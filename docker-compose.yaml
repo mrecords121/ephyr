@@ -1,0 +1,11 @@
+version: "2"
+
+services:
+  nginx-rtmp:
+    container_name: ${COMPOSE_PROJECT_NAME}-nginx-rtmp
+    image: alfg/nginx-rtmp:latest
+    ports:
+      - "80:80"        # nginx http
+      - "1935:1935"    # nginx rtmp
+    #volumes:
+    #  - ./.cache/nginx-rtmp/data/:/opt/data/
