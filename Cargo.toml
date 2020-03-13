@@ -1,9 +1,13 @@
 [package]
 name = "rtmp-mixing-poc"
-version = "0.1.0"
+version = "0.0.0"
+#edition = "2018"
 authors = ["tyranron <tyranron@gmail.com>"]
-edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+publish = false
 
 [dependencies]
+mio = "0.6"
+slab = "0.4"
+bytes = "0.4"
+rml_rtmp = "0.3"
+clap = { version = "2.31", features = ["yaml"] }
