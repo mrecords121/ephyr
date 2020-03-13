@@ -1,13 +1,13 @@
-use std::io;
-use std::io::{Read, Write};
+use mio::net::TcpStream;
+use mio::{Poll, PollOpt, Ready, Token};
+use rml_rtmp::chunk_io::Packet;
+use rml_rtmp::handshake::{Handshake, HandshakeProcessResult, PeerType};
+use std::collections::VecDeque;
 use std::fs;
 use std::fs::File;
-use std::collections::VecDeque;
+use std::io;
+use std::io::{Read, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
-use mio::{Token, Ready, Poll, PollOpt};
-use mio::net::TcpStream;
-use rml_rtmp::handshake::{Handshake, PeerType, HandshakeProcessResult};
-use rml_rtmp::chunk_io::{Packet};
 
 const BUFFER_SIZE: usize = 4096;
 
@@ -61,7 +61,12 @@ pub struct Connection {
 }
 
 impl Connection {
-    pub fn new(socket: TcpStream, count: usize, log_debug_logic: bool, is_inbound_connection: bool) -> Connection {
+    pub fn new(
+        socket: TcpStream,
+        count: usize,
+        log_debug_logic: bool,
+        is_inbound_connection: bool,
+    ) -> Connection {
         let debug_log_files = match log_debug_logic {
             true => {
                 fs::create_dir_all("logs").unwrap();
@@ -77,7 +82,7 @@ impl Connection {
                 };
 
                 Some(log_files)
-            },
+            }
 
             false => None,
         };
@@ -101,7 +106,9 @@ impl Connection {
         };
 
         let handshake_bytes = connection.handshake.generate_outbound_p0_and_p1().unwrap();
-        connection.send_queue.push_back(SendablePacket::RawBytes(handshake_bytes));
+        connection
+            .send_queue
+            .push_back(SendablePacket::RawBytes(handshake_bytes));
         connection.interest.insert(Ready::writable());
         connection
     }
@@ -116,9 +123,11 @@ impl Connection {
         let elapsed = self.last_drop_notification_at.elapsed().unwrap();
         if elapsed.as_secs() > 10 {
             if self.dropped_packet_count > 0 {
-                println!("{} packets dropped in the last {} seconds",
-                         self.dropped_packet_count,
-                         elapsed.as_secs());
+                println!(
+                    "{} packets dropped in the last {} seconds",
+                    self.dropped_packet_count,
+                    elapsed.as_secs()
+                );
             }
 
             self.last_drop_notification_at = SystemTime::now();
@@ -138,23 +147,27 @@ impl Connection {
     pub fn readable(&mut self, poll: &mut Poll) -> Result<ReadResult, ConnectionError> {
         let mut buffer = [0_u8; 4096];
         match self.socket.read(&mut buffer) {
-            Ok(0) => {
-                Err(ConnectionError::SocketClosed)
-            },
+            Ok(0) => Err(ConnectionError::SocketClosed),
 
             Ok(bytes_read_count) => {
                 let read_result = match self.handshake_completed {
                     false => self.handle_handshake_bytes(poll, &buffer[..bytes_read_count])?,
-                    true => ReadResult::BytesReceived {buffer, byte_count: bytes_read_count},
+                    true => ReadResult::BytesReceived {
+                        buffer,
+                        byte_count: bytes_read_count,
+                    },
                 };
 
                 match read_result {
-                    ReadResult::BytesReceived {buffer: read_buffer, byte_count} => {
-                        match self.debug_log_files {
-                            None => (),
-                            Some(ref mut logs) => {
-                                logs.rtmp_input_file.write(&read_buffer[..byte_count]).unwrap();
-                            },
+                    ReadResult::BytesReceived {
+                        buffer: read_buffer,
+                        byte_count,
+                    } => match self.debug_log_files {
+                        None => (),
+                        Some(ref mut logs) => {
+                            logs.rtmp_input_file
+                                .write(&read_buffer[..byte_count])
+                                .unwrap();
                         }
                     },
 
@@ -163,7 +176,7 @@ impl Connection {
 
                 self.register(poll)?;
                 Ok(read_result)
-            },
+            }
 
             Err(error) => {
                 if error.kind() == io::ErrorKind::WouldBlock {
@@ -172,7 +185,10 @@ impl Connection {
                     self.register(poll)?;
                     Ok(ReadResult::NoBytesReceived)
                 } else {
-                    println!("Failed to send buffer for {:?} with error {}", self.token, error);
+                    println!(
+                        "Failed to send buffer for {:?} with error {}",
+                        self.token, error
+                    );
                     return Err(ConnectionError::IoError(error));
                 }
             }
@@ -202,10 +218,10 @@ impl Connection {
                         None => (),
                         Some(ref mut logs) => {
                             logs.rtmp_output_file.write(&bytes[..bytes_sent]).unwrap();
-                        },
+                        }
                     }
                 }
-            },
+            }
 
             Err(error) => {
                 if error.kind() == io::ErrorKind::WouldBlock {
@@ -213,7 +229,10 @@ impl Connection {
                     println!("Full write buffer!");
                     self.send_queue.push_front(SendablePacket::RawBytes(bytes));
                 } else {
-                    println!("Failed to send buffer for {:?} with error {}", self.token, error);
+                    println!(
+                        "Failed to send buffer for {:?} with error {}",
+                        self.token, error
+                    );
                     return Err(error);
                 }
             }
@@ -229,15 +248,29 @@ impl Connection {
 
     pub fn register(&mut self, poll: &mut Poll) -> io::Result<()> {
         match self.has_been_registered {
-            true => poll.reregister(&self.socket, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())?,
-            false => poll.register(&self.socket, self.token.unwrap(), self.interest, PollOpt::edge() | PollOpt::oneshot())?
+            true => poll.reregister(
+                &self.socket,
+                self.token.unwrap(),
+                self.interest,
+                PollOpt::edge() | PollOpt::oneshot(),
+            )?,
+            false => poll.register(
+                &self.socket,
+                self.token.unwrap(),
+                self.interest,
+                PollOpt::edge() | PollOpt::oneshot(),
+            )?,
         }
 
         self.has_been_registered = true;
         Ok(())
     }
 
-    fn handle_handshake_bytes(&mut self, poll: &mut Poll, bytes: &[u8]) -> Result<ReadResult, ConnectionError> {
+    fn handle_handshake_bytes(
+        &mut self,
+        poll: &mut Poll,
+        bytes: &[u8],
+    ) -> Result<ReadResult, ConnectionError> {
         let result = match self.handshake.process_bytes(bytes) {
             Ok(result) => result,
             Err(error) => {
@@ -247,15 +280,18 @@ impl Connection {
         };
 
         match result {
-            HandshakeProcessResult::InProgress {response_bytes} => {
+            HandshakeProcessResult::InProgress { response_bytes } => {
                 if response_bytes.len() > 0 {
                     self.enqueue_response(poll, response_bytes)?;
                 }
 
                 Ok(ReadResult::HandshakingInProgress)
-            },
+            }
 
-            HandshakeProcessResult::Completed {response_bytes, remaining_bytes} => {
+            HandshakeProcessResult::Completed {
+                response_bytes,
+                remaining_bytes,
+            } => {
                 println!("Handshake successful!");
                 if response_bytes.len() > 0 {
                     self.enqueue_response(poll, response_bytes)?;
@@ -269,7 +305,10 @@ impl Connection {
 
                 self.handshake_completed = true;
 
-                Ok(ReadResult::HandshakeCompleted {buffer, byte_count: buffer_size})
+                Ok(ReadResult::HandshakeCompleted {
+                    buffer,
+                    byte_count: buffer_size,
+                })
             }
         }
     }
