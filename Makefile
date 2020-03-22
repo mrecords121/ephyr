@@ -2,6 +2,10 @@
 # Common defaults/definitions #
 ###############################
 
+# Checks two given strings for equality.
+eq = $(if $(or $(1),$(2)),$(and $(findstring $(1),$(2)),\
+                                $(findstring $(2),$(1))),1)
+
 OS_NAME := $(shell uname -s)
 
 
@@ -10,6 +14,19 @@ OS_NAME := $(shell uname -s)
 ############
 # Commands #
 ############
+
+# List to STDOUT available audio/video devices with FFmpeg.
+#
+# Usage:
+#	make devices.list
+
+devices.list:
+ifeq ($(OS_NAME),Darwin)
+	-ffmpeg -f avfoundation -list_devices true -i ''
+else
+	$(error "'devices.list' command is not implemented for your OS")
+endif
+
 
 # Stop running development environment and remove all related Docker containers.
 #
@@ -30,10 +47,11 @@ endif
 # Play re-streamed RTMP stream from Nginx.
 #
 # Usage:
-#	make publish
+#	make play [from=(youtube|edge)]
 
 play:
-	ffplay -rtmp_live 1 rtmp://127.0.0.1:1935/stream/some
+	ffplay -rtmp_live 1 \
+		rtmp://127.0.0.1:1935$(if $(call eq,$(from),edge),0,)/stream/some$(if $(call eq,$(from),edge),_ff,)
 
 
 # Publish raw local camera RTMP stream to re-streaming application.
@@ -44,7 +62,7 @@ play:
 publish:
 ifeq ($(OS_NAME),Darwin)
 	ffmpeg -f avfoundation -video_device_index 0 -audio_device_index 0 -i '' \
-	       -f flv rtmp://127.0.0.1:11935/stream/some
+	       -f flv rtmp://127.0.0.1:19351/stream/some
 else
 	$(error "'publish' command is not implemented for your OS")
 endif
@@ -53,11 +71,12 @@ endif
 # Run development environment.
 #
 # Usage:
-#	make up
+#	make up [background=(no|yes)]
 
 up: down
-	docker-compose up -d
-	cargo run -- push -h 127.0.0.1 -a stream -s some -t some
+	docker-compose up \
+		$(if $(call eq,$(background),yes),-d,--abort-on-container-exit)
+#	cargo run -- push -h 127.0.0.1 -a stream -s some -t some
 
 
 
@@ -66,4 +85,4 @@ up: down
 # .PHONY section #
 ##################
 
-.PHONY: down play publish up
+.PHONY: devices.list down play publish up

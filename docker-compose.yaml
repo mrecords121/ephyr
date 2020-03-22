@@ -1,11 +1,24 @@
 version: "2"
 
 services:
-  nginx-rtmp:
-    container_name: ${COMPOSE_PROJECT_NAME}-nginx-rtmp
+  youtube:
+    container_name: ${COMPOSE_PROJECT_NAME}-youtube
     image: alfg/nginx-rtmp:latest
     ports:
-      - "80:80"        # nginx http
-      - "1935:1935"    # nginx rtmp
+      - 1935:1935    # rtmp youtube
     #volumes:
     #  - ./.cache/nginx-rtmp/data/:/opt/data/
+  srs-origin:
+    container_name: ${COMPOSE_PROJECT_NAME}-srs-origin
+    image: ossrs/srs:3
+    ports:
+      - 19351:19351  # rtmp srs-origin
+    volumes:
+      - ./origin.srs.conf:/usr/local/srs/conf/srs.conf:ro
+  srs-edge:
+    container_name: ${COMPOSE_PROJECT_NAME}-srs-edge
+    image: ossrs/srs:3
+    ports:
+      - 19350:19350  # rtmp srs-edge
+    volumes:
+      - ./edge.srs.conf:/usr/local/srs/conf/srs.conf:ro
