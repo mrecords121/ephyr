@@ -15,6 +15,15 @@ OS_NAME := $(shell uname -s)
 # Commands #
 ############
 
+# Apply audion filters to background volume with ZeroMQ.
+#
+# Usage:
+#	make audio volume=<volume-rate>
+
+audio:
+	echo Parsed_volume_1 volume $(volume) | zmqsend -b tcp://127.0.0.1:11235
+
+
 # List to STDOUT available audio/video devices with FFmpeg.
 #
 # Usage:
@@ -85,4 +94,4 @@ up: down
 # .PHONY section #
 ##################
 
-.PHONY: devices.list down play publish up
+.PHONY: audio devices.list down play publish up
