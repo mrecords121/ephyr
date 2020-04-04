@@ -15,13 +15,22 @@ OS_NAME := $(shell uname -s)
 # Commands #
 ############
 
-# Apply audion filters to background volume with ZeroMQ.
+# Apply audio filters to background volume with ZeroMQ.
 #
 # Usage:
-#	make audio volume=<volume-rate>
+#	make audio [volume=<volume-rate>] [delay=<milliseconds>]
 
 audio:
-	echo Parsed_volume_1 volume $(volume) | zmqsend -b tcp://127.0.0.1:11235
+ifneq ($(volume),)
+	docker run --rm --network=host --entrypoint sh tyranron/srs:3 -c \
+		'echo "volume@y volume $(volume)" \
+		 | zmqsend -b tcp://127.0.0.1:11235'
+endif
+ifneq ($(delay),)
+	docker run --rm --network=host --entrypoint sh tyranron/srs:3 -c \
+		'echo "adelay@x reinit delays=$(delay)|all=1" \
+		 | zmqsend -b tcp://127.0.0.1:11235'
+endif
 
 
 # List to STDOUT available audio/video devices with FFmpeg.
@@ -60,7 +69,7 @@ endif
 
 play:
 	ffplay -rtmp_live 1 \
-		rtmp://127.0.0.1:1935$(if $(call eq,$(from),edge),0,)/stream/some$(if $(call eq,$(from),edge),_ff,)
+		rtmp://127.0.0.1:1935$(if $(call eq,$(from),edge),0,)/live/ru-en$(if $(call eq,$(from),edge),_ff,)
 
 
 # Publish raw local camera RTMP stream to re-streaming application.
@@ -71,7 +80,7 @@ play:
 publish:
 ifeq ($(OS_NAME),Darwin)
 	ffmpeg -f avfoundation -video_device_index 0 -audio_device_index 0 -i '' \
-	       -f flv rtmp://127.0.0.1:19351/stream/some
+	       -f flv rtmp://127.0.0.1:19351/ingest/ru-en
 else
 	$(error "'publish' command is not implemented for your OS")
 endif
