@@ -522,11 +522,11 @@ RUN \
         --extra-ldflags="-L${PREFIX}/lib" && \
         make && \
         make install && \
+        make tools/zmqsend && cp tools/zmqsend ${PREFIX}/bin && \
         make distclean && \
         hash -r && \
         cd tools && \
-        make qt-faststart && \
-        cp qt-faststart ${PREFIX}/bin
+        make qt-faststart && cp qt-faststart ${PREFIX}/bin
 
 RUN \
         ldd ${PREFIX}/bin/ffmpeg | grep opt/ffmpeg | cut -d ' ' -f 3 | xargs -i cp {} /usr/local/lib64/ && \
