@@ -11,6 +11,18 @@ OS_NAME := $(shell uname -s)
 
 
 
+###########
+# Aliases #
+###########
+
+fmt: cargo.fmt
+
+
+lint: cargo.lint
+
+
+
+
 ############
 # Commands #
 ############
@@ -100,7 +112,72 @@ up: down
 
 
 ##################
+# Cargo commands #
+##################
+
+# Resolve Cargo project dependencies.
+#
+# Usage:
+#	make cargo [cmd=(fetch|<cargo-cmd>)]
+#	           [background=(no|yes)]
+#	           [dockerized=(no|yes)]
+
+cargo-cmd = $(if $(call eq,$(cmd),),fetch,$(cmd))
+
+cargo:
+ifeq ($(dockerized),yes)
+ifeq ($(background),yes)
+	-@docker stop cargo-cmd
+	-@docker rm cargo-cmd
+endif
+	docker run --rm --network=host -v "$(PWD)":/app -w /app \
+	           --name=cargo-cmd $(if $(call eq,$(background),yes),-d,) \
+	           -v "$(abspath $(CARGO_HOME))/registry":/usr/local/cargo/registry\
+		rust:$(RUST_VER) \
+			make cargo cmd='$(cargo-cmd)' dockerized=no background=no
+else
+	cargo $(cargo-cmd) $(if $(call eq,$(background),yes),&,)
+endif
+
+
+# Format Rust sources with rustfmt.
+#
+# Usage:
+#	make cargo.fmt [check=(no|yes)]
+#	               [dockerized=(no|yes)]
+
+cargo.fmt:
+ifeq ($(dockerized),yes)
+	docker run --rm --network=host -v "$(PWD)":/app -w /app \
+	           -v "$(abspath $(CARGO_HOME))/registry":/usr/local/cargo/registry\
+		instrumentisto/rust:$(RUST_NIGHTLY_VER) \
+			make cargo.fmt check='$(check)' dockerized=no
+else
+	cargo +nightly fmt --all $(if $(call eq,$(check),yes),-- --check,)
+endif
+
+
+# Lint Rust sources with clippy.
+#
+# Usage:
+#	make cargo.lint [dockerized=(no|yes)]
+
+cargo.lint:
+ifeq ($(dockerized),yes)
+	docker run --rm --network=host -v "$(PWD)":/app -w /app \
+	           -v "$(abspath $(CARGO_HOME))/registry":/usr/local/cargo/registry\
+		rust:$(RUST_VER) \
+			make cargo.lint dockerized=no
+else
+	cargo clippy --all -- -D clippy::pedantic -D warnings
+endif
+
+
+
+
+##################
 # .PHONY section #
 ##################
 
-.PHONY: audio devices.list down play publish up
+.PHONY: audio devices.list down fmt lint play publish up \
+        cargo cargo.fmt cargo.lint
