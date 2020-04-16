@@ -790,8 +790,8 @@ fn decode_audio_packet(
                 }
                 Err(e) => {
                     log::error!("Failed to decode Opus data: {:?}", data);
-                    return Err(DecodingFailed(e))
-                },
+                    return Err(DecodingFailed(e));
+                }
             }
         };
         // Shrink the `dst` buffer to fit the decoded data exactly.

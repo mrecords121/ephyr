@@ -15,6 +15,7 @@
 )]
 
 pub mod input;
+pub mod spec;
 //pub mod mixer;
 
 use std::marker::PhantomData;
@@ -50,39 +51,41 @@ fn main() {
             .build();
 
         /*
-        let mut ffmpeg = tokio::process::Command::new("ffplay")
-            .arg("-f")
-            .arg("f32be")
-            .arg("-sample_rate")
-            .arg("48000")
-            //.arg("-use_wallclock_as_timestamps")
-            //.arg("true")
-            .arg("-i")
-            .arg("pipe:0")
-            .arg("-af")
-            .arg("aresample=async=1")
-            .arg("-i")
-            .arg("http://radio.casse-tete.solutions/salut-radio-64.mp3")
-            .arg("-map")
-            .arg("0")
-            .arg("-map")
-            .arg("1")
-            //.arg("-acodec")
-            //.arg("libmp3lame")
-            //.arg("-infbuf")
-            .arg("-loglevel")
-            .arg("debug")
-            .stdin(std::process::Stdio::piped())
-            //.stdout(std::process::Stdio::null())
-            //.stderr(std::process::Stdio::null())
-            .kill_on_drop(true)
-            .spawn()
-            .expect("Failed to spawn FFmpeg");
-        let ffmpeg_stdin =
-            &mut ffmpeg.stdin.expect("FFmpeg's STDIN hasn't been captured");
-*/
+                let mut ffmpeg = tokio::process::Command::new("ffplay")
+                    .arg("-f")
+                    .arg("f32be")
+                    .arg("-sample_rate")
+                    .arg("48000")
+                    //.arg("-use_wallclock_as_timestamps")
+                    //.arg("true")
+                    .arg("-i")
+                    .arg("pipe:0")
+                    .arg("-af")
+                    .arg("aresample=async=1")
+                    .arg("-i")
+                    .arg("http://radio.casse-tete.solutions/salut-radio-64.mp3")
+                    .arg("-map")
+                    .arg("0")
+                    .arg("-map")
+                    .arg("1")
+                    //.arg("-acodec")
+                    //.arg("libmp3lame")
+                    //.arg("-infbuf")
+                    .arg("-loglevel")
+                    .arg("debug")
+                    .stdin(std::process::Stdio::piped())
+                    //.stdout(std::process::Stdio::null())
+                    //.stderr(std::process::Stdio::null())
+                    .kill_on_drop(true)
+                    .spawn()
+                    .expect("Failed to spawn FFmpeg");
+                let ffmpeg_stdin =
+                    &mut ffmpeg.stdin
+                       .expect("FFmpeg's STDIN hasn't been captured");
+        */
         let mut file = tokio::fs::File::create("test.pcm")
-         .await.expect("create failed");
+            .await
+            .expect("create failed");
 
         //tokio::io::copy(&mut ts_input, ffmpeg_stdin)
         tokio::io::copy(&mut ts_input, &mut file)
