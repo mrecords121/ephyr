@@ -1,6 +1,6 @@
 //! Mixing specification schema.
 
-use std::{collections::HashMap, convert::TryInto as _, time::Duration};
+use std::{collections::HashMap, time::Duration};
 
 use config::{Config, ConfigError, Environment, FileFormat};
 use decimal::Decimal;
@@ -9,6 +9,8 @@ use smart_default::SmartDefault;
 use url::Url;
 use validator::{Validate, ValidationError, ValidationErrors};
 use validator_derive::Validate;
+
+use crate::cli;
 
 /// Specification of how the mixing should be performed.
 ///
@@ -102,10 +104,10 @@ impl Spec {
     ///
     /// - If [`Spec`] fails to be parsed from file or environment variables.
     /// - If [`Spec`] fails its validation.
-    pub fn parse() -> Result<Self, ConfigError> {
+    pub fn parse(opts: &cli::Opts) -> Result<Self, ConfigError> {
         let mut spec = Config::new();
         spec.merge(
-            config::File::with_name("spec.json")
+            config::File::with_name(opts.spec.as_str())
                 .format(FileFormat::Json)
                 .required(false),
         )?
@@ -216,6 +218,10 @@ pub struct Source {
 }
 
 /// Validates whether the given [`Url`] has `rtmp` or `ts` scheme.
+///
+/// # Errors
+///
+/// If [`Url`]'s scheme is not `rtmp` or `ts`.
 fn is_rtmp_or_ts(url: &Url) -> Result<(), ValidationError> {
     if !matches!(url.scheme(), "rtmp" | "ts") {
         return Err(ValidationError::new(
@@ -226,6 +232,10 @@ fn is_rtmp_or_ts(url: &Url) -> Result<(), ValidationError> {
 }
 
 /// Validates whether the given [`Duration`] has at most milliseconds precision.
+///
+/// # Errors
+///
+/// If [`Duration`]'s precision is more granular than millisecond.
 fn has_milliseconds_precision(dur: &Duration) -> Result<(), ValidationError> {
     if dur.subsec_nanos() % 1_000_000 != 0 {
         return Err(ValidationError::new(
@@ -270,6 +280,10 @@ pub struct Destination {
 }
 
 /// Validates whether the given [`Url`] has `rtmp` scheme.
+///
+/// # Errors
+///
+/// If [`Url`]'s scheme is not `rtmp`.
 fn is_rtmp_only(url: &Url) -> Result<(), ValidationError> {
     if url.scheme() != "rtmp" {
         return Err(ValidationError::new(
