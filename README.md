@@ -1,7 +1,7 @@
-RTMP re-streaming with mixing PoC in Rust
-=========================================
+Ephyr
+=====
 
-Currently, in development.
+[SRS] + [FFmpeg] solution for server-side mixing of live streams powered by [Rust].
 
 
 
@@ -62,4 +62,7 @@ make audio volume=1.5
 
 
 
+
+[FFmpeg]: https://ffmpeg.org
+[Rust]: https://www.rust-lang.org
 [SRS]: https://github.com/ossrs/srs

@@ -570,6 +570,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "ephyr"
+version = "0.0.0"
+dependencies = [
+ "audiopus",
+ "byteorder",
+ "config",
+ "derive_more",
+ "futures 0.1.29",
+ "futures 0.3.4",
+ "humantime-serde",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "slog",
+ "slog-async",
+ "slog-scope",
+ "slog-term",
+ "smart-default",
+ "tokio 0.1.22",
+ "tokio 0.2.16",
+ "tokio-compat",
+ "tsclientlib",
+ "tsproto",
+ "tsproto-packets",
+ "url 2.1.1",
+ "validator",
+ "validator_derive",
+]
+
+[[package]]
 name = "error-chain"
 version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1818,36 +1848,6 @@ checksum = "11834e137f3b14e309437a8276714eed3a80d1ef894869e510f2c0c0b98b9f4a"
 dependencies = [
  "hostname",
  "quick-error",
-]
-
-[[package]]
-name = "rtmp-mixing-poc"
-version = "0.0.0"
-dependencies = [
- "audiopus",
- "byteorder",
- "config",
- "derive_more",
- "futures 0.1.29",
- "futures 0.3.4",
- "humantime-serde",
- "rust_decimal",
- "serde",
- "serde_json",
- "slog",
- "slog-async",
- "slog-scope",
- "slog-term",
- "smart-default",
- "tokio 0.1.22",
- "tokio 0.2.16",
- "tokio-compat",
- "tsclientlib",
- "tsproto",
- "tsproto-packets",
- "url 2.1.1",
- "validator",
- "validator_derive",
 ]
 
 [[package]]

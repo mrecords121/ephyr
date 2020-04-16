@@ -22,6 +22,8 @@ use validator_derive::Validate;
 /// # Example
 ///
 /// ```
+/// # use ephyr::Spec;
+/// # use validator::Validate as _;
 /// let spec = r#"{"spec": {
 ///   "input": {
 ///     "en": {
@@ -66,7 +68,8 @@ use validator_derive::Validate;
 ///   "output": {}
 /// }}"#;
 ///
-/// let spec = serde_json::from_str(spec).expect("Deserialization failed");
+/// let spec: Spec =
+///     serde_json::from_str(spec).expect("Deserialization failed");
 /// assert!(spec.validate().is_ok());
 /// ```
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
