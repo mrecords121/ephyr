@@ -6,13 +6,13 @@ use std::{
 use anyhow::anyhow;
 use tokio::{io, process::Command};
 
-use crate::{input::teamspeak, spec};
+use crate::{filter::silence, input::teamspeak, spec};
 
 pub struct Mixer {
     app: String,
     stream: String,
     cmd: Command,
-    stdin: Option<teamspeak::Input>,
+    stdin: Option<silence::Filler<teamspeak::Input>>,
 }
 
 impl Mixer {
@@ -71,7 +71,7 @@ impl Mixer {
             ));
         }
         filters.push(format!(
-            "[{filter_names}]amerge=inputs={n}[out]",
+            "[{filter_names}]amix=inputs={n}:duration=longest[out]",
             filter_names = cfg
                 .src
                 .keys()
@@ -98,10 +98,13 @@ impl Mixer {
             }
             mixer.cmd.args(&["-f", "tee", &dsts.join("|")]);
         } else {
+            let url = cfg.dest.values().next().unwrap().url
+                .to_string()
+                .replace("[app]", &mixer.app)
+                .replace("[stream]", &mixer.stream);
             mixer
                 .cmd
-                .args(&["-f", "flv"])
-                .arg(cfg.dest.values().next().unwrap().url.as_str());
+                .args(&["-f", "flv", url.as_str()]);
         }
 
         mixer
@@ -112,7 +115,7 @@ impl Mixer {
         if let Some(port) = cfg.url.port() {
             host = format!("{}:{}", host, port);
         }
-        self.stdin = Some(
+        self.stdin = Some(silence::Filler::new(
             teamspeak::Input::new(host)
                 .channel(&cfg.url.path()[1..])
                 .name_as(format!(
@@ -120,12 +123,13 @@ impl Mixer {
                     self.app, self.stream, name,
                 ))
                 .build(),
-        );
+            8000, // Hz
+        ));
 
         self.cmd
-            .args(&["-i", "pipe:0", "-f", "f32be"])
+            .args(&["-f", "f32be", "-sample_rate", "48000"])
             .args(&["-use_wallclock_as_timestamps", "true"])
-            .args(&["-sample_rate", "48000"]);
+            .args(&["-i", "pipe:0"]);
     }
 
     fn add_rtmp_src(&mut self, cfg: &spec::Source) {

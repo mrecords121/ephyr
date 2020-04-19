@@ -15,6 +15,7 @@
 )]
 
 pub mod cli;
+pub mod filter;
 pub mod input;
 pub mod mixer;
 pub mod spec;
@@ -34,7 +35,7 @@ use futures::{
 use slog_scope as log;
 use tokio::io;
 
-use self::{input::teamspeak, mixer::ffmpeg};
+use self::{filter::silence, input::teamspeak, mixer::ffmpeg};
 
 #[doc(inline)]
 pub use self::spec::Spec;
@@ -106,6 +107,37 @@ pub async fn run_mixers(
             .map(|(_, cfg)| ffmpeg::Mixer::new(app, stream, cfg).run()),
     )
     .await?;
+
+    /*
+    let mut ts_input = teamspeak::Input::new("allatra.ruvoice.com:10335")
+        .channel("Translation/test_channel")
+        .name_as("[Bot] Origin SRS")
+        .build();
+    let mut ts_input = silence::Filler::new(ts_input, 8000);
+
+    let mut ffmpeg = tokio::process::Command::new("ffplay")
+        .arg("-f")
+        .arg("f32be")
+        .arg("-sample_rate")
+        .arg("48000")
+        .arg("-use_wallclock_as_timestamps")
+        .arg("true")
+        .arg("-i")
+        .arg("pipe:0")
+        .arg("-af")
+        .arg("aresample=async=1")
+        .arg("-loglevel")
+        .arg("debug")
+        .stdin(std::process::Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .expect("Failed to spawn FFmpeg");
+    let ffmpeg_stdin =
+        &mut ffmpeg.stdin.expect("FFmpeg's STDIN hasn't been captured");
+    tokio::io::copy(&mut ts_input, ffmpeg_stdin)
+        .await
+        .expect("Failed to write data");
+        */
 
     Ok(())
 }
