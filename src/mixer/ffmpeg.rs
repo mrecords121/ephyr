@@ -1,114 +1,161 @@
-use derive_more::{Display, Error, From};
-use futures::compat::Future01CompatExt as _;
-use tsclientlib::{ConnectOptions, Connection, PHBox, PacketHandler};
-use tsproto_packets::packets::{InAudio, InCommand};
+use std::{
+    collections::{BTreeMap, HashMap},
+    process::Stdio,
+};
 
-use crate::State;
+use anyhow::anyhow;
+use tokio::{io, process::Command};
 
-use super::TeamSpeakSettings;
+use crate::{input::teamspeak, spec};
 
-pub fn new() -> State<Builder, Empty> {
-    State::default()
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Builder {
-    ts: Option<TeamSpeakSettings>,
-    cmd: Option<String>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Empty;
-
-impl State<Builder, Empty> {
-    #[inline]
-    pub fn ts_audio(
-        mut self,
-        settings: TeamSpeakSettings,
-    ) -> State<Builder, WithTeamSpeakSettings> {
-        self.inner.ts = Some(settings);
-        self.transit()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct WithTeamSpeakSettings;
-
-impl State<Builder, WithTeamSpeakSettings> {
-    #[inline]
-    pub fn cmd<C: Into<String>>(
-        mut self,
-        cmd: C,
-    ) -> State<Builder, WithCommand> {
-        self.inner.cmd = Some(cmd.into());
-        self.transit()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct WithCommand;
-
-impl State<Builder, WithCommand> {
-    #[inline]
-    pub fn build(self) -> State<Mixer, Initialized> {
-        State::wrap(Mixer {
-            ts: self.inner.ts.unwrap(),
-            cmd: self.inner.cmd.unwrap(),
-        })
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
 pub struct Mixer {
-    ts: TeamSpeakSettings,
-    cmd: String,
+    app: String,
+    stream: String,
+    cmd: Command,
+    stdin: Option<teamspeak::Input>,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Initialized;
+impl Mixer {
+    pub fn new(app: &str, stream: &str, cfg: &spec::Mixer) -> Self {
+        use slog::Drain as _;
 
-impl State<Mixer, Initialized> {
-    pub async fn start(&mut self) -> Result<Connection, Error> {
-        let cfg = ConnectOptions::new(self.inner.ts.server_addr.into_owned())
-            .channel(self.inner.ts.channel.into())
-            .name(self.inner.ts.name_as.into())
-            .log_commands(true)
-            .log_packets(true)
-            .handle_packets(Box::new(self.inner)); // TODO
+        let mut mixer = Self {
+            app: app.into(),
+            stream: stream.into(),
+            cmd: Command::new("ffmpeg"),
+            stdin: None,
+        };
+        mixer
+            .cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit())
+            .kill_on_drop(true);
 
-        let conn = Connection::new(cfg).compat().await?;
+        let lgr = slog_scope::logger();
+        if lgr.is_debug_enabled() {
+            mixer.cmd.args(&["-loglevel", "debug"]);
+        }
 
-        // TODO: catch streams as PacketHandler
+        let srcs = cfg.src.iter().enumerate().collect::<BTreeMap<_, _>>();
+        for (_, (name, src)) in &srcs {
+            match src.url.scheme() {
+                "ts" => mixer.add_teamspeak_src(name, src),
+                "rtmp" => mixer.add_rtmp_src(src),
+                _ => unimplemented!(),
+            }
+        }
 
-        // TODO: start child process
+        let mut filters = Vec::with_capacity(srcs.len());
+        let mut video_num = 0;
+        for (i, (name, src)) in &srcs {
+            let mut f = format!(
+                "adelay@x=delays={delay}|all=1,\
+                 volume={volume},\
+                 azmq=bind_address=tcp\\\\\\://0.0.0.0\\\\\\:{zmq_port}",
+                delay = src.delay.as_millis(),
+                volume = src.volume,
+                zmq_port = src.zmq.port,
+            );
+            if src.url.scheme() == "ts" {
+                f = format!("aresample=async=1,{}", f);
+            }
+            if src.url.scheme() == "rtmp" {
+                video_num = *i;
+            }
+            filters.push(format!(
+                "[{num}:a]{filter}[{name}]",
+                num = i,
+                filter = f,
+                name = name,
+            ));
+        }
+        filters.push(format!(
+            "[{filter_names}]amerge=inputs={n}[out]",
+            filter_names = cfg
+                .src
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .join("]["),
+            n = srcs.len(),
+        ));
+        mixer
+            .cmd
+            .args(&["-filter_complex", &filters.join(";")])
+            .args(&["-map", "[out]", "-map", &format!("{}:v", video_num)])
+            .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"]);
 
-        // T
+        if cfg.dest.len() > 1 {
+            let mut dsts = Vec::with_capacity(cfg.dest.len());
+            for (_, dst) in &cfg.dest {
+                let url = dst
+                    .url
+                    .to_string()
+                    .replace("[app]", &mixer.app)
+                    .replace("[stream]", &mixer.stream);
+                dsts.push(format!("[f=flv]{}", url));
+            }
+            mixer.cmd.args(&["-f", "tee", &dsts.join("|")]);
+        } else {
+            mixer
+                .cmd
+                .args(&["-f", "flv"])
+                .arg(cfg.dest.values().next().unwrap().url.as_str());
+        }
 
-        Ok(conn)
+        mixer
     }
-}
 
-/// Helper alias for declaring [`Box`]ed [`futures_01::Stream`]s,
-/// which are [`Send`].
-pub type BoxStream01<I, E> =
-    Box<dyn futures_01::Stream<Item = I, Error = E> + Send>;
+    fn add_teamspeak_src(&mut self, name: &str, cfg: &spec::Source) {
+        let mut host = cfg.url.host().unwrap().to_string();
+        if let Some(port) = cfg.url.port() {
+            host = format!("{}:{}", host, port);
+        }
+        self.stdin = Some(
+            teamspeak::Input::new(host)
+                .channel(&cfg.url.path()[1..])
+                .name_as(format!(
+                    "[Bot] SRS {}/{} -> {}",
+                    self.app, self.stream, name,
+                ))
+                .build(),
+        );
 
-impl PacketHandler for Mixer {
-    fn new_connection(
-        &mut self,
-        commands: BoxStream01<InCommand, tsproto::Error>,
-        audio: BoxStream01<InAudio, tsproto::Error>,
-    ) {
-        // TODO: inject both streams into Mixer
+        self.cmd
+            .args(&["-i", "pipe:0", "-f", "f32be"])
+            .args(&["-use_wallclock_as_timestamps", "true"])
+            .args(&["-sample_rate", "48000"]);
     }
 
-    fn clone(&self) -> PHBox {
-        Box::new(Clone::clone(self))
+    fn add_rtmp_src(&mut self, cfg: &spec::Source) {
+        let url = cfg
+            .url
+            .to_string()
+            .replace("[app]", &self.app)
+            .replace("[stream]", &self.stream);
+        self.cmd.args(&["-i", &url]);
     }
-}
 
-#[derive(Debug, Display, Error, From)]
-pub enum Error {
-    #[display(fmt = "TeamSpeak connection failed: {}", _0)]
-    TeamSpeakConnectionFailed(tsclientlib::Error)
+    pub async fn run(mut self) -> Result<(), anyhow::Error> {
+        let mut ffmpeg = self
+            .cmd
+            .spawn()
+            .map_err(|e| anyhow!("Failed to spawn FFmpeg process: {}", e))?;
+
+        if let Some(mut ts_audio) = self.stdin {
+            let ffmpeg_stdin = &mut ffmpeg.stdin.ok_or_else(|| {
+                anyhow!("FFmpeg's STDIN hasn't been captured")
+            })?;
+            io::copy(&mut ts_audio, ffmpeg_stdin).await.map_err(|e| {
+                anyhow!("Failed to write into FFmpeg's STDIN: {}", e)
+            })?;
+        } else {
+            let _ = ffmpeg
+                .wait_with_output()
+                .await
+                .map_err(|e| anyhow!("FFmpeg process stopped: {}", e))?;
+        }
+        Ok(())
+    }
 }

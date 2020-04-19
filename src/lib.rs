@@ -16,10 +16,16 @@
 
 pub mod cli;
 pub mod input;
+pub mod mixer;
 pub mod spec;
-//pub mod mixer;
 
-use std::marker::PhantomData;
+use std::{
+    marker::PhantomData,
+    sync::{
+        atomic::{AtomicI32, Ordering},
+        Arc,
+    },
+};
 
 use anyhow::anyhow;
 use futures::{
@@ -28,102 +34,40 @@ use futures::{
 use slog_scope as log;
 use tokio::io;
 
-use self::input::teamspeak;
+use self::{input::teamspeak, mixer::ffmpeg};
 
 #[doc(inline)]
 pub use self::spec::Spec;
 
-pub fn run() -> Result<(), anyhow::Error> {
+pub fn run() -> i32 {
     let opts = cli::Opts::from_args();
-    let spec = Spec::parse(&opts)
-        .map_err(|e| anyhow!("Failed to parse specification: {}", e))?;
 
     // This guard should be held till the end of the program for the logger
     // to present in global context.
     let _log_guard = slog_scope::set_global_logger(main_logger(&opts));
 
-    log::info!("Spec: {:?}", spec);
+    let schema = match Spec::parse(&opts) {
+        Ok(s) => s,
+        Err(e) => {
+            log::crit!("Failed to parse specification: {}", e);
+            return 2;
+        }
+    };
+
+    log::info!("Schema: {:?}", schema);
+
+    let exit_code = Arc::new(AtomicI32::new(0));
+    let exit_code_ref = exit_code.clone();
 
     tokio_compat::run_std(
         future::select(
-            async {
-                let mut ts_input =
-                    teamspeak::Input::new("allatra.ruvoice.com:10335")
-                        .channel("Translation/test_channel")
-                        .name_as("[Bot] Origin SRS")
-                        .build();
-
-                /*
-                        let mut ffmpeg = tokio::process::Command::new("ffplay")
-                            .arg("-f")
-                            .arg("f32be")
-                            .arg("-sample_rate")
-                            .arg("48000")
-                            //.arg("-use_wallclock_as_timestamps")
-                            //.arg("true")
-                            .arg("-i")
-                            .arg("pipe:0")
-                            .arg("-af")
-                            .arg("aresample=async=1")
-                            .arg("-i")
-                    .arg("http://radio.casse-tete.solutions/salut-radio-64.mp3")
-                            .arg("-map")
-                            .arg("0")
-                            .arg("-map")
-                            .arg("1")
-                            //.arg("-acodec")
-                            //.arg("libmp3lame")
-                            //.arg("-infbuf")
-                            .arg("-loglevel")
-                            .arg("debug")
-                            .stdin(std::process::Stdio::piped())
-                            //.stdout(std::process::Stdio::null())
-                            //.stderr(std::process::Stdio::null())
-                            .kill_on_drop(true)
-                            .spawn()
-                            .expect("Failed to spawn FFmpeg");
-                        let ffmpeg_stdin =
-                            &mut ffmpeg.stdin
-                               .expect("FFmpeg's STDIN hasn't been captured");
-                */
-                let mut file = tokio::fs::File::create("test.pcm")
-                    .await
-                    .expect("create failed");
-
-                //tokio::io::copy(&mut ts_input, ffmpeg_stdin)
-
-                tokio::io::copy(&mut ts_input, &mut file)
-                    .await
-                    .expect("Failed to write data");
-
-                /*
-                    let mixer = mixer::ffmpeg::new()
-                        .ts_audio(tsclient::TeamSpeakSettings {
-                            server_addr: "allatra.ruvoice.com:10335".into(),
-                            channel: "Translation/test_channel".into(),
-                            name_as: "[Bot] Origin SRS".into(),
-                        })
-                .cmd("ffplay http://radio.casse-tete.solutions/salut-radio-64.mp3")
-                        .build()
-                        .start();
-
-                    let fetcher = tsclient::AudioFetcher {
-                        server_addr: "allatra.ruvoice.com:10335".into(),
-                        name: "[Bot] Origin SRS".into(),
-                        channel: "Translation/test_channel".into(),
-                        verbose: 1,
-                    };
-                    let conn = fetcher
-                        .start()
-                        .await
-                        .map_err(|e| {
-                            log::error!("Starting AudioFetcher failed: {}", e)}
-                        );
-
-                    log::info!("woohoo!");
-
-                    tokio::time::delay_for(Duration::from_secs(60)).await;
-                    */
+            async move {
+                if let Err(e) =
+                    run_mixers(&opts.app, &opts.stream, &schema).await
+                {
+                    log::crit!("Cannot run: {}", e);
+                    exit_code_ref.compare_and_swap(0, 1, Ordering::SeqCst);
+                }
             }
             .boxed(),
             async {
@@ -137,6 +81,31 @@ pub fn run() -> Result<(), anyhow::Error> {
         )
         .map(|_| ()),
     );
+
+    // Unwrapping is OK here, because at this moment `exit_code` is not shared
+    // anymore, as runtime has finished.
+    Arc::try_unwrap(exit_code).unwrap().into_inner()
+}
+
+pub async fn run_mixers(
+    app: &str,
+    stream: &str,
+    schema: &Spec,
+) -> Result<(), anyhow::Error> {
+    let mixers_spec = schema.spec.get(app).ok_or_else(|| {
+        anyhow!("Spec doesn't allows '{}' live stream app", app)
+    })?;
+
+    if mixers_spec.is_empty() {
+        return Ok(future::pending().await);
+    }
+
+    future::try_join_all(
+        mixers_spec
+            .iter()
+            .map(|(_, cfg)| ffmpeg::Mixer::new(app, stream, cfg).run()),
+    )
+    .await?;
 
     Ok(())
 }
@@ -193,37 +162,5 @@ pub async fn shutdown_signal() -> io::Result<&'static str> {
 
         signal::ctrl_c().await;
         Ok("ctrl-c")
-    }
-}
-
-pub struct State<V, S> {
-    inner: V,
-    _state: PhantomData<S>,
-}
-
-impl<V: Default, S> Default for State<V, S> {
-    #[inline]
-    fn default() -> Self {
-        Self::wrap(V::default())
-    }
-}
-
-impl<V, S> State<V, S> {
-    #[inline]
-    fn wrap(val: V) -> Self {
-        Self {
-            inner: val,
-            _state: PhantomData,
-        }
-    }
-
-    #[inline]
-    fn unwrap(self) -> V {
-        self.inner
-    }
-
-    #[inline]
-    fn transit<IntoS>(self) -> State<V, IntoS> {
-        State::wrap(self.inner)
     }
 }

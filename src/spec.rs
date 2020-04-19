@@ -163,7 +163,7 @@ impl Validate for Mixer {
                 "src",
                 ValidationError::new(
                     "At least one destination for mixing result should be \
-                 specified",
+                     specified",
                 ),
             );
             out = ValidationErrors::merge(out, "dest", Err(errs));

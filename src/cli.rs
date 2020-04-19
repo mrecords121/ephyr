@@ -10,6 +10,30 @@ use structopt::StructOpt;
 #[derive(Clone, Debug, SmartDefault, StructOpt)]
 #[structopt(about = "FFmpeg-based mixer of live streams.")]
 pub struct Opts {
+    /// RTMP application of live stream to be mixed.
+    ///
+    /// This one is referred as `[app]` in [SRS] configuration.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[structopt(
+        help = "RTMP application of live stream to be mixed \
+                ([app] in SRS)",
+        long_help = "RTMP application of live stream to be mixed \
+                     ([app] in SRS)"
+    )]
+    pub app: String,
+
+    /// RTMP key of live stream to be mixed.
+    ///
+    /// This one is referred as `[stream]` in [SRS] configuration.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[structopt(
+        help = "RTMP key of live stream to be mixed ([stream] in SRS)",
+        long_help = "RTMP key of live stream to be mixed ([stream] in SRS)"
+    )]
+    pub stream: String,
+
     /// Path to [`Spec`] file of application.
     ///
     /// [`Spec`]: crate::Spec

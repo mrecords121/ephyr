@@ -1,25 +1,25 @@
 version: "2"
 
 services:
-  youtube:
-    container_name: ${COMPOSE_PROJECT_NAME}-youtube
-    image: alfg/nginx-rtmp:latest
-    ports:
-      - 1935:1935    # rtmp  youtube
+#  youtube:
+#    container_name: ${COMPOSE_PROJECT_NAME}-youtube
+#    image: alfg/nginx-rtmp:latest
+#    ports:
+#      - 1935:1935    # rtmp  youtube
     #volumes:
     #  - ./.cache/nginx-rtmp/data/:/opt/data/
   srs-origin:
     container_name: ${COMPOSE_PROJECT_NAME}-srs-origin
     image: tyranron/srs:3
     ports:
-      - 19351:19351  # rtmp  srs-origin
-      - 11235:11235  # zmq   srs-origin  bg volume filter
+      - 1935:1935  # rtmp  srs-origin
+#      - 11235:11235  # zmq   srs-origin  bg volume filter
     volumes:
-      - ./origin.srs.conf:/usr/local/srs/conf/srs.conf:ro
-  srs-edge:
-    container_name: ${COMPOSE_PROJECT_NAME}-srs-edge
-    image: ossrs/srs:3
-    ports:
-      - 19350:19350  # rtmp  srs-edge
-    volumes:
-      - ./edge.srs.conf:/usr/local/srs/conf/srs.conf:ro
+      - ./simple.srs.conf:/usr/local/srs/conf/srs.conf:ro
+#  srs-edge:
+#    container_name: ${COMPOSE_PROJECT_NAME}-srs-edge
+#    image: ossrs/srs:3
+#    ports:
+#      - 19350:19350  # rtmp  srs-edge
+#    volumes:
+#      - ./edge.srs.conf:/usr/local/srs/conf/srs.conf:ro
