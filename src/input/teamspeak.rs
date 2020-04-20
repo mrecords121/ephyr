@@ -11,7 +11,7 @@ use std::{
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context, Poll},
-    time::{self, Duration},
+    time::Duration,
 };
 
 use audiopus::coder::{Decoder as OpusDecoder, GenericCtl as _};
@@ -132,6 +132,7 @@ impl InputBuilder {
 
     /// Builds out the configured [`Input`], ready for use.
     #[inline]
+    #[must_use]
     pub fn build(self) -> Input {
         Input {
             cfg: self.cfg,
@@ -168,13 +169,6 @@ pub struct Input {
 }
 
 impl Input {
-    /// Timeout for [`OpusDecoder`] to await packet, after which it's considered
-    /// to be not used anymore.
-    const OPUS_DECODER_TIMEOUT: Duration = Duration::from_secs(1);
-
-    /// Period to perform garbage collection of [`State::Connected::decoders`].
-    const OPUS_DECODERS_GC_PERIOD: Duration = Duration::from_secs(2);
-
     /// Maximum supported size of a decoded [Opus] audio frame received from
     /// [TeamSpeak] server.
     ///
@@ -197,6 +191,7 @@ impl Input {
     const OPUS_USUAL_FRAME_SIZE: usize = 48000 / 50;
 
     /// Starts creation of the new [`Input`].
+    #[allow(clippy::new_ret_no_self)]
     #[inline]
     pub fn new<A: Into<ServerAddress>>(server_address: A) -> InputBuilder {
         InputBuilder {
@@ -321,10 +316,7 @@ type MemberId = u16;
 /// with the last garbage collection time.
 ///
 /// Garbage collection happens with [`Input::OPUS_DECODERS_GC_PERIOD`].
-type OpusDecoders = (
-    HashMap<MemberId, (OpusDecoder, time::Instant)>,
-    time::Instant,
-);
+type OpusDecoders = HashMap<MemberId, OpusDecoder>;
 
 impl Input {
     /// Polls [`Input`] in [`State::Disconnected`].
@@ -425,8 +417,8 @@ impl Input {
                             "InAudioStream must be injected when Connected",
                         )
                     },
-                    decoders: (HashMap::new(), time::Instant::now()),
-                    data: vec![0f32; Self::OPUS_USUAL_FRAME_SIZE],
+                    decoders: OpusDecoders::new(),
+                    data: vec![0_f32; Self::OPUS_USUAL_FRAME_SIZE],
                     cursor: 0,
                 },
 
@@ -469,12 +461,12 @@ impl Input {
         buf: &mut [u8],
     ) -> Poll<Result<usize, InputError>> {
         if let State::Connected {
-            _conn: _,
             commands,
             audio,
             decoders,
             data,
             cursor,
+            ..
         } = &mut self.state
         {
             // If not all `data` was read yet, then read it to the end.
@@ -490,7 +482,8 @@ impl Input {
                 // `InAudio` packet we're interested in.
                 match ready!(Pin::new(audio).poll_next(cx)) {
                     Some(Ok(aud)) => {
-                        if decode_audio_packet(aud, data, decoders)?.is_some() {
+                        if decode_audio_packet(&aud, data, decoders)?.is_some()
+                        {
                             return Poll::Ready(Ok(write_audio_be(
                                 data, buf, cursor,
                             )));
@@ -592,9 +585,7 @@ impl fmt::Debug for State {
         match self {
             Self::Disconnected => f.debug_tuple("State::Disconnected").finish(),
             Self::Connecting {
-                conn: _,
-                commands,
-                audio,
+                commands, audio, ..
             } => f
                 .debug_struct("State::Connecting")
                 .field("conn", &"BoxFuture<Connection>")
@@ -703,74 +694,49 @@ fn write_audio_be(src: &[f32], dst: &mut [u8], cursor: &mut usize) -> usize {
 /// [TeamSpeak]: https://teamspeak.com
 /// [1]: https://wiki.multimedia.cx/index.php/PCM
 fn decode_audio_packet(
-    src: InAudio,
+    src: &InAudio,
     dst: &mut Vec<f32>,
     decoders: &mut OpusDecoders,
 ) -> Result<Option<usize>, InputError> {
     use InputError::*;
 
     if let AudioData::S2C {
-        id: _,
-        from,
-        codec,
-        data,
+        from, codec, data, ..
     }
     | AudioData::S2CWhisper {
-        id: _,
-        from,
-        codec,
-        data,
+        from, codec, data, ..
     } = src.data()
     {
         if !matches!(codec, CodecType::OpusVoice | CodecType::OpusMusic) {
             return Err(UnsupportedCodec(*codec));
         }
 
-        let now = time::Instant::now();
-
-        let (decoders, gc_at) = decoders;
-        // Garbage collect unused decoders.
-        /*
-        if !decoders.is_empty()
-            && (*gc_at + Input::OPUS_DECODERS_GC_PERIOD <= now)
-        {
-            decoders.retain(|_, (_, used_at)| {
-                *used_at + Input::OPUS_DECODER_TIMEOUT <= now
-            });
-        }
-        */
-
-        let decoder = if let Some((dcdr, at)) = decoders.get_mut(from) {
-            // If `OpusDecoder` is present for the given member, then update
-            // its usage time.
-            *at = now;
-            dcdr
-        } else {
-            // Otherwise, instantiate new `OpusDecoder` for the given member.
+        if !decoders.contains_key(from) {
             let dcdr = OpusDecoder::new(
                 audiopus::SampleRate::Hz48000,
                 audiopus::Channels::Mono, // TODO: test stereo?
             )
             .map_err(DecoderCreationFailed)?;
-            decoders.insert(*from, (dcdr, now));
-            &mut decoders.get_mut(from).unwrap().0
-        };
+            decoders.insert(*from, dcdr);
+        }
+        let decoder = decoders.get_mut(from).unwrap();
 
         if data.is_empty() {
+            // Note: In practice, this situation wasn't detected to happen ever.
             decoder.reset_state().map_err(DecoderResetFailed)?;
             log::debug!("Decoder of client {} reset it state", from);
             return Ok(None);
         }
-        // Sometimes TeamSpeak server sends 1-byte Opus control frame, which
-        // cannot be decoded (for example, when Push-to-Talk button is
-        // released). We should ignore such control frames to not break the
-        // decoding.
+        // When audio stream of member ends (for example, when Push-to-Talk
+        // button is released) TeamSpeak server sends 1-byte control frame,
+        // which represents an invalid Opus data and breaks the decoding.
+        // However, instead of decoding, we can use it to remove the appropriate
+        // `OpusDecoder` as it's not necessary anymore.
         if data.len() == 1 {
-            // TODO: use this for garbage collection?
-            // TODO: test with voice detection
-            //decoder.reset_state().map_err(DecoderResetFailed)?;
+            let _ = decoders.remove(from);
             return Ok(None);
         }
+
         let samples_num = loop {
             // TODO: use fec for decoding?
             match decoder.decode_float(Some(*data), &mut dst[..], false) {
@@ -783,9 +749,9 @@ fn decode_audio_packet(
                     if dst_len >= Input::OPUS_MAX_FRAME_SIZE {
                         return Err(MaxBufferSizeExceeded(dst_len));
                     } else if dst_len * 2 > Input::OPUS_MAX_FRAME_SIZE {
-                        dst.resize(Input::OPUS_MAX_FRAME_SIZE, 0f32);
+                        dst.resize(Input::OPUS_MAX_FRAME_SIZE, 0_f32);
                     } else {
-                        dst.resize(dst_len * 2, 0f32);
+                        dst.resize(dst_len * 2, 0_f32);
                     }
                 }
                 Err(e) => {

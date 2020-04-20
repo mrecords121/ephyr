@@ -1,3 +1,10 @@
+//! Mixing application to be used as [SRS] `exec.publish` command.
+//!
+//! It pulls RTMP stream from [SRS], and mixes it with other sources described
+//! in [`Spec`], republishing the result to specified endpoints.
+//!
+//! [SRS]: https://github.com/ossrs/srs
+
 #![deny(
     nonstandard_style,
     rust_2018_idioms,
@@ -20,26 +27,23 @@ pub mod input;
 pub mod mixer;
 pub mod spec;
 
-use std::{
-    marker::PhantomData,
-    sync::{
-        atomic::{AtomicI32, Ordering},
-        Arc,
-    },
+use std::sync::{
+    atomic::{AtomicI32, Ordering},
+    Arc,
 };
 
 use anyhow::anyhow;
-use futures::{
-    future, stream, FutureExt as _, StreamExt as _, TryStreamExt as _,
-};
+use futures::{future, FutureExt as _};
 use slog_scope as log;
 use tokio::io;
 
-use self::{filter::silence, input::teamspeak, mixer::ffmpeg};
+use self::mixer::ffmpeg;
 
 #[doc(inline)]
 pub use self::spec::Spec;
 
+/// Runs application, returning its exit code.
+#[must_use]
 pub fn run() -> i32 {
     let opts = cli::Opts::from_args();
 
@@ -88,6 +92,7 @@ pub fn run() -> i32 {
     Arc::try_unwrap(exit_code).unwrap().into_inner()
 }
 
+/// Runs all mixers of the application defined in [`Spec`] for the given `app`.
 pub async fn run_mixers(
     app: &str,
     stream: &str,
@@ -98,7 +103,8 @@ pub async fn run_mixers(
     })?;
 
     if mixers_spec.is_empty() {
-        return Ok(future::pending().await);
+        future::pending::<()>().await;
+        return Ok(());
     }
 
     future::try_join_all(
@@ -145,6 +151,7 @@ pub async fn run_mixers(
 /// Creates, configures and returns main [`Logger`] of the application.
 ///
 /// [`Logger`]: slog::Logger
+#[must_use]
 pub fn main_logger(opts: &cli::Opts) -> slog::Logger {
     use slog::Drain as _;
     use slog_async::OverflowStrategy::Drop;
@@ -170,6 +177,7 @@ pub fn main_logger(opts: &cli::Opts) -> slog::Logger {
 /// If listening to OS signals fails.
 pub async fn shutdown_signal() -> io::Result<&'static str> {
     #[cfg(unix)]
+    #[allow(clippy::mut_mut)]
     {
         use tokio::signal::unix::{signal, SignalKind};
 

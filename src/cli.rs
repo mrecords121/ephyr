@@ -86,6 +86,7 @@ impl Opts {
     ///
     /// Prints the error message and quits the program in case of failure.
     #[inline]
+    #[must_use]
     pub fn from_args() -> Self {
         <Self as StructOpt>::from_args()
     }

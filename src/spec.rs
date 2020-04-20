@@ -87,8 +87,8 @@ impl Validate for Spec {
     /// Performs nested validation of [`Spec`].
     fn validate(&self) -> Result<(), ValidationErrors> {
         let mut out = Ok(());
-        for (_, app) in &self.spec {
-            for (_, mixer) in app {
+        for app in self.spec.values() {
+            for mixer in app.values() {
                 out =
                     ValidationErrors::merge(out, "app/mixer", mixer.validate());
             }
@@ -154,7 +154,7 @@ impl Validate for Mixer {
             );
             out = ValidationErrors::merge(out, "src", Err(errs));
         }
-        for (_, s) in &self.src {
+        for s in self.src.values() {
             out = ValidationErrors::merge(out, "src", s.validate());
         }
         if self.dest.is_empty() {
@@ -168,7 +168,7 @@ impl Validate for Mixer {
             );
             out = ValidationErrors::merge(out, "dest", Err(errs));
         }
-        for (_, d) in &self.dest {
+        for d in self.dest.values() {
             out = ValidationErrors::merge(out, "dest", d.validate());
         }
         out

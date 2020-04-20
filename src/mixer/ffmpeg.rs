@@ -1,21 +1,37 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    process::Stdio,
-};
+//! [FFmpeg] based mixer.
+//!
+//! [FFmpeg]: https://ffmpeg.org
+
+use std::{collections::BTreeMap, process::Stdio};
 
 use anyhow::anyhow;
 use tokio::{io, process::Command};
 
 use crate::{filter::silence, input::teamspeak, spec};
 
+/// Mixer that performs mixing via [FFmpeg] invoked as a child process.
+///
+/// [FFmpeg]: https://ffmpeg.org
 pub struct Mixer {
+    /// RTMP application of live stream being mixed.
     app: String,
+
+    /// RTMP key of live stream being mixed.
     stream: String,
+
+    /// [FFmpeg] command to run and perform mixing with.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
     cmd: Command,
+
+    /// Audio data to be fed into [FFmpeg]'s STDIN.
     stdin: Option<silence::Filler<teamspeak::Input>>,
 }
 
 impl Mixer {
+    /// Creates new [`Mixer`] for the given `app` and `stream` according to the
+    /// provided [`spec::Mixer`].
+    #[must_use]
     pub fn new(app: &str, stream: &str, cfg: &spec::Mixer) -> Self {
         use slog::Drain as _;
 
@@ -38,7 +54,7 @@ impl Mixer {
         }
 
         let srcs = cfg.src.iter().enumerate().collect::<BTreeMap<_, _>>();
-        for (_, (name, src)) in &srcs {
+        for (name, src) in srcs.values() {
             match src.url.scheme() {
                 "ts" => mixer.add_teamspeak_src(name, src),
                 "rtmp" => mixer.add_rtmp_src(src),
@@ -88,7 +104,7 @@ impl Mixer {
 
         if cfg.dest.len() > 1 {
             let mut dsts = Vec::with_capacity(cfg.dest.len());
-            for (_, dst) in &cfg.dest {
+            for dst in cfg.dest.values() {
                 let url = dst
                     .url
                     .to_string()
@@ -98,18 +114,22 @@ impl Mixer {
             }
             mixer.cmd.args(&["-f", "tee", &dsts.join("|")]);
         } else {
-            let url = cfg.dest.values().next().unwrap().url
+            let url = cfg
+                .dest
+                .values()
+                .next()
+                .unwrap()
+                .url
                 .to_string()
                 .replace("[app]", &mixer.app)
                 .replace("[stream]", &mixer.stream);
-            mixer
-                .cmd
-                .args(&["-f", "flv", url.as_str()]);
+            mixer.cmd.args(&["-f", "flv", url.as_str()]);
         }
 
         mixer
     }
 
+    /// Adds [`teamspeak::Input`] to inputs for mixing.
     fn add_teamspeak_src(&mut self, name: &str, cfg: &spec::Source) {
         let mut host = cfg.url.host().unwrap().to_string();
         if let Some(port) = cfg.url.port() {
@@ -132,6 +152,9 @@ impl Mixer {
             .args(&["-i", "pipe:0"]);
     }
 
+    /// Adds remote [RTMP] endpoint as input for mixing.
+    ///
+    /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
     fn add_rtmp_src(&mut self, cfg: &spec::Source) {
         let url = cfg
             .url
@@ -141,8 +164,9 @@ impl Mixer {
         self.cmd.args(&["-i", &url]);
     }
 
+    /// Runs this [`Mixer`] until it completes or fails.
     pub async fn run(mut self) -> Result<(), anyhow::Error> {
-        let mut ffmpeg = self
+        let ffmpeg = self
             .cmd
             .spawn()
             .map_err(|e| anyhow!("Failed to spawn FFmpeg process: {}", e))?;
