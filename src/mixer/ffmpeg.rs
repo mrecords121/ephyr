@@ -65,25 +65,30 @@ impl Mixer {
         let mut filters = Vec::with_capacity(srcs.len());
         let mut video_num = 0;
         for (i, (name, src)) in &srcs {
-            let mut f = format!(
+            // WARNING: The filters order matters here!
+            let extra_filters = if src.url.scheme() == "ts" {
+                "aresample=async=1,"
+            } else {
+                ""
+            };
+            let filter_complex = format!(
                 "adelay=delays={delay}|all=1,\
                  volume@{name}={volume},\
+                 {extra_filters}\
                  azmq=bind_address=tcp\\\\\\://0.0.0.0\\\\\\:{zmq_port}",
                 delay = src.delay.as_millis(),
                 volume = src.volume,
+                extra_filters = extra_filters,
                 zmq_port = src.zmq.port,
                 name = name,
             );
-            if src.url.scheme() == "ts" {
-                f = format!("aresample=async=1,{}", f);
-            }
             if src.url.scheme() == "rtmp" {
                 video_num = *i;
             }
             filters.push(format!(
                 "[{num}:a]{filter}[{name}]",
                 num = i,
-                filter = f,
+                filter = filter_complex,
                 name = name,
             ));
         }
@@ -148,6 +153,7 @@ impl Mixer {
         ));
 
         self.cmd
+            .args(&["-thread_queue_size", "512"])
             .args(&["-f", "f32be", "-sample_rate", "48000"])
             .args(&["-use_wallclock_as_timestamps", "true"])
             .args(&["-i", "pipe:0"]);
@@ -162,7 +168,7 @@ impl Mixer {
             .to_string()
             .replace("[app]", &self.app)
             .replace("[stream]", &self.stream);
-        self.cmd.args(&["-i", &url]);
+        self.cmd.args(&["-thread_queue_size", "512", "-i", &url]);
     }
 
     /// Runs this [`Mixer`] until it completes or fails.
