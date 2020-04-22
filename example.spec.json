@@ -1,0 +1,25 @@
+{
+  "spec": {
+    "input": {
+      "trance": {
+        "src": {
+          "original": {
+            "url": "rtmp://127.0.0.1/[app]/[stream]",
+            "volume": 1,
+            "zmq": {"port": 60001}
+          },
+          "music": {
+            "url": "ts://ts3.ts3.online:8722/[cspacer]Best-of-Trance-Radio",
+            "delay": "4s",
+            "volume": 0.1,
+            "zmq": {"port": 60002}
+          }
+        },
+        "dest": {
+          "output": {"url": "rtmp://127.0.0.1/output/musicify_[stream]"}
+        }
+      }
+    },
+    "output": {}
+  }
+}

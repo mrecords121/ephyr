@@ -11,39 +11,40 @@ OS_NAME := $(shell uname -s)
 
 
 
+######################
+# Project parameters #
+######################
+
+IMAGE_NAME ?= $(strip $(shell grep 'IMAGE_NAME=' .env | cut -d '=' -f2))
+IMAGE_TAG ?= $(strip $(shell grep 'IMAGE_TAG=' .env | cut -d '=' -f2))
+
+
+
+
 ###########
 # Aliases #
 ###########
 
+down: docker.down
+
+
 fmt: cargo.fmt
+
+
+image: docker.image
 
 
 lint: cargo.lint
 
 
+up: docker.up
 
 
-############
-# Commands #
-############
 
-# Apply audio filters to background volume with ZeroMQ.
-#
-# Usage:
-#	make audio [volume=<volume-rate>] [delay=<milliseconds>]
 
-audio:
-ifneq ($(volume),)
-	docker run --rm --network=host --entrypoint sh tyranron/srs:3 -c \
-		'echo "volume@y volume $(volume)" \
-		 | zmqsend -b tcp://127.0.0.1:11235'
-endif
-ifneq ($(delay),)
-	docker run --rm --network=host --entrypoint sh tyranron/srs:3 -c \
-		'echo "adelay@x reinit delays=$(delay)|all=1" \
-		 | zmqsend -b tcp://127.0.0.1:11235'
-endif
-
+########################
+# Interaction commands #
+########################
 
 # List to STDOUT available audio/video devices with FFmpeg.
 #
@@ -58,55 +59,48 @@ else
 endif
 
 
-# Stop running development environment and remove all related Docker containers.
+# Play mixed RTMP stream from Origin SRS.
 #
 # Usage:
-#	make down
+#	make play [stream=(output/musicify_mic|<app>/<stream>)]
 
-cargo-run-pid = $(word 1,$(shell ps -ax | grep -v grep \
-                                        | grep 'target/' \
-                                        | grep '/rtmp-mixing-poc'))
-
-down:
-ifneq ($(cargo-run-pid),)
-	kill $(cargo-run-pid)
-endif
-	docker-compose down --rmi=local -v
-
-
-# Play re-streamed RTMP stream from Nginx.
-#
-# Usage:
-#	make play [from=(youtube|edge)]
+play-stream = $(if $(call eq,$(stream),),output/musicify_mic,$(stream))
 
 play:
-	ffplay -rtmp_live 1 \
-		rtmp://127.0.0.1:1935$(if $(call eq,$(from),edge),0,)/live/ru-en$(if $(call eq,$(from),edge),_ff,)
+	ffplay -rtmp_live 1 rtmp://127.0.0.1:1935/$(play-stream)
 
 
-# Publish raw local camera RTMP stream to re-streaming application.
+# Publish raw local camera RTMP stream to Origin SRS.
 #
 # Usage:
-#	make publish
+#	make publish [stream=(input/mic|<app>/<stream>)]
+
+publish-stream = $(if $(call eq,$(stream),),input/trance,$(stream))
 
 publish:
 ifeq ($(OS_NAME),Darwin)
 	ffmpeg -f avfoundation -video_device_index 0 -audio_device_index 0 -i '' \
-	       -f flv rtmp://127.0.0.1:19351/ingest/ru-en
+	       -f flv rtmp://127.0.0.1:1935/$(publish-stream)
 else
 	$(error "'publish' command is not implemented for your OS")
 endif
 
 
-# Run development environment.
+# Tune audio filters on-fly for mixed RTMP stream.
 #
 # Usage:
-#	make up [background=(no|yes)]
+#	make tune volume=<volume-rate> [track=(music|original)]
 
-up: down
-	docker-compose up \
-		$(if $(call eq,$(background),yes),-d,--abort-on-container-exit)
-#	cargo run -- push -h 127.0.0.1 -a stream -s some -t some
+tune-track = $(if $(call eq,$(track),),music,$(track))
+tune-volume-port = $(if $(call eq,$(tune-track),music),60002,60001)
+
+tune:
+ifneq ($(volume),)
+	docker run --rm --network=host --entrypoint sh \
+		$(IMAGE_NAME):$(IMAGE_TAG) -c \
+			'echo "volume@$(tune-track) volume $(volume)" \
+			 | zmqsend -b tcp://127.0.0.1:$(tune-volume-port)'
+endif
 
 
 
@@ -175,9 +169,54 @@ endif
 
 
 
+###################
+# Docker commands #
+###################
+
+# Stop project in Docker Compose development environment
+# and remove all related containers.
+#
+# Usage:
+#	make docker.down
+
+docker.down:
+	docker-compose down --rmi=local -v
+
+
+# Build project Docker image.
+#
+# Usage:
+#	make docker.image [tag=($(IMAGE_TAG)|<tag>)]
+#	                  [no-cache=(no|yes)]
+
+docker.image:
+	docker build --network=host --force-rm \
+		$(if $(call eq,$(no-cache),yes),\
+			--no-cache --pull,) \
+		-t $(IMAGE_NAME):$(if $(call eq,$(tag),),$(IMAGE_TAG),$(tag)) ./
+
+
+# Run project in Docker Compose development environment.
+#
+# Usage:
+#	make docker.up [rebuild=(no|yes)] [background=(no|yes)]
+
+docker.up: docker.down
+ifeq ($(rebuild),yes)
+	@make docker.image
+endif
+	docker-compose up \
+		$(if $(call eq,$(background),yes),-d,--abort-on-container-exit)
+
+
+
+
 ##################
 # .PHONY section #
 ##################
 
-.PHONY: audio devices.list down fmt lint play publish up \
-        cargo cargo.fmt cargo.lint
+.PHONY: down fmt image lint up \
+        play publish tune \
+        cargo cargo.fmt cargo.lint \
+        devices.list \
+        docker.down docker.image docker.up

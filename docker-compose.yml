@@ -1,0 +1,15 @@
+version: "2"
+
+services:
+  srs-origin:
+    container_name: ${COMPOSE_PROJECT_NAME}-srs-origin
+    image: ${IMAGE_NAME}:${IMAGE_TAG}
+    build:
+      context: .
+    ports:
+      - 1935:1935      # rtmp  srs-origin
+      - 60001:60001    # zmq   "original" audio filter
+      - 60002:60002    # zmq   "music" audio filter
+    volumes:
+      - ./origin.srs.conf:/usr/local/srs/conf/srs.conf:ro
+      - ./example.spec.json:/etc/ephyr/spec.json:ro

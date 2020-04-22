@@ -5,6 +5,10 @@ edition = "2018"
 authors = ["Kai Ren <tyranron@gmail.com>"]
 publish = false
 
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
 [dependencies]
 audiopus = "0.2"
 anyhow = "1.0"
@@ -31,7 +35,7 @@ validator_derive = "0.10"
     features = ["serde-float"]
 [dependencies.tokio]
     version = "0.2"
-    features = ["io-util", "process", "signal", "stream", "time", "fs"]
+    features = ["io-util", "process", "signal", "stream", "time"]
 [dependencies.tokio-01]
     version = "0.1"
     package = "tokio"
