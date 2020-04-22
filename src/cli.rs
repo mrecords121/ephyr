@@ -48,6 +48,20 @@ pub struct Opts {
     )]
     pub spec: String,
 
+    /// Path to [FFmpeg] binary.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
+    #[default = "/usr/local/bin/ffmpeg"]
+    #[structopt(
+        short,
+        long,
+        env = "FFMPEG_PATH",
+        default_value = "/usr/local/bin/ffmpeg",
+        help = "Path to FFmpeg binary",
+        long_help = "Path to FFmpeg binary"
+    )]
+    pub ffmpeg: String,
+
     /// Verbosity level of application logs.
     #[structopt(
         short,

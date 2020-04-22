@@ -67,9 +67,7 @@ pub fn run() -> i32 {
     tokio_compat::run_std(
         future::select(
             async move {
-                if let Err(e) =
-                    run_mixers(&opts.app, &opts.stream, &schema).await
-                {
+                if let Err(e) = run_mixers(&opts, &schema).await {
                     log::crit!("Cannot run: {}", e);
                     exit_code_ref.compare_and_swap(0, 1, Ordering::SeqCst);
                 }
@@ -94,12 +92,11 @@ pub fn run() -> i32 {
 
 /// Runs all mixers of the application defined in [`Spec`] for the given `app`.
 pub async fn run_mixers(
-    app: &str,
-    stream: &str,
+    opts: &cli::Opts,
     schema: &Spec,
 ) -> Result<(), anyhow::Error> {
-    let mixers_spec = schema.spec.get(app).ok_or_else(|| {
-        anyhow!("Spec doesn't allows '{}' live stream app", app)
+    let mixers_spec = schema.spec.get(&opts.app).ok_or_else(|| {
+        anyhow!("Spec doesn't allows '{}' live stream app", opts.app)
     })?;
 
     if mixers_spec.is_empty() {
@@ -107,43 +104,10 @@ pub async fn run_mixers(
         return Ok(());
     }
 
-    future::try_join_all(
-        mixers_spec
-            .iter()
-            .map(|(_, cfg)| ffmpeg::Mixer::new(app, stream, cfg).run()),
-    )
+    future::try_join_all(mixers_spec.values().map(|cfg| {
+        ffmpeg::Mixer::new(&opts.ffmpeg, &opts.app, &opts.stream, cfg).run()
+    }))
     .await?;
-
-    /*
-    let mut ts_input = teamspeak::Input::new("allatra.ruvoice.com:10335")
-        .channel("Translation/test_channel")
-        .name_as("[Bot] Origin SRS")
-        .build();
-    let mut ts_input = silence::Filler::new(ts_input, 8000);
-
-    let mut ffmpeg = tokio::process::Command::new("ffplay")
-        .arg("-f")
-        .arg("f32be")
-        .arg("-sample_rate")
-        .arg("48000")
-        .arg("-use_wallclock_as_timestamps")
-        .arg("true")
-        .arg("-i")
-        .arg("pipe:0")
-        .arg("-af")
-        .arg("aresample=async=1")
-        .arg("-loglevel")
-        .arg("debug")
-        .stdin(std::process::Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()
-        .expect("Failed to spawn FFmpeg");
-    let ffmpeg_stdin =
-        &mut ffmpeg.stdin.expect("FFmpeg's STDIN hasn't been captured");
-    tokio::io::copy(&mut ts_input, ffmpeg_stdin)
-        .await
-        .expect("Failed to write data");
-        */
 
     Ok(())
 }

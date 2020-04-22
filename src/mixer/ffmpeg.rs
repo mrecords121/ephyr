@@ -32,13 +32,13 @@ impl Mixer {
     /// Creates new [`Mixer`] for the given `app` and `stream` according to the
     /// provided [`spec::Mixer`].
     #[must_use]
-    pub fn new(app: &str, stream: &str, cfg: &spec::Mixer) -> Self {
+    pub fn new(bin: &str, app: &str, stream: &str, cfg: &spec::Mixer) -> Self {
         use slog::Drain as _;
 
         let mut mixer = Self {
             app: app.into(),
             stream: stream.into(),
-            cmd: Command::new("ffmpeg"),
+            cmd: Command::new(bin),
             stdin: None,
         };
         mixer
@@ -66,12 +66,13 @@ impl Mixer {
         let mut video_num = 0;
         for (i, (name, src)) in &srcs {
             let mut f = format!(
-                "adelay@x=delays={delay}|all=1,\
-                 volume={volume},\
+                "adelay=delays={delay}|all=1,\
+                 volume@{name}={volume},\
                  azmq=bind_address=tcp\\\\\\://0.0.0.0\\\\\\:{zmq_port}",
                 delay = src.delay.as_millis(),
                 volume = src.volume,
                 zmq_port = src.zmq.port,
+                name = name,
             );
             if src.url.scheme() == "ts" {
                 f = format!("aresample=async=1,{}", f);
@@ -139,7 +140,7 @@ impl Mixer {
             teamspeak::Input::new(host)
                 .channel(&cfg.url.path()[1..])
                 .name_as(format!(
-                    "[Bot] SRS {}/{} -> {}",
+                    "[Bot] SRS {}/{} <- {}",
                     self.app, self.stream, name,
                 ))
                 .build(),
