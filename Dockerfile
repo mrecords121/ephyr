@@ -3,7 +3,7 @@
 #
 
 # https://github.com/jrottenberg/ffmpeg/blob/master/docker-images/4.1/centos7/Dockerfile
-FROM jrottenberg/ffmpeg:4.1-centos7 AS build-ephyr
+FROM jrottenberg/ffmpeg:4.2-centos7 AS build-ephyr
 
 
 # Install Rust.
@@ -61,7 +61,7 @@ FROM ossrs/srs:3 AS build-srs
 #
 
 # https://github.com/jrottenberg/ffmpeg/blob/master/docker-images/4.1/centos7/Dockerfile
-FROM jrottenberg/ffmpeg:4.1-centos7 AS dist
+FROM jrottenberg/ffmpeg:4.2-centos7 AS dist
 
 COPY --from=build-ephyr /tmp/ephyr/target/release/ephyr /usr/local/bin/ephyr
 
