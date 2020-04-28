@@ -307,6 +307,10 @@ enum State {
     },
 }
 
+// TODO #4: Spawn `InCommandsStream` and `InAudioStream` on `Drop` to disconnect
+//          normally.
+//      https://github.com/tyranron/ephyr/issues/4
+
 /// Type of [TeamSpeak] channel member ID.
 ///
 /// [TeamSpeak]: https://teamspeak.com
@@ -370,6 +374,9 @@ impl Input {
                 // with the server, until it does.
                 Poll::Pending => {
                     let ok = {
+                        // TODO #5: Out-of-order errors still happens rarely.
+                        //      https://github.com/tyranron/ephyr/issues/5
+
                         // When `State::Connecting` we still need to poll and
                         // process `InAudio` packets for preserving correct
                         // packets processing order inside `tsclientlib`
@@ -714,7 +721,9 @@ fn decode_audio_packet(
         if !decoders.contains_key(from) {
             let dcdr = OpusDecoder::new(
                 audiopus::SampleRate::Hz48000,
-                audiopus::Channels::Mono, // TODO: test stereo?
+                // TODO #2: Use stereo?
+                //      https://github.com/tyranron/ephyr/issues/2
+                audiopus::Channels::Mono,
             )
             .map_err(DecoderCreationFailed)?;
             decoders.insert(*from, dcdr);
@@ -738,7 +747,8 @@ fn decode_audio_packet(
         }
 
         let samples_num = loop {
-            // TODO: use fec for decoding?
+            // TODO #3: Use `fec` for decoding?
+            //      https://github.com/tyranron/ephyr/issues/3
             match decoder.decode_float(Some(*data), &mut dst[..], false) {
                 Ok(n) => break n,
                 Err(audiopus::Error::Opus(
