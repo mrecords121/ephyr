@@ -163,7 +163,8 @@ ifeq ($(dockerized),yes)
 		rust:$(RUST_VER) \
 			make cargo.lint dockerized=no
 else
-	cargo clippy --all -- -D clippy::pedantic -D warnings
+	cargo clippy --all -- -D clippy::pedantic -D warnings \
+		-A clippy::enum_glob_use
 endif
 
 

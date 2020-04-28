@@ -90,7 +90,13 @@ pub fn run() -> i32 {
     Arc::try_unwrap(exit_code).unwrap().into_inner()
 }
 
-/// Runs all mixers of the application defined in [`Spec`] for the given `app`.
+/// Runs all mixers of the application defined in [`Spec`] for the given
+/// [`cli::Opts::app`].
+///
+/// # Errors
+///
+/// - If [`Spec`] doesn't contain [`cli::Opts::app`].
+/// - If at least one mixer fails to run.
 pub async fn run_mixers(
     opts: &cli::Opts,
     schema: &Spec,

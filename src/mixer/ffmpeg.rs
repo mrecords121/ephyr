@@ -174,6 +174,12 @@ impl Mixer {
     }
 
     /// Runs this [`Mixer`] until it completes or fails.
+    ///
+    /// # Errors
+    ///
+    /// Errors if running and attaching to [FFmpeg] process fails.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
     pub async fn run(mut self) -> Result<(), anyhow::Error> {
         let ffmpeg = self
             .cmd
