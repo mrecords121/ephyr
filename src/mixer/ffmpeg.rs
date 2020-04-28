@@ -106,6 +106,7 @@ impl Mixer {
             .cmd
             .args(&["-filter_complex", &filters.join(";")])
             .args(&["-map", "[out]", "-map", &format!("{}:v", video_num)])
+            .args(&["-max_muxing_queue_size", "50000000"])
             .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"]);
 
         if cfg.dest.len() > 1 {
