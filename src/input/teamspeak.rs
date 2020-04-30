@@ -123,10 +123,17 @@ impl InputBuilder {
     ///
     /// If not given, then `TeamSpeakBot` will be used.
     ///
+    /// Beware, that [TeamSpeak] limits client names by
+    /// [30 UTF-8 characters max][1]. If the provided `name` is longer, then it
+    /// will be automatically truncated to fit into the requirement.
+    ///
     /// [TeamSpeak]: https://teamspeak.com
+    /// [1]: https://tinyurl.com/y7z3nkpx
     #[inline]
     pub fn name_as<S: Into<String>>(mut self, name: S) -> Self {
-        self.cfg.name_as = Some(name.into());
+        let mut name = name.into();
+        name = name.chars().take(30).collect();
+        self.cfg.name_as = Some(name);
         self
     }
 

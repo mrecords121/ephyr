@@ -143,14 +143,9 @@ impl Mixer {
             host = format!("{}:{}", host, port);
         }
         self.stdin = Some(silence::Filler::new(
-            // TODO #1: Limit `name_as` up to 20 symbols
-            //      https://github.com/tyranron/ephyr/issues/1
             teamspeak::Input::new(host)
                 .channel(&cfg.url.path()[1..])
-                .name_as(format!(
-                    "[Bot] SRS {}/{} <- {}",
-                    self.app, self.stream, name,
-                ))
+                .name_as(format!("🤖 {}/{} <- {}", self.app, self.stream, name))
                 .build(),
             8000, // Hz
         ));

@@ -7,7 +7,7 @@ fn main() {
     tokio_compat::run_std(async {
         let ts_input = teamspeak::Input::new("ts3.ts3.online:8722")
             .channel("[cspacer]Best-of-Trance-Radio")
-            .name_as("[Bot] ephyr::play_ts")
+            .name_as("🤖 ephyr::play_ts")
             .build();
         let mut ts_input = silence::Filler::new(ts_input, 8000);
 
