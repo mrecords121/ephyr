@@ -19,9 +19,9 @@ use byteorder::{BigEndian, ByteOrder as _};
 use derive_more::{Display, Error};
 use futures::{
     compat::{Compat01As03, Future01CompatExt as _, Stream01CompatExt as _},
-    ready,
-    stream::{BoxStream, StreamExt as _},
-    Stream,
+    ready, sink,
+    stream::BoxStream,
+    FutureExt as _, Stream, StreamExt as _, TryFutureExt as _,
 };
 use slog_scope as log;
 use tokio::{
@@ -314,10 +314,6 @@ enum State {
     },
 }
 
-// TODO #4: Spawn `InCommandsStream` and `InAudioStream` on `Drop` to disconnect
-//          normally.
-//      https://github.com/tyranron/ephyr/issues/4
-
 /// Type of [TeamSpeak] channel member ID.
 ///
 /// [TeamSpeak]: https://teamspeak.com
@@ -590,6 +586,67 @@ fn poll_next_packet<P: fmt::Debug>(
         Poll::Ready(None) => {
             log::error!("Receiving {} packets finished", typ);
             false
+        }
+    }
+}
+
+impl Drop for Input {
+    /// Spawns [`InCommandsStream`] and [`InAudioStream`] (if any) to be fully
+    /// drained for disconnecting from [TeamSpeak] server normally.
+    ///
+    /// This is required, because [`tsclientlib`] still awaits in background
+    /// for [`InCommandsStream`] being processed, even after [`Connection`] is
+    /// all dropped.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    fn drop(&mut self) {
+        if !matches!(
+            self.state, State::Connected { .. } | State::Connecting { .. }
+        ) {
+            return;
+        }
+
+        let (commands, audio) =
+            match mem::replace(&mut self.state, State::Disconnected) {
+                State::Connected {
+                    commands, audio, ..
+                } => (Some(commands), Some(audio)),
+                State::Connecting {
+                    commands, audio, ..
+                } => (
+                    commands.lock().unwrap().take(),
+                    audio.lock().unwrap().take(),
+                ),
+                _ => {
+                    debug_assert!(
+                        false,
+                        "Entered unreachable match arm in \
+                         teamspeak::Input::drop",
+                    );
+                    #[allow(unsafe_code)]
+                    unsafe {
+                        unreachable_unchecked()
+                    }
+                }
+            };
+
+        if let Some(strm) = commands {
+            tokio_01::spawn(
+                strm.map(Ok)
+                    .forward(sink::drain())
+                    .map_err(|_| ())
+                    .boxed()
+                    .compat(),
+            );
+        }
+        if let Some(strm) = audio {
+            tokio_01::spawn(
+                strm.map(Ok)
+                    .forward(sink::drain())
+                    .map_err(|_| ())
+                    .boxed()
+                    .compat(),
+            );
         }
     }
 }

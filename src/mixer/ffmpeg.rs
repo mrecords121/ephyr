@@ -137,6 +137,7 @@ impl Mixer {
     }
 
     /// Adds [`teamspeak::Input`] to inputs for mixing.
+    #[allow(clippy::non_ascii_literal)]
     fn add_teamspeak_src(&mut self, name: &str, cfg: &spec::Source) {
         let mut host = cfg.url.host().unwrap().to_string();
         if let Some(port) = cfg.url.port() {
