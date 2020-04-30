@@ -233,13 +233,11 @@ impl AsyncRead for Input {
         cx: &mut Context<'_>,
         buf: &mut [u8],
     ) -> Poll<io::Result<usize>> {
-        use State::*;
-
         match self.state {
-            Disconnected => self.poll_disconnected(cx, buf),
-            Connecting { .. } => self.poll_connecting(cx, buf),
-            Connected { .. } => self.poll_read_connected(cx, buf),
-            Backoff { .. } => self.poll_backoff(cx, buf),
+            State::Disconnected => self.poll_disconnected(cx, buf),
+            State::Connecting { .. } => self.poll_connecting(cx, buf),
+            State::Connected { .. } => self.poll_read_connected(cx, buf),
+            State::Backoff { .. } => self.poll_backoff(cx, buf),
         }
         .map(|res| res.map_err(Into::into))
     }
@@ -769,7 +767,10 @@ fn decode_audio_packet(
     dst: &mut Vec<f32>,
     decoders: &mut OpusDecoders,
 ) -> Result<Option<usize>, InputError> {
-    use InputError::*;
+    use InputError::{
+        DecoderCreationFailed, DecoderResetFailed, DecodingFailed,
+        MaxBufferSizeExceeded, UnsupportedCodec,
+    };
 
     if let AudioData::S2C {
         from, codec, data, ..
@@ -889,13 +890,14 @@ pub enum InputError {
 
 impl From<InputError> for io::Error {
     fn from(e: InputError) -> Self {
-        use InputError::*;
+        use InputError as E;
+
         io::Error::new(
             match e {
-                UnsupportedCodec(_)
-                | DecodingFailed(_)
-                | MaxBufferSizeExceeded(_) => io::ErrorKind::InvalidData,
-                DecoderCreationFailed(_) | DecoderResetFailed(_) => {
+                E::UnsupportedCodec(_)
+                | E::DecodingFailed(_)
+                | E::MaxBufferSizeExceeded(_) => io::ErrorKind::InvalidData,
+                E::DecoderCreationFailed(_) | E::DecoderResetFailed(_) => {
                     io::ErrorKind::Other
                 }
             },
