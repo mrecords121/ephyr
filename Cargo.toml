@@ -51,3 +51,6 @@ validator_derive = "0.10"
 
 [dev-dependencies]
 serde_json = "1.0"
+
+[workspace]
+members = ["ui"]
