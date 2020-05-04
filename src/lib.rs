@@ -110,8 +110,9 @@ pub async fn run_mixers(
         return Ok(());
     }
 
-    future::try_join_all(mixers_spec.values().map(|cfg| {
-        ffmpeg::Mixer::new(&opts.ffmpeg, &opts.app, &opts.stream, cfg).run()
+    future::try_join_all(mixers_spec.iter().map(|(name, cfg)| {
+        ffmpeg::Mixer::new(&opts.ffmpeg, &opts.app, &opts.stream, name, cfg)
+            .run()
     }))
     .await?;
 

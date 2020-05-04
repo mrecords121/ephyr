@@ -19,6 +19,9 @@ pub struct Mixer {
     /// RTMP key of live stream being mixed.
     stream: String,
 
+    /// Unique name of this [`Mixer`] for `app`.
+    name: String,
+
     /// [FFmpeg] command to run and perform mixing with.
     ///
     /// [FFmpeg]: https://ffmpeg.org
@@ -29,15 +32,22 @@ pub struct Mixer {
 }
 
 impl Mixer {
-    /// Creates new [`Mixer`] for the given `app` and `stream` according to the
-    /// provided [`spec::Mixer`].
+    /// Creates new `name`d [`Mixer`] for the given `app` and `stream` according
+    /// to the provided [`spec::Mixer`].
     #[must_use]
-    pub fn new(bin: &str, app: &str, stream: &str, cfg: &spec::Mixer) -> Self {
+    pub fn new(
+        bin: &str,
+        app: &str,
+        stream: &str,
+        name: &str,
+        cfg: &spec::Mixer,
+    ) -> Self {
         use slog::Drain as _;
 
         let mut mixer = Self {
             app: app.into(),
             stream: stream.into(),
+            name: name.into(),
             cmd: Command::new(bin),
             stdin: None,
         };
@@ -146,7 +156,10 @@ impl Mixer {
         self.stdin = Some(silence::Filler::new(
             teamspeak::Input::new(host)
                 .channel(&cfg.url.path()[1..])
-                .name_as(format!("🤖 {}/{} <- {}", self.app, self.stream, name))
+                .name_as(format!(
+                    "🤖 {}/{} <- {}/{}",
+                    self.app, self.stream, self.name, name,
+                ))
                 .build(),
             8000, // Hz
         ));
