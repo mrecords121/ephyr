@@ -243,10 +243,25 @@
   resolved "https://registry.yarnpkg.com/@xtuc/long/-/long-4.2.2.tgz#d291c6a4e97989b5c61d9acf396ae4fe133a718d"
   integrity sha512-NuHqBY1PB/D8xU6s/thBgOAiAP7HOYDQ32+BFZILJ8ivkUkAHQnWfn6WhL79Owj1qmUnoN/YPhktdIoucipkAQ==
 
+"@zendeskgarden/css-bedrock@^8.0":
+  version "8.0.0"
+  resolved "https://registry.yarnpkg.com/@zendeskgarden/css-bedrock/-/css-bedrock-8.0.0.tgz#129a106133c63b8f95a2efb6512dccd48576c59b"
+  integrity sha512-VRdVAUX2+Nb8rxYtIqSmIR4m3dSellfoTKUpTsv6QAaZjfIg0Jltig4yrLe/7zrESEYMjHDO2rDG/kMgDZ8TSQ==
+  dependencies:
+    "@zendeskgarden/css-variables" "^6.4.5"
+    normalize.css "^8.0.0"
+
 "@zendeskgarden/css-buttons@^7.0":
   version "7.0.19"
   resolved "https://registry.yarnpkg.com/@zendeskgarden/css-buttons/-/css-buttons-7.0.19.tgz#8755e54bd9e0cf472dddf2b8041d05cd03b78bf6"
   integrity sha512-Fv+vDvwwsf2SIoqxKPbg5hXPnYlqJ74ZCat9k9TvxAkz+BW8ufQlKksSzztfVBKRIJNJR4IQoEL9Yz7GPBl3xw==
+  dependencies:
+    "@zendeskgarden/css-variables" "^6.4.5"
+
+"@zendeskgarden/css-tabs@^6.0":
+  version "6.0.19"
+  resolved "https://registry.yarnpkg.com/@zendeskgarden/css-tabs/-/css-tabs-6.0.19.tgz#52c3537bb31c15117ecb10f575319586ed87f38f"
+  integrity sha512-UpvM69JNVlsPnHRwxMTgyjXPmUgFLez65kJxGcHRRMEJsI99fDjIxuJSvZjOjwHpl+Vf3XOaDGH/c2a3mrfEFw==
   dependencies:
     "@zendeskgarden/css-variables" "^6.4.5"
 
@@ -3266,6 +3281,11 @@ normalize-url@^3.0.0:
   version "3.3.0"
   resolved "https://registry.yarnpkg.com/normalize-url/-/normalize-url-3.3.0.tgz#b2e1c4dc4f7c6d57743df733a4f5978d18650559"
   integrity sha512-U+JJi7duF1o+u2pynbp2zXDW2/PADgC30f0GsHZtRh+HOcXHnw137TrNlyxxRvWW5fjKd3bcLHPxofWuCjaeZg==
+
+normalize.css@^8.0.0:
+  version "8.0.1"
+  resolved "https://registry.yarnpkg.com/normalize.css/-/normalize.css-8.0.1.tgz#9b98a208738b9cc2634caacbc42d131c97487bf3"
+  integrity sha512-qizSNPO93t1YUuUhP22btGOo3chcvDFqFaj2TRybP0DMxkHOCTYwp3n34fel4a31ORXy4m1Xq0Gyqpb5m33qIg==
 
 npm-run-path@^2.0.0:
   version "2.0.2"

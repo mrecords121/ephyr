@@ -10,7 +10,9 @@
 
   "devDependencies": {
     "@wasm-tool/wasm-pack-plugin": "^1.3",
+    "@zendeskgarden/css-bedrock": "^8.0",
     "@zendeskgarden/css-buttons": "^7.0",
+    "@zendeskgarden/css-tabs": "^6.0",
     "autoprefixer": "^9.7",
     "copy-webpack-plugin": "^5.1",
     "css-loader": "^3.5",
