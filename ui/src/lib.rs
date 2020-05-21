@@ -1,4 +1,5 @@
 pub mod app;
+pub mod presets_bar;
 pub mod state;
 pub mod streams_bar;
 

@@ -15,18 +15,45 @@ impl State {
     pub fn from_seed() -> Self {
         serde_json::from_str(
             r#"{
-          "active_stream": 1,
+          "active_stream": 0,
           "streams": [{
             "name": "love",
-            "presets": [],
+            "active_preset": 2,
+            "presets": [{
+              "name": "Original",
+              "volume": []
+            }, {
+              "name": "English",
+              "volume": []
+            }, {
+              "name": "Spanish",
+              "volume": []
+            }],
             "mixers": []
           }, {
             "name": "life_is_beautiful",
-            "presets": [],
+            "active_preset": 1,
+            "presets": [{
+              "name": "Always",
+              "volume": []
+            }, {
+              "name": "And now",
+              "volume": []
+            }],
             "mixers": []
           }, {
             "name": "trance_radio",
-            "presets": [],
+            "active_preset": 2,
+            "presets": [{
+              "name": "Trance",
+              "volume": []
+            }, {
+              "name": "Silence",
+              "volume": []
+            }, {
+              "name": "Mood",
+              "volume": []
+            }],
             "mixers": []
           }]
         }"#,
@@ -38,6 +65,7 @@ impl State {
 #[derive(Clone, Debug, Deserialize)]
 pub struct Stream {
     pub name: Mutable<StreamName>,
+    pub active_preset: Mutable<usize>,
     pub presets: Rc<MutableVec<Preset>>,
     pub mixers: Rc<MutableVec<Mixer>>,
 }
