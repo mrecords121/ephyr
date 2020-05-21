@@ -265,6 +265,13 @@
   dependencies:
     "@zendeskgarden/css-variables" "^6.4.5"
 
+"@zendeskgarden/css-utilities@^4.5":
+  version "4.5.5"
+  resolved "https://registry.yarnpkg.com/@zendeskgarden/css-utilities/-/css-utilities-4.5.5.tgz#f0c4099af660894494126f5edfed40d732cfa53b"
+  integrity sha512-68sFP8aJBcEY/TfT2y5qmsq28f8imRxj8k2yK3+SSFDJvhIyp9IO1ZrQF/2+O5ZAIVKq2cdV7WZkLt5n4vllvA==
+  dependencies:
+    "@zendeskgarden/css-variables" "^6.4.5"
+
 "@zendeskgarden/css-variables@^6.4.5":
   version "6.4.5"
   resolved "https://registry.yarnpkg.com/@zendeskgarden/css-variables/-/css-variables-6.4.5.tgz#b51a50046f42a11b8d1bfec46e100b02fd6fc1d9"

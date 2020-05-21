@@ -43,7 +43,7 @@ impl StreamsBar {
             .class("c-tab__list__item")
             .class_signal("is-selected", active_stream.signal().dedupe()
                 .map(move |n| n == num))
-            .attribute("id", &format!("tab-{}", num))
+            .attribute("id", &format!("stream-{}", num))
             .attribute("role", "tab")
             .attribute_signal("tabindex", active_stream.signal().dedupe()
                 .map(move |n| if n == num { "0" } else { "-1" }))
