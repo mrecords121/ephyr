@@ -82,9 +82,9 @@ impl Mixer {
                 ""
             };
             let filter_complex = format!(
-                "adelay=delays={delay}|all=1,\
-                 volume@{name}={volume},\
+                "volume@{name}={volume},\
                  {extra_filters}\
+                 adelay=delays={delay}|all=1,\
                  azmq=bind_address=tcp\\\\\\://0.0.0.0\\\\\\:{zmq_port}",
                 delay = src.delay.as_millis(),
                 volume = src.volume,
