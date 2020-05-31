@@ -58,19 +58,29 @@ async fn run() -> Result<(), anyhow::Error> {
         .build();
     let mut ts_input = silence::Filler::new(ts_input, 8000);
 
-    let ffmpeg = Command::new("ffplay")
-        .arg("-f")
-        .arg("f32be")
-        .arg("-sample_rate")
-        .arg("48000")
-        .arg("-use_wallclock_as_timestamps")
-        .arg("true")
-        .arg("-i")
-        .arg("pipe:0")
-        .arg("-af")
-        .arg("aresample=async=1")
-        .arg("-loglevel")
-        .arg("debug")
+    let ffmpeg = Command::new("ffmpeg")
+        .args(&["-loglevel", "debug"])
+        .args(&["-thread_queue_size", "512"])
+        .args(&["-i", "rtmp://127.0.0.1:1935/input/live"])
+        .args(&["-thread_queue_size", "512"])
+        .args(&["-f", "f32be", "-sample_rate", "48000"])
+        .args(&["-use_wallclock_as_timestamps", "true"])
+        .args(&["-i", "pipe:0"])
+        .args(&[
+            "-filter_complex",
+            "[0:a]adelay=delays=0|all=1,\
+                  volume@org=0.7,\
+                  azmq=bind_address=tcp\\\\\\://0.0.0.0\\\\\\:6001[org];\
+             [1:a]volume@trn=2,\
+                  aresample=async=1,\
+                  adelay=delays=7000|all=1,\
+                  azmq=bind_address=tcp\\\\\\://0.0.0.0\\\\\\:6002[trn];\
+             [org][trn]amix=inputs=2:duration=longest[out]",
+        ])
+        .args(&["-map", "[out]", "-map", "0:v"])
+        .args(&["-max_muxing_queue_size", "50000000"])
+        .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"])
+        .args(&["-f", "tee", "[f=flv]rtmp://127.0.0.1:1935/output/live"])
         .stdin(Stdio::piped())
         .stderr(Stdio::null())
         .kill_on_drop(true)
