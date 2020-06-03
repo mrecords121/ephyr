@@ -29,7 +29,32 @@ impl State {
               "name": "Spanish",
               "volume": []
             }],
-            "mixers": []
+            "mixers": [{
+              "name": "en",
+              "sources": [],
+              "destinations": [],
+              "is_online": true
+            }, {
+              "name": "es",
+              "sources": [],
+              "destinations": [],
+              "is_online": false
+            }, {
+              "name": "itttt",
+              "sources": [],
+              "destinations": [],
+              "is_online": false
+            }, {
+              "name": "fr",
+              "sources": [],
+              "destinations": [],
+              "is_online": true
+            }, {
+              "name": "de",
+              "sources": [],
+              "destinations": [],
+              "is_online": false
+            }]
           }, {
             "name": "life_is_beautiful",
             "active_preset": 1,

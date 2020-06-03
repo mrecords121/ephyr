@@ -1,0 +1,22 @@
+.mixers_dashboard
+  flex: 2 100%
+  margin: 0 20px 20px
+
+  .input_info
+    margin-bottom: 20px
+
+  .mixers
+    display: flex
+    flex-flow: row wrap
+
+    .mixer
+      $margin_px = 10px
+      margin: 0 $margin_px $margin_px 0
+      padding: 15px
+      width: "calc(50% - %s)" % $margin_px
+      border: 1px solid #68737d
+      border-radius: 4px
+      background-color: #f8f9f9
+      @media (max-width: 2 * (400px + $margin_px) + $presets_bar_max_width_px)
+        width: "calc(100% - %s)" % $margin_px
+

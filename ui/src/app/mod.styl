@@ -1,1 +1,11 @@
 @require "~@zendeskgarden/css-tabs"
+
+.ephyr-ui
+  &> .content
+    display: flex
+    flex-flow: row nowrap
+    align-items: flex-start
+
+  @require "../streams_bar/mod.styl"
+  @require "../presets_bar/mod.styl"
+  @require "../mixers_dashboard/mod.styl"

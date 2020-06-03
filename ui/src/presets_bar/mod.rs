@@ -13,7 +13,7 @@ impl PresetsBar {
         let streams = state.streams.clone();
 
         html!("aside", {.class("c-tab").class("c-tab--block")
-            .class("presets-bar")
+            .class("presets_bar")
             .child_signal(state.active_stream.signal().dedupe()
                 .map(move |n| {
                     let streams = streams.lock_ref();

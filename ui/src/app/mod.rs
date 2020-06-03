@@ -13,8 +13,13 @@ impl App {
             .class("ephyr-ui")
             .children(&mut [
                 StreamsBar::render(&self.state),
-                PresetsBar::render(&self.state),
-                MixersDashboard::render(&self.state),
+                html!("main", {
+                    .class("content")
+                    .children(&mut [
+                        PresetsBar::render(&self.state),
+                        MixersDashboard::render(&self.state),
+                    ])
+                }),
             ])
         })
     }

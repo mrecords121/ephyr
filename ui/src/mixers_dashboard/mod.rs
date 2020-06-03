@@ -10,29 +10,57 @@ pub struct MixersDashboard;
 
 impl MixersDashboard {
     pub fn render(state: &state::State) -> Dom {
-        let streams = state.streams.clone();
-
         html!("div", {
+            .class("mixers_dashboard")
             .class("c-tab__panel")
-            .class("u-p")
             .attribute_signal("aria-labeledby", state.active_stream.signal()
                 .dedupe()
                 .map(|n| format!("stream-{}", n)))
             .attribute("role", "tabpanel")
-            .child_signal(state.active_stream.signal().dedupe()
-                .map(move |n| {
-                    let streams = streams.lock_ref();
-                    let stream = streams.as_slice().get(n)?;
+            .children(&mut [
+                Self::render_input_info(state),
+                Self::render_mixers(state),
+            ])
+        })
+    }
 
-                    Some(Self::render_header(stream))
+    pub fn render_input_info(state: &state::State) -> Dom {
+        let streams = state.streams.clone();
+
+        html!("div", {
+            .class("input_info")
+            .text_signal(state.active_stream.signal().dedupe()
+                .switch(move |num| {
+                    let streams = streams.lock_ref();
+                    let stream = streams.as_slice().get(num).unwrap();
+                    stream.name.signal_cloned().dedupe_cloned()
+                })
+                .map(|name| {
+                    format!("Input URL: rtmp://127.0.0.1/{}/????", name)
                 }))
         })
     }
 
-    pub fn render_header(stream: &state::Stream) -> Dom {
-        html!("div", {
-            .text_signal(stream.name.signal_cloned().dedupe_cloned()
-                .map(|n| format!("rtmp://127.0.0.1/{}/????", n)))
+    pub fn render_mixers(state: &state::State) -> Dom {
+        let streams = state.streams.clone();
+
+        html!("form", {
+            .class("mixers")
+            .children_signal_vec(state.active_stream.signal().dedupe()
+                .switch_signal_vec(move |num| {
+                    let streams = streams.lock_ref();
+                    let stream = streams.as_slice().get(num).unwrap();
+                    stream.mixers.signal_vec_cloned()
+                })
+                .map(Self::render_mixer))
+        })
+    }
+
+    pub fn render_mixer(mixer: state::Mixer, ) -> Dom {
+        html!("fieldset", {
+            .class("mixer")
+            .text_signal(mixer.name.signal_cloned().dedupe_cloned()
+                .map(String::from))
         })
     }
 }
