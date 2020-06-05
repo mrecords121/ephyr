@@ -2,3 +2,13 @@ $presets_bar_max_width_px = 150px
 
 .presets_bar
   max-width: $presets_bar_max_width_px
+  position: relative
+
+  &::before
+    content: 'Presets'
+    font-size: 10px
+    color: #a8a8a8
+    position: absolute
+    top: -20px
+    width: 100%
+    text-align: center
