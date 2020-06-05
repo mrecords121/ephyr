@@ -1,10 +1,7 @@
 pub mod volume_range;
 
-use dominator::{clone, events, html, Dom};
-use futures_signals::{
-    signal::{Mutable, SignalExt as _},
-    signal_vec::SignalVecExt as _,
-};
+use dominator::{html, Dom};
+use futures_signals::{signal::SignalExt as _, signal_vec::SignalVecExt as _};
 
 use crate::state;
 
@@ -55,13 +52,23 @@ impl MixersDashboard {
                 .switch_signal_vec(move |num| {
                     let streams = streams.lock_ref();
                     let stream = streams.as_slice().get(num).unwrap();
+
+                    let presets = stream.presets.lock_ref();
+                    let active_preset = presets.as_slice()
+                        .get(stream.active_preset.get())
+                        .unwrap()
+                        .clone();
+
                     stream.mixers.signal_vec_cloned()
-                })
-                .map(Self::render_mixer))
+                        .map(move |m| Self::render_mixer(m, &active_preset))
+                }))
         })
     }
 
-    pub fn render_mixer(mixer: state::Mixer) -> Dom {
+    pub fn render_mixer(
+        mixer: state::Mixer,
+        active_preset: &state::Preset,
+    ) -> Dom {
         let sources = mixer.sources.lock_ref();
 
         let mut elems = Vec::with_capacity(sources.len() + 1);
@@ -73,8 +80,14 @@ impl MixersDashboard {
                 .map(String::from))
         }));
 
+        let active_preset_volumes =
+            active_preset.volume.get(&mixer.name.lock_ref()).unwrap();
         for (i, src) in sources.iter().enumerate() {
-            elems.push(VolumeRange::render(i, src));
+            let preset_volume = active_preset_volumes
+                .get(&src.name.lock_ref())
+                .cloned()
+                .unwrap();
+            elems.push(VolumeRange::render(i, src, preset_volume));
         }
 
         html!("fieldset", {

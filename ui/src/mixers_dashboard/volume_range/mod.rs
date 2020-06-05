@@ -1,5 +1,3 @@
-use std::str::FromStr as _;
-
 use decimal::Decimal;
 use dominator::{clone, events, html, Dom};
 use futures_signals::signal::{Mutable, SignalExt as _};
@@ -11,7 +9,11 @@ use crate::state::{self, Volume};
 pub struct VolumeRange;
 
 impl VolumeRange {
-    pub fn render(id: usize, src: &state::Source) -> Dom {
+    pub fn render(
+        id: usize,
+        src: &state::Source,
+        preset: Mutable<Volume>,
+    ) -> Dom {
         let id = format!("volume_range-{}", id);
         let value = src.volume.clone();
 
@@ -43,8 +45,10 @@ impl VolumeRange {
                     .attribute("max", "200")
                     .attribute("step", "1")
                     .attribute_signal("value", value.signal().dedupe()
-                        .map(|v| format!("{:.2}", Decimal::from(v) * Decimal::from(100))))
-                    .event(clone!(value => move |ev: events::Change| {
+                        .map(|v| format!(
+                            "{:.2}", Decimal::from(v) * Decimal::from(100),
+                        )))
+                    .event(clone!(value, preset => move |ev: events::Change| {
                         let new = ev.dyn_target::<HtmlInputElement>()
                             .expect("VolumeRange is not HtmlInputElement")
                             .value()
@@ -52,7 +56,10 @@ impl VolumeRange {
                             .expect(
                                 "Cannot parse VolumeRange::value as Decimal",
                             );
-                        value.set(Volume::new(new / Decimal::from(100)).expect("Not volume!!"));
+                        let new = Volume::new(new / Decimal::from(100))
+                            .expect("Not volume!!");
+                        value.set(new);
+                        preset.set(new);
                     }))
                 }),
                 html!("small", {

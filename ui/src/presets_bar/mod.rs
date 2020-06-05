@@ -24,11 +24,12 @@ impl PresetsBar {
                         .attribute("role", "tablist")
                         .children_signal_vec(
                             stream.presets.signal_vec_cloned().enumerate()
-                                .map(clone!(active => move |(n, preset)| {
+                                .map(clone!(active, stream => move |(n, prst)| {
                                     Self::render_item(
                                         n.get().unwrap(),
-                                        &preset,
+                                        &prst,
                                         active.clone(),
+                                        stream.clone(),
                                     )
                                 }))
                         )}
@@ -41,6 +42,7 @@ impl PresetsBar {
         num: usize,
         preset: &state::Preset,
         active_preset: Mutable<usize>,
+        stream: state::Stream,
     ) -> Dom {
         html!("li", {
             .attribute("aria-controls", &format!("panel{}", num))
@@ -54,8 +56,27 @@ impl PresetsBar {
             .attribute("id", &format!("preset-{}", num))
             .attribute("role", "tab")
             .attribute("tabindex", "0")
-            .event(clone!(active_preset => move |_: events::Click| {
+            .event(clone!(active_preset, stream => move |_: events::Click| {
                 active_preset.set(num);
+
+                let presets = stream.presets.lock_ref();
+                let active_preset = presets.as_slice().get(num).unwrap();
+
+                for (mixer_name, srcs) in active_preset.volume.iter() {
+                    let mixers = stream.mixers.lock_ref();
+                    if let Some(mixer) = mixers.iter()
+                        .find(|m| &*m.name.lock_ref() == mixer_name) {
+
+                        for (src_name, volume) in srcs.iter() {
+                            let sources = mixer.sources.lock_ref();
+                            if let Some(src) = sources.iter()
+                                .find(|s| &*s.name.lock_ref() == src_name) {
+                                src.volume.set(volume.get());
+                            }
+                        }
+                    }
+                }
+
             }))
             .text_signal(preset.name.signal_cloned().dedupe_cloned()
                 .map(String::from))

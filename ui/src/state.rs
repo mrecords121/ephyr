@@ -21,13 +21,31 @@ impl State {
             "active_preset": 2,
             "presets": [{
               "name": "Original",
-              "volume": []
+              "volume": {
+                "en": {"org": 1.4, "trn": 0.43},
+                "es": {"org": 1, "trn": 1},
+                "itttt": {"org": 0.78, "trn": 0.43},
+                "fr": {"org": 0.2, "trn": 2},
+                "de": {"org": 2, "trn": 1.54}
+              }
             }, {
               "name": "English",
-              "volume": []
+              "volume": {
+                "en": {"org": 0.2, "trn": 2},
+                "es": {"org": 0.78, "trn": 0.43},
+                "itttt": {"org": 1.4, "trn": 0.43},
+                "fr": {"org": 1, "trn": 1},
+                "de": {"org": 0, "trn": 1}
+              }
             }, {
               "name": "Spanish",
-              "volume": []
+              "volume": {
+                "en": {"org": 1, "trn": 1},
+                "es": {"org": 2, "trn": 1.54},
+                "itttt": {"org": 0.2, "trn": 2},
+                "fr": {"org": 0.78, "trn": 0.43},
+                "de": {"org": 1.4, "trn": 0.43}
+              }
             }],
             "mixers": [{
               "name": "en",
@@ -120,10 +138,10 @@ impl State {
             "active_preset": 1,
             "presets": [{
               "name": "Always",
-              "volume": []
+              "volume": {}
             }, {
               "name": "And now",
-              "volume": []
+              "volume": {}
             }],
             "mixers": []
           }, {
@@ -131,13 +149,13 @@ impl State {
             "active_preset": 2,
             "presets": [{
               "name": "Trance",
-              "volume": []
+              "volume": {}
             }, {
               "name": "Silence",
-              "volume": []
+              "volume": {}
             }, {
               "name": "Mood",
-              "volume": []
+              "volume": {}
             }],
             "mixers": []
           }]
@@ -163,7 +181,7 @@ pub struct StreamName(String);
 #[derive(Clone, Debug, Deserialize)]
 pub struct Preset {
     pub name: Mutable<PresetName>,
-    pub volume: Rc<MutableVec<(MixerName, HashMap<SourceName, Volume>)>>,
+    pub volume: Rc<HashMap<MixerName, HashMap<SourceName, Mutable<Volume>>>>,
 }
 
 #[derive(
