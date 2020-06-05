@@ -1,0 +1,33 @@
+/
+  @require "~@zendeskgarden/css-forms/dist/range.css"
+
+
+.volume_range
+  $margin_right_px = 40px
+  display: block
+  width: 100%
+  position: relative
+  &, &:not(:nth-first)
+    margin-top: 10px
+
+  > input
+    width: "calc(100% - %s)" % $margin_right_px
+
+  > small
+    margin-left: 10px
+
+    &.delay
+      position: absolute
+      top: 7px
+      padding-top: 1px
+      right: $margin_right_px
+      //display: none
+
+    &.url
+      $margin_px = 6px
+      color: #a8a8a8
+      padding-top: 1px
+      margin-left: $margin_px
+      &::before
+        content: "←"
+        margin-right: $margin_px

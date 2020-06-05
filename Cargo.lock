@@ -667,10 +667,14 @@ dependencies = [
  "derive_more",
  "dominator",
  "futures-signals",
+ "humantime",
+ "humantime-serde",
+ "log",
  "rust_decimal",
  "serde",
  "serde_json",
  "wasm-bindgen",
+ "wasm-logger",
  "web-sys",
 ]
 
@@ -3193,6 +3197,17 @@ name = "wasm-bindgen-shared"
 version = "0.2.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a91c2916119c17a8e316507afaaa2dd94b47646048014bbdf6bef098c1bb58ad"
+
+[[package]]
+name = "wasm-logger"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "074649a66bb306c8f2068c9016395fa65d8e08d2affcbf95acf3c24c3ab19718"
+dependencies = [
+ "log",
+ "wasm-bindgen",
+ "web-sys",
+]
 
 [[package]]
 name = "web-sys"

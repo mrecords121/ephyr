@@ -258,6 +258,13 @@
   dependencies:
     "@zendeskgarden/css-variables" "^6.4.5"
 
+"@zendeskgarden/css-forms@^7.0":
+  version "7.0.20"
+  resolved "https://registry.yarnpkg.com/@zendeskgarden/css-forms/-/css-forms-7.0.20.tgz#0c305663ec1d7e2c32c1209f2b2e0fbd2f3cd27b"
+  integrity sha512-afgvzgKd5wTpffscj3QnJgMEJtv+xsNqrslhMWjaQTp0aysjeZ+SHYQZLS/Sh9XV7ecqEP8tuentelxwShfstQ==
+  dependencies:
+    "@zendeskgarden/css-variables" "^6.4.5"
+
 "@zendeskgarden/css-tabs@^6.0":
   version "6.0.19"
   resolved "https://registry.yarnpkg.com/@zendeskgarden/css-tabs/-/css-tabs-6.0.19.tgz#52c3537bb31c15117ecb10f575319586ed87f38f"

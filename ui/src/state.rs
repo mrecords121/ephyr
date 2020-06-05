@@ -31,27 +31,87 @@ impl State {
             }],
             "mixers": [{
               "name": "en",
-              "sources": [],
+              "sources": [{
+                "name": "org",
+                "url": "rtmp://127.0.0.1/some",
+                "volume": 1,
+                "delay": "0s",
+                "zmq_port": 60010
+              }, {
+                "name": "trn",
+                "url": "ts://127.0.0.1/chan/en",
+                "volume": 1.7,
+                "delay": "7s",
+                "zmq_port": 60011
+              }],
               "destinations": [],
               "is_online": true
             }, {
               "name": "es",
-              "sources": [],
+              "sources": [{
+                "name": "org",
+                "url": "rtmp://127.0.0.1/some",
+                "volume": 1,
+                "delay": "0s",
+                "zmq_port": 60010
+              }, {
+                "name": "trn",
+                "url": "ts://127.0.0.1/chan/es",
+                "volume": 1.7,
+                "delay": "7s",
+                "zmq_port": 60011
+              }],
               "destinations": [],
               "is_online": false
             }, {
               "name": "itttt",
-              "sources": [],
+              "sources": [{
+                "name": "org",
+                "url": "rtmp://127.0.0.1/some",
+                "volume": 1,
+                "delay": "0s",
+                "zmq_port": 60010
+              }, {
+                "name": "trn",
+                "url": "ts://127.0.0.1/chan/itttt",
+                "volume": 1.7,
+                "delay": "7s",
+                "zmq_port": 60011
+              }],
               "destinations": [],
               "is_online": false
             }, {
               "name": "fr",
-              "sources": [],
+              "sources": [{
+                "name": "org",
+                "url": "rtmp://127.0.0.1/some",
+                "volume": 1,
+                "delay": "0s",
+                "zmq_port": 60010
+              }, {
+                "name": "trn",
+                "url": "ts://127.0.0.1/chan/fr",
+                "volume": 1.7,
+                "delay": "7s",
+                "zmq_port": 60011
+              }],
               "destinations": [],
               "is_online": true
             }, {
               "name": "de",
-              "sources": [],
+              "sources": [{
+                "name": "org",
+                "url": "rtmp://127.0.0.1/some",
+                "volume": 1,
+                "delay": "0s",
+                "zmq_port": 60010
+              }, {
+                "name": "trn",
+                "url": "ts://127.0.0.1/chan/de",
+                "volume": 1.7,
+                "delay": "7s",
+                "zmq_port": 60011
+              }],
               "destinations": [],
               "is_online": false
             }]
@@ -126,10 +186,11 @@ pub struct MixerName(String);
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct Source {
-    pub name: SourceName,
+    pub name: Mutable<SourceName>,
     pub url: String,
+    #[serde(with = "serde_humantime")]
     pub delay: Duration,
-    pub volume: Volume,
+    pub volume: Mutable<Volume>,
     pub zmq_port: u16,
 }
 
@@ -150,7 +211,7 @@ pub struct Destination {
 pub struct DestinationName(String);
 
 // TODO: deserialize with validation
-#[derive(Clone, Copy, Deserialize, Debug, Display, Eq, PartialEq)]
+#[derive(Clone, Copy, Deserialize, Debug, Display, Eq, Into, PartialEq)]
 pub struct Volume(Decimal);
 
 impl Volume {

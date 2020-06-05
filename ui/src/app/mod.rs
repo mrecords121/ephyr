@@ -1,6 +1,9 @@
 use dominator::{html, Dom};
 
-use crate::{presets_bar::PresetsBar, state::State, streams_bar::StreamsBar, mixers_dashboard::MixersDashboard};
+use crate::{
+    mixers_dashboard::MixersDashboard, presets_bar::PresetsBar, state::State,
+    streams_bar::StreamsBar,
+};
 
 #[derive(Clone, Debug)]
 pub struct App {

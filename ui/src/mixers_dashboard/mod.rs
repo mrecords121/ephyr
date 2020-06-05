@@ -1,3 +1,5 @@
+pub mod volume_range;
+
 use dominator::{clone, events, html, Dom};
 use futures_signals::{
     signal::{Mutable, SignalExt as _},
@@ -5,6 +7,8 @@ use futures_signals::{
 };
 
 use crate::state;
+
+use self::volume_range::VolumeRange;
 
 pub struct MixersDashboard;
 
@@ -29,6 +33,7 @@ impl MixersDashboard {
 
         html!("div", {
             .class("input_info")
+            .class("u-fs-lg")
             .text_signal(state.active_stream.signal().dedupe()
                 .switch(move |num| {
                     let streams = streams.lock_ref();
@@ -56,11 +61,25 @@ impl MixersDashboard {
         })
     }
 
-    pub fn render_mixer(mixer: state::Mixer, ) -> Dom {
-        html!("fieldset", {
-            .class("mixer")
+    pub fn render_mixer(mixer: state::Mixer) -> Dom {
+        let sources = mixer.sources.lock_ref();
+
+        let mut elems = Vec::with_capacity(sources.len() + 1);
+
+        elems.push(html!("label", {
+            .class("name")
+            .class("u-fs-sm")
             .text_signal(mixer.name.signal_cloned().dedupe_cloned()
                 .map(String::from))
+        }));
+
+        for (i, src) in sources.iter().enumerate() {
+            elems.push(VolumeRange::render(i, src));
+        }
+
+        html!("fieldset", {
+            .class("mixer")
+            .children(elems.as_mut_slice())
         })
     }
 }
