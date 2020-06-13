@@ -351,6 +351,8 @@ impl Input {
         let commands = Arc::new(Mutex::new(None));
         let audio = Arc::new(Mutex::new(None));
 
+        // TODO #6: Memoize TeamSpeak Identity and reuse.
+        //      https://github.com/tyranron/ephyr/issues/6
         let opts = ConnectOptions::from(self.cfg.clone()).handle_packets(
             Box::new(InPacketsInjector {
                 commands: commands.clone(),
@@ -777,7 +779,7 @@ fn write_mixed_audio_be(
     // Detect how much samples we can mix and write into `dst`.
     let src_size = src.iter().min_by_key(|(_, data)| data.len())?.1.len();
     if src_size == 0 {
-        // If there is not enough samples for mixing, or no sample at all, then
+        // If there is not enough samples for mixing, or no samples at all, then
         // just don't write anything and wait for the data being enough.
         return None;
     }
