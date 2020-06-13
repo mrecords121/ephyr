@@ -3,7 +3,7 @@
 //! [TeamSpeak]: https://teamspeak.com
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     fmt,
     future::Future,
     hint::unreachable_unchecked,
@@ -288,21 +288,25 @@ enum State {
         /// [TeamSpeak]: https://teamspeak.com
         decoders: OpusDecoders,
 
-        /// Raw [PCM 32-bit floating-point][1] data decoded by [`OpusDecoder`].
+        /// Buffer to temporarily hold a raw [PCM 32-bit floating-point][1] data
+        /// decoded by [`OpusDecoder`].
         ///
         /// It's reused for decoding each received packet instead of allocating
-        /// new memory each time.
+        /// new memory each time. It's required, because the current API of
+        /// [`OpusDecoder`] doesn't allow to decode directly into [`VecDeque`].
         ///
         /// [1]: https://wiki.multimedia.cx/index.php/PCM
-        data: Vec<f32>,
+        decoding_buff: Vec<f32>,
 
-        /// Cursor that indicates how much from `data` was already read.
+        /// Raw [PCM 32-bit floating-point][1] data decoded by [`OpusDecoder`].
         ///
-        /// Zero value indicates that all `data` was already read and it should
-        /// be filled with new [Opus] frame.
+        /// It stores decoded audio data of each [TeamSpeak] channel member
+        /// separately, so then it can be mixed into a single audio data stream
+        /// with a correct frame rate.
         ///
-        /// [Opus]: https://opus-codec.org
-        cursor: usize,
+        /// [1]: https://wiki.multimedia.cx/index.php/PCM
+        /// [TeamSpeak]: https://teamspeak.com
+        data: PcmDataBuffers,
     },
 
     /// Not connected to the server and is delayed before reconnecting.
@@ -322,6 +326,14 @@ type MemberId = u16;
 ///
 /// Garbage collection happens with [`Input::OPUS_DECODERS_GC_PERIOD`].
 type OpusDecoders = HashMap<MemberId, OpusDecoder>;
+
+/// Collection of buffers for storing [PCM 32-bit floating-point][1] data
+/// decoded by [`OpusDecoder`]. Each buffer is dedicated to a concrete
+/// [TeamSpeak] channel member, which transmits any audio at the moment.
+///
+/// [1]: https://wiki.multimedia.cx/index.php/PCM
+/// [TeamSpeak]: https://teamspeak.com
+type PcmDataBuffers = HashMap<MemberId, VecDeque<f32>>;
 
 impl Input {
     /// Polls [`Input`] in [`State::Disconnected`].
@@ -426,8 +438,8 @@ impl Input {
                         )
                     },
                     decoders: OpusDecoders::new(),
-                    data: vec![0_f32; Self::OPUS_USUAL_FRAME_SIZE],
-                    cursor: 0,
+                    decoding_buff: vec![0_f32; Self::OPUS_USUAL_FRAME_SIZE],
+                    data: PcmDataBuffers::new(),
                 },
 
                 // If `Connection` establishing fails, then reconnect with
@@ -472,14 +484,14 @@ impl Input {
             commands,
             audio,
             decoders,
+            decoding_buff,
             data,
-            cursor,
             ..
         } = &mut self.state
         {
-            // If not all `data` was read yet, then read it to the end.
-            if *cursor > 0 {
-                return Poll::Ready(Ok(write_audio_be(data, buf, cursor)));
+            // If not all `data` was read yet, then read it as much as possible.
+            if let Some(num) = write_mixed_audio_be(data, buf, decoders) {
+                return Poll::Ready(Ok(num));
             }
 
             // We still need to poll and process `InCommand` packets for
@@ -490,16 +502,22 @@ impl Input {
                 // `InAudio` packet we're interested in.
                 match ready!(Pin::new(audio).poll_next(cx)) {
                     Some(Ok(aud)) => {
-                        if decode_audio_packet(&aud, data, decoders)?.is_some()
+                        let _ = decode_audio_packet(
+                            &aud,
+                            data,
+                            decoders,
+                            decoding_buff,
+                        )?;
+                        if let Some(num) =
+                            write_mixed_audio_be(data, buf, decoders)
                         {
-                            return Poll::Ready(Ok(write_audio_be(
-                                data, buf, cursor,
-                            )));
+                            return Poll::Ready(Ok(num));
                         }
 
                         // If empty or irrelevant `InAudio` packet is received,
-                        // then don't write anything and just continue waiting
-                        // for new data.
+                        // or we have nothing to write (not all transmitting
+                        // members have data arrived), then don't write anything
+                        // and just continue waiting for new data.
                         cx.waker().wake_by_ref();
                         return Poll::Pending;
                     }
@@ -721,33 +739,87 @@ impl PacketHandler for InPacketsInjector {
 /// Writes decoded [PCM 32-bit floating-point][1] audio data into the given
 /// `dst` buffer in big endian, and returns the number of written bytes.
 ///
-/// It writes as much data as fits into `dst`, mutating `cursor` to point the
-/// position in `src` to perform next write from. If `cursor` is set to `0`,
-/// then it means that the whole data was written.
+/// # Sample rate preservation
+///
+/// We cannot simply write into the `dst` buffer all the decoded audio data "as
+/// is", because multiple [TeamSpeak] channel members may transmit audio at the
+/// same moment, so for each member we receive a separate audio stream and
+/// decode it with some sample rate separately. Writing decoded audio data "as
+/// is" for each member will result in a broken sample rate of the resulting
+/// audio data stream (given 2 transmitting members at the same moment we will
+/// produce a 2x48kHz sample rate instead of the expected 48kHz).
+///
+/// That's why, if multiple members transmit audio at the same moment, we should
+/// mix it, sample by sample, and produce data with an expected 48kHz sample
+/// rate. We can do that only once we have a decoded data for all [TeamSpeak]
+/// channel members transmitting at the moment.
 ///
 /// [1]: https://wiki.multimedia.cx/index.php/PCM
-fn write_audio_be(src: &[f32], dst: &mut [u8], cursor: &mut usize) -> usize {
+/// [TeamSpeak]: https://teamspeak.com
+fn write_mixed_audio_be(
+    src: &mut PcmDataBuffers,
+    dst: &mut [u8],
+    decoders: &OpusDecoders,
+) -> Option<usize> {
+    // If there are any empty buffers left for the members, which don't transmit
+    // anymore, we should remove them, to not stuck eternally by waiting new
+    // data for them.
+    src.retain(|k, data| !data.is_empty() || decoders.contains_key(k));
+
     // `f32` takes 4 bytes in big endian, so we should fit in there.
     let dst_size = dst.len() / 4;
-    // How much data in `src` left to be read.
-    let src_size = src.len() - *cursor;
+    if dst_size == 0 {
+        // If there is no enough space to write data, then just don't write
+        // anything.
+        return None;
+    }
 
+    // Detect how much samples we can mix and write into `dst`.
+    let src_size = src.iter().min_by_key(|(_, data)| data.len())?.1.len();
+    if src_size == 0 {
+        // If there is not enough samples for mixing, or no sample at all, then
+        // just don't write anything and wait for the data being enough.
+        return None;
+    }
+
+    // We only can write as much data as we have, or as much as `dst` buffer can
+    // contain.
     let size = src_size.min(dst_size);
     let size_in_bytes = size * 4;
 
-    BigEndian::write_f32_into(
-        &src[(*cursor)..(*cursor + size)],
-        &mut dst[..size_in_bytes],
-    );
-
-    *cursor += size;
-    if *cursor >= src.len() {
-        // Once no data left in `src` we reset the `cursor` indicating that.
-        *cursor = 0;
+    let mut src_iter = src.iter_mut();
+    // First, choose data buffer as the one where we will do the mixing.
+    let (_, mixed_data) = src_iter.next()?;
+    for (_, data) in src_iter {
+        // Then, mix into the resulting audio data stream, sample by sample.
+        for (i, f) in &mut mixed_data.iter_mut().take(size).enumerate() {
+            *f += data[i];
+        }
     }
 
-    // We should return the number of written bytes.
-    size_in_bytes
+    let (head, tail) = mixed_data.as_slices();
+    if head.len() < size {
+        let head_size = head.len();
+        let head_size_in_bytes = head_size * 4;
+        BigEndian::write_f32_into(
+            &head[..head_size],
+            &mut dst[..head_size_in_bytes],
+        );
+        BigEndian::write_f32_into(
+            &tail[..(size - head_size)],
+            &mut dst[head_size_in_bytes..size_in_bytes],
+        );
+    } else {
+        BigEndian::write_f32_into(&head[..size], &mut dst[..size_in_bytes]);
+    }
+
+    // Finally, strip all the written data from the buffers.
+    for (_, data) in src.iter_mut() {
+        data.drain(..size);
+    }
+
+    // We should return the number of written bytes, not samples.
+    Some(size_in_bytes)
 }
 
 /// Decodes the given [`InAudio`] packet received from [TeamSpeak] server into
@@ -764,8 +836,9 @@ fn write_audio_be(src: &[f32], dst: &mut [u8], cursor: &mut usize) -> usize {
 /// [1]: https://wiki.multimedia.cx/index.php/PCM
 fn decode_audio_packet(
     src: &InAudio,
-    dst: &mut Vec<f32>,
+    dst: &mut PcmDataBuffers,
     decoders: &mut OpusDecoders,
+    buff: &mut Vec<f32>,
 ) -> Result<Option<usize>, InputError> {
     use InputError::{
         DecoderCreationFailed, DecoderResetFailed, DecodingFailed,
@@ -808,25 +881,30 @@ fn decode_audio_packet(
         // `OpusDecoder` as it's not necessary anymore.
         if data.len() == 1 {
             let _ = decoders.remove(from);
+            // Also, remove decoded data buffer of this member, if it doesn't
+            // contain any unread data anymore.
+            if let Some(true) = dst.get(from).map(VecDeque::is_empty) {
+                dst.remove(from);
+            }
             return Ok(None);
         }
 
         let samples_num = loop {
             // TODO #3: Use `fec` for decoding?
             //      https://github.com/tyranron/ephyr/issues/3
-            match decoder.decode_float(Some(*data), &mut dst[..], false) {
+            match decoder.decode_float(Some(*data), &mut buff[..], false) {
                 Ok(n) => break n,
                 Err(audiopus::Error::Opus(
                     audiopus::ErrorCode::BufferTooSmall,
                 )) => {
-                    // Enlarge the `dst` buffer.
-                    let dst_len = dst.len();
-                    if dst_len >= Input::OPUS_MAX_FRAME_SIZE {
-                        return Err(MaxBufferSizeExceeded(dst_len));
-                    } else if dst_len * 2 > Input::OPUS_MAX_FRAME_SIZE {
-                        dst.resize(Input::OPUS_MAX_FRAME_SIZE, 0_f32);
+                    // Enlarge the `buff` buffer.
+                    let buff_len = buff.len();
+                    if buff_len >= Input::OPUS_MAX_FRAME_SIZE {
+                        return Err(MaxBufferSizeExceeded(buff_len));
+                    } else if buff_len * 2 > Input::OPUS_MAX_FRAME_SIZE {
+                        buff.resize(Input::OPUS_MAX_FRAME_SIZE, 0_f32);
                     } else {
-                        dst.resize(dst_len * 2, 0_f32);
+                        buff.resize(buff_len * 2, 0_f32);
                     }
                 }
                 Err(e) => {
@@ -835,10 +913,14 @@ fn decode_audio_packet(
                 }
             }
         };
-        // Shrink the `dst` buffer to fit the decoded data exactly.
-        if samples_num < dst.len() {
-            dst.truncate(samples_num);
+        // Shrink the `buff` buffer to fit the decoded data exactly.
+        if samples_num < buff.len() {
+            buff.truncate(samples_num);
         }
+
+        // Append decoded data to the member's buffer.
+        dst.entry(*from).or_default().extend(buff.iter().copied());
+
         Ok(Some(samples_num))
     } else {
         Ok(None)
