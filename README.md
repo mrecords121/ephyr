@@ -43,7 +43,7 @@ make tune volume=0.4 track=original
 
 ## License
 
-Ephyr is subject to the terms of the [Blue Oak Model License 1.0.0](https://github.com/tyranron/ephyr/blob/master/LICENSE.md). If a copy of the [BlueOak-1.0.0](https://spdx.org/licenses/BlueOak-1.0.0.html) license was not distributed with this file, You can obtain one at <https://blueoakcouncil.org/license/1.0.0>.
+Ephyr is subject to the terms of the [Blue Oak Model License 1.0.0](https://github.com/ALLATRA-IT/ephyr/blob/master/LICENSE.md). If a copy of the [BlueOak-1.0.0](https://spdx.org/licenses/BlueOak-1.0.0.html) license was not distributed with this file, You can obtain one at <https://blueoakcouncil.org/license/1.0.0>.
 
 [SRS] is licensed under the [MIT license](https://github.com/ossrs/srs/blob/3.0release/LICENSE).
 
@@ -64,4 +64,4 @@ As for any pre-built image usage, it is the image user's responsibility to ensur
 [SRS]: https://github.com/ossrs/srs
 [TeamSpeak]: https://teamspeak.com
 
-[1]: https://github.com/tyranron/ephyr/blob/master/example.spec.json
+[1]: https://github.com/ALLATRA-IT/ephyr/blob/master/example.spec.json

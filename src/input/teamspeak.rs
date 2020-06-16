@@ -383,7 +383,7 @@ impl Input {
         let audio = Arc::new(Mutex::new(None));
 
         // TODO #6: Memoize TeamSpeak Identity and reuse.
-        //      https://github.com/tyranron/ephyr/issues/6
+        //      https://github.com/ALLATRA-IT/ephyr/issues/6
         let opts = ConnectOptions::from(self.cfg.clone()).handle_packets(
             Box::new(InPacketsInjector {
                 commands: commands.clone(),
@@ -421,7 +421,7 @@ impl Input {
                 Poll::Pending => {
                     let ok = {
                         // TODO #5: Out-of-order errors still happens rarely.
-                        //      https://github.com/tyranron/ephyr/issues/5
+                        //      https://github.com/ALLATRA-IT/ephyr/issues/5
 
                         // When `State::Connecting` we still need to poll and
                         // process `InAudio` packets for preserving correct
@@ -893,7 +893,7 @@ fn decode_audio_packet(
             let dcdr = OpusDecoder::new(
                 audiopus::SampleRate::Hz48000,
                 // TODO #2: Use stereo?
-                //      https://github.com/tyranron/ephyr/issues/2
+                //      https://github.com/ALLATRA-IT/ephyr/issues/2
                 audiopus::Channels::Mono,
             )
             .map_err(DecoderCreationFailed)?;
@@ -924,7 +924,7 @@ fn decode_audio_packet(
 
         let samples_num = loop {
             // TODO #3: Use `fec` for decoding?
-            //      https://github.com/tyranron/ephyr/issues/3
+            //      https://github.com/ALLATRA-IT/ephyr/issues/3
             match decoder.decode_float(Some(*data), &mut buff[..], false) {
                 Ok(n) => break n,
                 Err(audiopus::Error::Opus(
