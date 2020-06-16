@@ -9,6 +9,7 @@ use std::{
     hint::unreachable_unchecked,
     mem,
     pin::Pin,
+    str,
     sync::{Arc, Mutex},
     task::{Context, Poll},
     time::Duration,
@@ -23,6 +24,7 @@ use futures::{
     stream::BoxStream,
     FutureExt as _, Stream, StreamExt as _, TryFutureExt as _,
 };
+use rand::Rng as _;
 use slog_scope as log;
 use tokio::{
     io::{self, AsyncRead},
@@ -80,11 +82,40 @@ pub struct Config {
     pub name_as: Option<String>,
 }
 
+impl Config {
+    /// Generates a new random HWID (hardware identification string).
+    #[must_use]
+    pub fn new_hwid() -> String {
+        const BYTES: usize = 16;
+        const HEX_BYTES: usize = 2 * BYTES;
+
+        let mut rng = rand::thread_rng();
+
+        let mut first = [0_u8; HEX_BYTES];
+        hex::encode_to_slice(&rng.gen::<[u8; BYTES]>(), &mut first).unwrap();
+
+        let mut second = [0_u8; HEX_BYTES];
+        hex::encode_to_slice(&rng.gen::<[u8; BYTES]>(), &mut second).unwrap();
+
+        // This is totally safe, because hex-encoded data is guaranteed to be
+        // a valid UTF-8 string.
+        #[allow(unsafe_code)]
+        unsafe {
+            format!(
+                "{},{}",
+                str::from_utf8_unchecked(&first),
+                str::from_utf8_unchecked(&second),
+            )
+        }
+    }
+}
+
 impl From<Config> for ConnectOptions {
     fn from(cfg: Config) -> Self {
         use slog::Drain as _;
 
         let mut out = Self::new(cfg.server_addr)
+            .hwid(Config::new_hwid())
             .name(cfg.name_as.unwrap_or_else(|| "TeamSpeakBot".into()));
         if let Some(v) = cfg.channel {
             out = out.channel(v);

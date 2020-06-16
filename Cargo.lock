@@ -610,7 +610,9 @@ dependencies = [
  "derive_more",
  "futures 0.1.29",
  "futures 0.3.4",
+ "hex",
  "humantime-serde",
+ "rand 0.7.3",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -918,6 +920,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "644f9158b2f133fd50f5fb3242878846d9eb792e445c893805ff0e3824006e35"
+
+[[package]]
 name = "hostname"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1217,9 +1225,9 @@ dependencies = [
 
 [[package]]
 name = "miniz_oxide"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aa679ff6578b1cddee93d7e82e263b94a575e0bfced07284eb0c037c1d2416a5"
+checksum = "791daaae1ed6889560f8c4359194f56648355540573244a5448a83ba1ecc7435"
 dependencies = [
  "adler32",
 ]
@@ -1948,17 +1956,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rustversion"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3bba175698996010c4f6dce5e7f173b6eb781fce25d2cfc45e27091ce0b79f6"
-dependencies = [
- "proc-macro2 1.0.10",
- "quote 1.0.3",
- "syn 1.0.17",
-]
-
-[[package]]
 name = "ryu"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2433,17 +2430,17 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.2.10"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cacbd5ebf7b211db6d9500b8b033c20b6e333a68368a9e8d3a1d073bb1f0a12a"
+checksum = "3a51cadc5b1eec673a685ff7c33192ff7b7603d0b75446fb354939ee615acb15"
 dependencies = [
  "cfg-if",
  "libc",
- "rustversion",
  "serde",
  "standback",
  "stdweb",
  "time-macros",
+ "version_check",
  "winapi 0.3.8",
 ]
 
@@ -2774,7 +2771,7 @@ dependencies = [
 [[package]]
 name = "ts-bookkeeping"
 version = "0.1.0"
-source = "git+https://github.com/ReSpeak/tsclientlib?rev=0205a64d66aff13ea12ad92cb8e8a11d2a322ba4#0205a64d66aff13ea12ad92cb8e8a11d2a322ba4"
+source = "git+https://github.com/ALLATRA-IT/tsclientlib?rev=e39ead63c7366456b233a083bab3fc5dfa3e8bae#e39ead63c7366456b233a083bab3fc5dfa3e8bae"
 dependencies = [
  "base64 0.11.0",
  "derive_more",
@@ -2785,7 +2782,7 @@ dependencies = [
  "num-traits",
  "serde",
  "t4rust-derive",
- "time 0.2.10",
+ "time 0.2.16",
  "tsproto-packets",
  "tsproto-structs",
  "tsproto-types",
@@ -2794,7 +2791,7 @@ dependencies = [
 [[package]]
 name = "tsclientlib"
 version = "0.1.0"
-source = "git+https://github.com/ReSpeak/tsclientlib?rev=0205a64d66aff13ea12ad92cb8e8a11d2a322ba4#0205a64d66aff13ea12ad92cb8e8a11d2a322ba4"
+source = "git+https://github.com/ALLATRA-IT/tsclientlib?rev=e39ead63c7366456b233a083bab3fc5dfa3e8bae#e39ead63c7366456b233a083bab3fc5dfa3e8bae"
 dependencies = [
  "base64 0.11.0",
  "bytes 0.4.12",
@@ -2813,7 +2810,7 @@ dependencies = [
  "slog-perf",
  "slog-term",
  "t4rust-derive",
- "time 0.2.10",
+ "time 0.2.16",
  "tokio 0.1.22",
  "tokio-threadpool",
  "trust-dns-proto",
@@ -2827,7 +2824,7 @@ dependencies = [
 [[package]]
 name = "tsproto"
 version = "0.1.0"
-source = "git+https://github.com/ReSpeak/tsclientlib?rev=0205a64d66aff13ea12ad92cb8e8a11d2a322ba4#0205a64d66aff13ea12ad92cb8e8a11d2a322ba4"
+source = "git+https://github.com/ALLATRA-IT/tsclientlib?rev=e39ead63c7366456b233a083bab3fc5dfa3e8bae#e39ead63c7366456b233a083bab3fc5dfa3e8bae"
 dependencies = [
  "aes",
  "arrayref",
@@ -2854,7 +2851,7 @@ dependencies = [
  "slog-perf",
  "slog-term",
  "stable_deref_trait",
- "time 0.2.10",
+ "time 0.2.16",
  "tokio 0.1.22",
  "tokio-threadpool",
  "tsproto-packets",
@@ -2864,7 +2861,7 @@ dependencies = [
 [[package]]
 name = "tsproto-packets"
 version = "0.1.0"
-source = "git+https://github.com/ReSpeak/tsclientlib?rev=0205a64d66aff13ea12ad92cb8e8a11d2a322ba4#0205a64d66aff13ea12ad92cb8e8a11d2a322ba4"
+source = "git+https://github.com/ALLATRA-IT/tsclientlib?rev=e39ead63c7366456b233a083bab3fc5dfa3e8bae#e39ead63c7366456b233a083bab3fc5dfa3e8bae"
 dependencies = [
  "arrayref",
  "base64 0.11.0",
@@ -2884,7 +2881,7 @@ dependencies = [
 [[package]]
 name = "tsproto-structs"
 version = "0.1.0"
-source = "git+https://github.com/ReSpeak/tsclientlib?rev=0205a64d66aff13ea12ad92cb8e8a11d2a322ba4#0205a64d66aff13ea12ad92cb8e8a11d2a322ba4"
+source = "git+https://github.com/ALLATRA-IT/tsclientlib?rev=e39ead63c7366456b233a083bab3fc5dfa3e8bae#e39ead63c7366456b233a083bab3fc5dfa3e8bae"
 dependencies = [
  "base64 0.11.0",
  "csv",
@@ -2898,7 +2895,7 @@ dependencies = [
 [[package]]
 name = "tsproto-types"
 version = "0.1.0"
-source = "git+https://github.com/ReSpeak/tsclientlib?rev=0205a64d66aff13ea12ad92cb8e8a11d2a322ba4#0205a64d66aff13ea12ad92cb8e8a11d2a322ba4"
+source = "git+https://github.com/ALLATRA-IT/tsclientlib?rev=e39ead63c7366456b233a083bab3fc5dfa3e8bae#e39ead63c7366456b233a083bab3fc5dfa3e8bae"
 dependencies = [
  "base64 0.11.0",
  "bitflags",
@@ -2908,7 +2905,7 @@ dependencies = [
  "num-traits",
  "serde",
  "t4rust-derive",
- "time 0.2.10",
+ "time 0.2.16",
  "tsproto-structs",
 ]
 
