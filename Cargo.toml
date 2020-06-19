@@ -12,12 +12,14 @@ codegen-units = 1
 [dependencies]
 audiopus = "0.2"
 anyhow = "1.0"
+backoff = "0.1.6"
 byteorder = "1.3"
 config = { version = "0.10", default-features = false, features = ["json"] }
 derive_more = "0.99.5"
 futures = { version = "0.3", features = ["compat"] }
 futures-01 = { version = "0.1", package = "futures" }
 hex = "0.4"
+pin-project = "0.4"
 rand = "0.7"
 serde = "1.0"
 serde_humantime = { version = "1.0", package = "humantime-serde" }

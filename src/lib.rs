@@ -26,6 +26,7 @@ pub mod filter;
 pub mod input;
 pub mod mixer;
 pub mod spec;
+pub mod util;
 
 use std::sync::{
     atomic::{AtomicI32, Ordering},

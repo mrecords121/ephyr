@@ -6,13 +6,10 @@ use std::{
     collections::{HashMap, VecDeque},
     fmt,
     future::Future,
-    hint::unreachable_unchecked,
-    mem,
     pin::Pin,
     str,
     sync::{Arc, Mutex},
     task::{Context, Poll},
-    time::Duration,
 };
 
 use audiopus::coder::{Decoder as OpusDecoder, GenericCtl as _};
@@ -20,16 +17,13 @@ use byteorder::{BigEndian, ByteOrder as _};
 use derive_more::{Display, Error};
 use futures::{
     compat::{Compat01As03, Future01CompatExt as _, Stream01CompatExt as _},
-    ready, sink,
+    sink,
     stream::BoxStream,
     FutureExt as _, Stream, StreamExt as _, TryFutureExt as _,
 };
 use rand::Rng as _;
 use slog_scope as log;
-use tokio::{
-    io::{self, AsyncRead},
-    time::{delay_for, Delay},
-};
+use tokio::io::{self, AsyncRead};
 use tsclientlib::{
     ConnectOptions, Connection, Error as TsClientError, PHBox, PacketHandler,
     ServerAddress,
@@ -50,10 +44,12 @@ type BoxStream01<I, E> =
 type ConnectionFuture = Compat01As03<BoxFuture01<Connection, TsClientError>>;
 
 /// Helper alias for [`Stream`] of [`InCommand`] packets,
-type InCommandsStream = BoxStream<'static, Result<InCommand, tsproto::Error>>;
+type InCommandsStream =
+    SpawnDropped<BoxStream<'static, Result<InCommand, tsproto::Error>>>;
 
 /// Helper alias for [`Stream`] of [`InAudio`] packets,
-type InAudioStream = BoxStream<'static, Result<InAudio, tsproto::Error>>;
+type InAudioStream =
+    SpawnDropped<BoxStream<'static, Result<InAudio, tsproto::Error>>>;
 
 /// Configuration for creating connections to [TeamSpeak] server.
 ///
@@ -169,13 +165,25 @@ impl InputBuilder {
     }
 
     /// Builds out the configured [`Input`], ready for use.
-    #[inline]
     #[must_use]
     pub fn build(self) -> Input {
-        Input {
-            cfg: self.cfg,
-            state: State::Disconnected,
-            backoff: Duration::from_millis(50),
+        let commands = Arc::new(Mutex::new(None));
+        let audio = Arc::new(Mutex::new(None));
+
+        // TODO #6: Memoize TeamSpeak Identity and reuse.
+        //      https://github.com/ALLATRA-IT/ephyr/issues/6
+        let opts = ConnectOptions::from(self.cfg).handle_packets(Box::new(
+            InPacketsInjector {
+                commands: commands.clone(),
+                audio: audio.clone(),
+            },
+        ));
+
+        log::debug!("Connecting to TeamSpeak server...");
+        Input::Handshaking {
+            conn: Connection::new(opts).compat(),
+            commands,
+            audio,
         }
     }
 }
@@ -192,95 +200,9 @@ impl InputBuilder {
 /// [TeamSpeak]: https://teamspeak.com
 /// [1]: https://wiki.multimedia.cx/index.php/PCM
 /// [2]: https://trac.ffmpeg.org/wiki/audio%20types
-#[derive(Debug)]
-pub struct Input {
-    /// Configuration for establishing connections with [TeamSpeak] server.
-    ///
-    /// [TeamSpeak]: https://teamspeak.com
-    cfg: Config,
-
-    /// Current [`State`] of this [`Input`].
-    state: State,
-
-    /// Delay of the next backoff for reconnection.
-    backoff: Duration,
-}
-
-impl Input {
-    /// Maximum supported size of a decoded [Opus] audio frame received from
-    /// [TeamSpeak] server.
-    ///
-    /// Use 48 kHz, maximum of 120 ms frames (3 times 40 ms frames of which
-    /// there are 25 per second) and stereo data (2 channels).
-    /// This is a maximum of 11520 samples and 45 kiB.
-    ///
-    /// [Opus]: https://opus-codec.org
-    /// [TeamSpeak]: https://teamspeak.com
-    const OPUS_MAX_FRAME_SIZE: usize = 48000 / 25 * 3 * 2;
-
-    /// Usual size of a decoded [Opus] audio frame received from [TeamSpeak]
-    /// server.
-    ///
-    /// Use 48 kHz, 20 ms frames (50 per second) and mono data (1 channel).
-    /// This means 1920 samples and 7.5 kiB.
-    ///
-    /// [Opus]: https://opus-codec.org
-    /// [TeamSpeak]: https://teamspeak.com
-    const OPUS_USUAL_FRAME_SIZE: usize = 48000 / 50;
-
-    /// Starts creation of the new [`Input`].
-    #[allow(clippy::new_ret_no_self)]
-    #[inline]
-    pub fn new<A: Into<ServerAddress>>(server_address: A) -> InputBuilder {
-        InputBuilder {
-            cfg: Config {
-                server_addr: server_address.into(),
-                channel: None,
-                name_as: None,
-            },
-        }
-    }
-
-    /// Increases backoff delay of this [`Input`] twice if it's not more than
-    /// 1 minute.
-    #[inline]
-    fn increase_backoff_delay(&mut self) {
-        if self.backoff < Duration::from_secs(60) {
-            self.backoff *= 2;
-        }
-    }
-
-    /// Resets backoff delay of this [`Input`] to the default value of
-    /// 100 milliseconds.
-    #[inline]
-    fn reset_backoff_delay(&mut self) {
-        self.backoff = Duration::from_millis(100);
-    }
-}
-
-impl AsyncRead for Input {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<usize>> {
-        match self.state {
-            State::Disconnected => self.poll_disconnected(cx, buf),
-            State::Connecting { .. } => self.poll_connecting(cx, buf),
-            State::Connected { .. } => self.poll_read_connected(cx, buf),
-            State::Backoff { .. } => self.poll_backoff(cx, buf),
-        }
-        .map(|res| res.map_err(Into::into))
-    }
-}
-
-/// Possible states of audio [`Input`].
-enum State {
-    /// Not connected to the server and is ready to establish a [`Connection`].
-    Disconnected,
-
+pub enum Input {
     /// Connecting to the server and negotiating with it.
-    Connecting {
+    Handshaking {
         /// [`Future`] that will be resolved once [`Connection`] is established
         /// and ready.
         conn: ConnectionFuture,
@@ -339,12 +261,217 @@ enum State {
         /// [TeamSpeak]: https://teamspeak.com
         data: PcmDataBuffers,
     },
+}
 
-    /// Not connected to the server and is delayed before reconnecting.
-    Backoff {
-        /// [`Future`] that will be resolved once backoff delay is finished.
-        delay: Delay,
-    },
+impl Input {
+    /// Maximum supported size of a decoded [Opus] audio frame received from
+    /// [TeamSpeak] server.
+    ///
+    /// Use 48 kHz, maximum of 120 ms frames (3 times 40 ms frames of which
+    /// there are 25 per second) and stereo data (2 channels).
+    /// This is a maximum of 11520 samples and 45 kiB.
+    ///
+    /// [Opus]: https://opus-codec.org
+    /// [TeamSpeak]: https://teamspeak.com
+    const OPUS_MAX_FRAME_SIZE: usize = 48000 / 25 * 3 * 2;
+
+    /// Usual size of a decoded [Opus] audio frame received from [TeamSpeak]
+    /// server.
+    ///
+    /// Use 48 kHz, 20 ms frames (50 per second) and mono data (1 channel).
+    /// This means 1920 samples and 7.5 kiB.
+    ///
+    /// [Opus]: https://opus-codec.org
+    /// [TeamSpeak]: https://teamspeak.com
+    const OPUS_USUAL_FRAME_SIZE: usize = 48000 / 50;
+
+    /// Starts creation of a new [`Input`].
+    #[allow(clippy::new_ret_no_self)]
+    #[inline]
+    pub fn new<A: Into<ServerAddress>>(server_address: A) -> InputBuilder {
+        InputBuilder {
+            cfg: Config {
+                server_addr: server_address.into(),
+                channel: None,
+                name_as: None,
+            },
+        }
+    }
+
+    /// Polls next packet out of the given [`Stream`] making it being processed
+    /// by [`tsclientlib`], and then returns it, if any, reporting whether
+    /// packet polling was successful or not.
+    fn poll_next_packet<P: fmt::Debug + Send>(
+        typ: &'static str,
+        stream: &mut SpawnDropped<
+            BoxStream<'static, Result<P, tsproto::Error>>,
+        >,
+        cx: &mut Context<'_>,
+    ) -> Result<Option<P>, InputError> {
+        use InputError::{ReceivingFailed, ReceivingFinished};
+
+        match Pin::new(stream.as_mut()).poll_next(cx) {
+            Poll::Pending => Ok(None),
+            Poll::Ready(Some(Ok(pkt))) => {
+                log::trace!("Received {} packet: {:?}", typ, pkt);
+                Ok(Some(pkt))
+            }
+            Poll::Ready(Some(Err(e))) => Err(ReceivingFailed(typ, e)),
+            Poll::Ready(None) => Err(ReceivingFinished(typ)),
+        }
+    }
+}
+
+impl AsyncRead for Input {
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        use InputError::ConnectionFailed;
+
+        let new_state = match &mut *self {
+            Self::Handshaking {
+                conn,
+                commands,
+                audio,
+            } => {
+                match Pin::new(conn).poll(cx) {
+                    // If `Connection` is not established yet, then perform
+                    // negotiation with the server, until it does.
+                    Poll::Pending => {
+                        // TODO #5: Out-of-order errors still happen rarely.
+                        //      https://github.com/ALLATRA-IT/ephyr/issues/5
+
+                        // When `Input::Handshaking` we still need to poll
+                        // and process `InAudio` packets for preserving
+                        // correct packets processing order inside
+                        // `tsclientlib` implementation.
+                        if let Some(aud) = audio.lock().unwrap().as_mut() {
+                            let _ = Self::poll_next_packet("InAudio", aud, cx)?;
+                        }
+
+                        // We should poll `InCommand` packets to make them
+                        // processed inside `tsclientlib` and perform the
+                        // necessary negotiation with the server.
+                        if let Some(cmds) = commands.lock().unwrap().as_mut() {
+                            let _ =
+                                Self::poll_next_packet("InCommand", cmds, cx)?;
+                        }
+
+                        return Poll::Pending;
+                    }
+
+                    // If `Connection` has been established successfully, then
+                    // transit to `Input::Connected` state.
+                    Poll::Ready(Ok(conn)) => Self::Connected {
+                        _conn: conn,
+                        commands: {
+                            commands.lock().unwrap().take().expect(
+                                "InCommandsStream must be injected when \
+                                 Connected",
+                            )
+                        },
+                        audio: {
+                            audio.lock().unwrap().take().expect(
+                                "InAudioStream must be injected when Connected",
+                            )
+                        },
+                        decoders: OpusDecoders::new(),
+                        decoding_buff: vec![0_f32; Self::OPUS_USUAL_FRAME_SIZE],
+                        data: PcmDataBuffers::new(),
+                    },
+
+                    Poll::Ready(Err(e)) => {
+                        return Poll::Ready(Err(ConnectionFailed(e).into()));
+                    }
+                }
+            }
+
+            Self::Connected {
+                commands,
+                audio,
+                decoders,
+                decoding_buff,
+                data,
+                ..
+            } => {
+                // If not all `data` was read yet, then read it as much as
+                // possible.
+                if let Some(num) = write_mixed_audio_be(data, buf, decoders) {
+                    return Poll::Ready(Ok(num));
+                }
+
+                // We still need to poll and process `InCommand` packets for
+                // preserving correct packets processing order inside
+                // `tsclientlib` implementation and react as server
+                // requires.
+                let _ = Self::poll_next_packet("InCommand", commands, cx)?;
+
+                // Once `InCommand` packet is polled, we can now poll the actual
+                // `InAudio` packet we're interested in.
+                if let Some(aud) = Self::poll_next_packet("InAudio", audio, cx)?
+                {
+                    let _ = decode_audio_packet(
+                        &aud,
+                        data,
+                        decoders,
+                        decoding_buff,
+                    )?;
+
+                    // Write new decoded packets, if any.
+                    if let Some(num) = write_mixed_audio_be(data, buf, decoders)
+                    {
+                        return Poll::Ready(Ok(num));
+                    }
+
+                    // If we have nothing to write (not all transmitting members
+                    // have data arrived, or something else), then don't write
+                    // anything and just continue waiting for new data.
+                    cx.waker().wake_by_ref();
+                }
+                return Poll::Pending;
+            }
+        };
+
+        log::debug!("Successfully Connected to TeamSpeak server");
+        self.set(new_state);
+        self.poll_read(cx, buf)
+    }
+}
+
+impl fmt::Debug for Input {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Handshaking {
+                commands, audio, ..
+            } => f
+                .debug_struct("Input::Handshaking")
+                .field("conn", &"BoxFuture<Connection>")
+                .field("commands", &{
+                    if commands.lock().unwrap().is_some() {
+                        "Arc<Mutex<Some(InCommandsStream)>>"
+                    } else {
+                        "Arc<Mutex<None>>"
+                    }
+                })
+                .field("audio", &{
+                    if audio.lock().unwrap().is_some() {
+                        "Arc<Mutex<Some(InAudioStream)>>"
+                    } else {
+                        "Arc<Mutex<None>>"
+                    }
+                })
+                .finish(),
+
+            Self::Connected { .. } => f
+                .debug_struct("Input::Connected")
+                .field("conn", &"Connection")
+                .field("commands", &"InCommandsStream")
+                .field("audio", &"InAudioStream")
+                .finish(),
+        }
+    }
 }
 
 /// Type of [TeamSpeak] channel member ID.
@@ -365,378 +492,6 @@ type OpusDecoders = HashMap<MemberId, OpusDecoder>;
 /// [1]: https://wiki.multimedia.cx/index.php/PCM
 /// [TeamSpeak]: https://teamspeak.com
 type PcmDataBuffers = HashMap<MemberId, VecDeque<f32>>;
-
-impl Input {
-    /// Polls [`Input`] in [`State::Disconnected`].
-    fn poll_disconnected(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize, InputError>> {
-        debug_assert!(
-            matches!(self.state, State::Disconnected),
-            "Called poll_disconnected() for state {:?}",
-            self.state,
-        );
-
-        let commands = Arc::new(Mutex::new(None));
-        let audio = Arc::new(Mutex::new(None));
-
-        // TODO #6: Memoize TeamSpeak Identity and reuse.
-        //      https://github.com/ALLATRA-IT/ephyr/issues/6
-        let opts = ConnectOptions::from(self.cfg.clone()).handle_packets(
-            Box::new(InPacketsInjector {
-                commands: commands.clone(),
-                audio: audio.clone(),
-            }),
-        );
-        let conn = Connection::new(opts).compat();
-
-        let new_state = State::Connecting {
-            conn,
-            commands,
-            audio,
-        };
-
-        let _ = mem::replace(&mut self.state, new_state);
-        log::debug!("Connecting to TeamSpeak server...");
-        self.poll_connecting(cx, buf)
-    }
-
-    /// Polls [`Input`] in [`State::Connecting`].
-    fn poll_connecting(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize, InputError>> {
-        let new_state = if let State::Connecting {
-            conn,
-            commands,
-            audio,
-        } = &mut self.state
-        {
-            match Pin::new(conn).poll(cx) {
-                // If `Connection` is not ready yet, then perform negotiation
-                // with the server, until it does.
-                Poll::Pending => {
-                    let ok = {
-                        // TODO #5: Out-of-order errors still happens rarely.
-                        //      https://github.com/ALLATRA-IT/ephyr/issues/5
-
-                        // When `State::Connecting` we still need to poll and
-                        // process `InAudio` packets for preserving correct
-                        // packets processing order inside `tsclientlib`
-                        // implementation.
-                        if let Some(aud) = audio.lock().unwrap().as_mut() {
-                            poll_next_packet("InAudio", aud, cx)
-                        } else {
-                            // If `InPacketsInjector` hasn't injected
-                            // `InAudioStream` yet, then it's OK at the moment.
-                            true
-                        }
-                    };
-                    if ok {
-                        // We should poll `InCommand` packets to make them
-                        // processed inside `tsclientlib` and perform the
-                        // necessary negotiation with the server.
-                        if let Some(cmds) = commands.lock().unwrap().as_mut() {
-                            if poll_next_packet("InCommand", cmds, cx) {
-                                return Poll::Pending;
-                            }
-                        } else {
-                            // If `InPacketsInjector` hasn't injected
-                            // `InCommandsStream`s yet, let's just wait until
-                            // it does.
-                            return Poll::Pending;
-                        }
-                    }
-                    // If polling packets failed, then reconnect with backoff.
-                    State::Backoff {
-                        delay: delay_for(self.backoff),
-                    }
-                }
-
-                // If `Connection` has been established successfully, then
-                // transit to `State::Connected`.
-                Poll::Ready(Ok(conn)) => State::Connected {
-                    _conn: conn,
-                    commands: {
-                        commands.lock().unwrap().take().expect(
-                            "InCommandsStream must be injected when Connected",
-                        )
-                    },
-                    audio: {
-                        audio.lock().unwrap().take().expect(
-                            "InAudioStream must be injected when Connected",
-                        )
-                    },
-                    decoders: OpusDecoders::new(),
-                    decoding_buff: vec![0_f32; Self::OPUS_USUAL_FRAME_SIZE],
-                    data: PcmDataBuffers::new(),
-                },
-
-                // If `Connection` establishing fails, then reconnect with
-                // backoff.
-                Poll::Ready(Err(e)) => {
-                    log::error!("Connecting to TeamSpeak server failed: {}", e);
-                    State::Backoff {
-                        delay: delay_for(self.backoff),
-                    }
-                }
-            }
-        } else {
-            debug_assert!(
-                false,
-                "Called poll_connecting() for state {:?}",
-                self.state,
-            );
-            #[allow(unsafe_code)]
-            unsafe {
-                unreachable_unchecked()
-            }
-        };
-
-        let _ = mem::replace(&mut self.state, new_state);
-        if matches!(self.state, State::Connected { .. }) {
-            self.reset_backoff_delay();
-            log::debug!("Successfully Connected to TeamSpeak server");
-            self.poll_read_connected(cx, buf)
-        } else {
-            log::debug!("Backoff connection to TeamSpeak server");
-            self.poll_backoff(cx, buf)
-        }
-    }
-
-    /// Polls [`Input`] in [`State::Connected`].
-    fn poll_read_connected(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize, InputError>> {
-        if let State::Connected {
-            commands,
-            audio,
-            decoders,
-            decoding_buff,
-            data,
-            ..
-        } = &mut self.state
-        {
-            // If not all `data` was read yet, then read it as much as possible.
-            if let Some(num) = write_mixed_audio_be(data, buf, decoders) {
-                return Poll::Ready(Ok(num));
-            }
-
-            // We still need to poll and process `InCommand` packets for
-            // preserving correct packets processing order inside `tsclientlib`
-            // implementation and react as server requires.
-            if poll_next_packet("InCommand", commands, cx) {
-                // Once `InCommand` packet is polled, we can now poll the actual
-                // `InAudio` packet we're interested in.
-                match ready!(Pin::new(audio).poll_next(cx)) {
-                    Some(Ok(aud)) => {
-                        let _ = decode_audio_packet(
-                            &aud,
-                            data,
-                            decoders,
-                            decoding_buff,
-                        )?;
-                        if let Some(num) =
-                            write_mixed_audio_be(data, buf, decoders)
-                        {
-                            return Poll::Ready(Ok(num));
-                        }
-
-                        // If empty or irrelevant `InAudio` packet is received,
-                        // or we have nothing to write (not all transmitting
-                        // members have data arrived), then don't write anything
-                        // and just continue waiting for new data.
-                        cx.waker().wake_by_ref();
-                        return Poll::Pending;
-                    }
-                    Some(Err(e)) => {
-                        log::error!("Receiving InAudio packet failed: {}", e)
-                    }
-                    None => log::error!("Receiving InAudio packets finished"),
-                }
-            }
-        // If we failed to receive packets or their `Stream`s have finished,
-        // then reconnect with backoff and start again.
-        } else {
-            debug_assert!(
-                false,
-                "Called poll_read_connected() for state {:?}",
-                self.state,
-            );
-            #[allow(unsafe_code)]
-            unsafe {
-                unreachable_unchecked()
-            }
-        };
-
-        let new_state = State::Backoff {
-            delay: delay_for(self.backoff),
-        };
-
-        let _ = mem::replace(&mut self.state, new_state);
-        log::debug!("Backoff connection to TeamSpeak server");
-        self.poll_backoff(cx, buf)
-    }
-
-    /// Polls [`Input`] in [`State::Backoff`].
-    fn poll_backoff(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<Result<usize, InputError>> {
-        let new_state = if let State::Backoff { delay } = &mut self.state {
-            ready!(Pin::new(delay).poll(cx));
-
-            // After backoff delay is finished, transit to
-            // `State::Disconnected` for reconnection.
-            State::Disconnected
-        } else {
-            debug_assert!(
-                false,
-                "Called poll_backoff() for state {:?}",
-                self.state,
-            );
-            #[allow(unsafe_code)]
-            unsafe {
-                unreachable_unchecked()
-            }
-        };
-
-        self.increase_backoff_delay();
-
-        let _ = mem::replace(&mut self.state, new_state);
-        self.poll_disconnected(cx, buf)
-    }
-}
-
-/// Polls next packet out of the given [`Stream`] making it being processed by
-/// [`tsclientlib`], and then just drops it, reporting whether packet polling
-/// was successful or not.
-fn poll_next_packet<P: fmt::Debug>(
-    typ: &'static str,
-    stream: &mut BoxStream<'static, Result<P, tsproto::Error>>,
-    cx: &mut Context<'_>,
-) -> bool {
-    match Pin::new(stream).poll_next(cx) {
-        Poll::Pending => true,
-        Poll::Ready(Some(Ok(cmd))) => {
-            log::trace!("Received {} packet: {:?}", typ, cmd);
-            true
-        }
-        Poll::Ready(Some(Err(e))) => {
-            log::error!("Receiving {} packet failed: {}", typ, e);
-            false
-        }
-        Poll::Ready(None) => {
-            log::error!("Receiving {} packets finished", typ);
-            false
-        }
-    }
-}
-
-impl Drop for Input {
-    /// Spawns [`InCommandsStream`] and [`InAudioStream`] (if any) to be fully
-    /// drained for disconnecting from [TeamSpeak] server normally.
-    ///
-    /// This is required, because [`tsclientlib`] still awaits in background
-    /// for [`InCommandsStream`] being processed, even after [`Connection`] is
-    /// all dropped.
-    ///
-    /// [TeamSpeak]: https://teamspeak.com
-    fn drop(&mut self) {
-        if !matches!(
-            self.state, State::Connected { .. } | State::Connecting { .. }
-        ) {
-            return;
-        }
-
-        let (commands, audio) =
-            match mem::replace(&mut self.state, State::Disconnected) {
-                State::Connected {
-                    commands, audio, ..
-                } => (Some(commands), Some(audio)),
-                State::Connecting {
-                    commands, audio, ..
-                } => (
-                    commands.lock().unwrap().take(),
-                    audio.lock().unwrap().take(),
-                ),
-                _ => {
-                    debug_assert!(
-                        false,
-                        "Entered unreachable match arm in \
-                         teamspeak::Input::drop",
-                    );
-                    #[allow(unsafe_code)]
-                    unsafe {
-                        unreachable_unchecked()
-                    }
-                }
-            };
-
-        if let Some(strm) = commands {
-            tokio_01::spawn(
-                strm.map(Ok)
-                    .forward(sink::drain())
-                    .map_err(|_| ())
-                    .boxed()
-                    .compat(),
-            );
-        }
-        if let Some(strm) = audio {
-            tokio_01::spawn(
-                strm.map(Ok)
-                    .forward(sink::drain())
-                    .map_err(|_| ())
-                    .boxed()
-                    .compat(),
-            );
-        }
-    }
-}
-
-impl fmt::Debug for State {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Disconnected => f.debug_tuple("State::Disconnected").finish(),
-            Self::Connecting {
-                commands, audio, ..
-            } => f
-                .debug_struct("State::Connecting")
-                .field("conn", &"BoxFuture<Connection>")
-                .field("commands", &{
-                    if commands.lock().unwrap().is_some() {
-                        "Arc<Mutex<Some(InCommandsStream)>>"
-                    } else {
-                        "Arc<Mutex<None>>"
-                    }
-                })
-                .field("audio", &{
-                    if audio.lock().unwrap().is_some() {
-                        "Arc<Mutex<Some(InAudioStream)>>"
-                    } else {
-                        "Arc<Mutex<None>>"
-                    }
-                })
-                .finish(),
-            Self::Connected { .. } => f
-                .debug_struct("State::Connected")
-                .field("conn", &"Connection")
-                .field("commands", &"InCommandsStream")
-                .field("audio", &"InAudioStream")
-                .finish(),
-            Self::Backoff { delay } => f
-                .debug_struct("State::Backoff")
-                .field("delay", &delay)
-                .finish(),
-        }
-    }
-}
 
 /// [`PacketHandler`] that injects received [`InCommandsStream`] and
 /// [`InAudioStream`] directly into [`Input`] itself.
@@ -759,8 +514,12 @@ impl PacketHandler for InPacketsInjector {
             .commands
             .lock()
             .unwrap()
-            .replace(commands.compat().boxed());
-        let _ = self.audio.lock().unwrap().replace(audio.compat().boxed());
+            .replace(SpawnDropped::wrap(commands.compat().boxed()));
+        let _ = self
+            .audio
+            .lock()
+            .unwrap()
+            .replace(SpawnDropped::wrap(audio.compat().boxed()));
     }
 
     #[inline]
@@ -960,11 +719,85 @@ fn decode_audio_packet(
     }
 }
 
+/// Simple wrapper around [`Stream`] which spawns on [`Drop`].
+///
+/// This is required for [`InCommandsStream`] and [`InAudioStream`] to be fully
+/// drained for disconnecting from [TeamSpeak] server normally, because
+/// [`tsclientlib`] still awaits in background for [`InCommandsStream`] being
+/// processed, even after [`Connection`] is whole dropped.
+///
+/// [TeamSpeak]: https://teamspeak.com
+pub struct SpawnDropped<T>(Option<T>)
+where
+    T: Stream + Send + 'static,
+    T::Item: Send;
+
+impl<T> AsMut<T> for SpawnDropped<T>
+where
+    T: Stream + Send + 'static,
+    T::Item: Send,
+{
+    #[inline]
+    fn as_mut(&mut self) -> &mut T {
+        self.0.as_mut().unwrap()
+    }
+}
+
+impl<T> SpawnDropped<T>
+where
+    T: Stream + Send + 'static,
+    T::Item: Send,
+{
+    /// Wraps the given [`Stream`] into [`SpawnDropped`] wrapper.
+    #[inline]
+    pub fn wrap(stream: T) -> Self {
+        Self(Some(stream))
+    }
+}
+
+impl<T: Stream + Send + 'static> Drop for SpawnDropped<T>
+where
+    T: Stream + Send + 'static,
+    T::Item: Send,
+{
+    /// Spawns the inner [`Stream`] on [`tokio_01`] executor to be fully
+    /// drained.
+    fn drop(&mut self) {
+        if let Some(strm) = self.0.take() {
+            tokio_01::spawn(
+                strm.map(Ok)
+                    .forward(sink::drain())
+                    .map_err(|_| ())
+                    .boxed()
+                    .compat(),
+            );
+        }
+    }
+}
+
 /// Possible errors of capturing audio [`Input`] from [TeamSpeak] server.
 ///
 /// [TeamSpeak]: https://teamspeak.com
-#[derive(Clone, Display, Debug, Error)]
+#[derive(Display, Debug, Error)]
 pub enum InputError {
+    /// Establishing connection with [TeamSpeak] server failed.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    #[display(fmt = "Connecting to TeamSpeak server failed: {}", _0)]
+    ConnectionFailed(#[error(not(source))] TsClientError),
+
+    /// Receiving packet from [TeamSpeak] server failed.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    #[display(fmt = "Receiving {} packet failed: {}", _0, _1)]
+    ReceivingFailed(&'static str, tsproto::Error),
+
+    /// Receiving packets from [TeamSpeak] server finished unexpectedly.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    #[display(fmt = "Receiving {} packets finished unexpectedly", _0)]
+    ReceivingFinished(#[error(not(source))] &'static str),
+
     /// Received [`InAudio`] packet from [TeamSpeak] server is encoded with
     /// unsupported codec.
     ///
@@ -1007,16 +840,31 @@ impl From<InputError> for io::Error {
     fn from(e: InputError) -> Self {
         use InputError as E;
 
-        io::Error::new(
-            match e {
-                E::UnsupportedCodec(_)
-                | E::DecodingFailed(_)
-                | E::MaxBufferSizeExceeded(_) => io::ErrorKind::InvalidData,
-                E::DecoderCreationFailed(_) | E::DecoderResetFailed(_) => {
-                    io::ErrorKind::Other
-                }
-            },
-            e,
-        )
+        let (kind, is_permanent) = match e {
+            E::ConnectionFailed(_) => (io::ErrorKind::ConnectionRefused, false),
+
+            E::ReceivingFailed(..) => (io::ErrorKind::ConnectionAborted, false),
+
+            E::ReceivingFinished(_) => (io::ErrorKind::BrokenPipe, false),
+
+            E::UnsupportedCodec(_) => (io::ErrorKind::InvalidData, true),
+
+            E::DecodingFailed(_) | E::MaxBufferSizeExceeded(_) => {
+                (io::ErrorKind::InvalidData, false)
+            }
+
+            E::DecoderCreationFailed(_) | E::DecoderResetFailed(_) => {
+                (io::ErrorKind::Other, true)
+            }
+        };
+
+        if is_permanent {
+            io::Error::new(
+                kind,
+                backoff::Error::Permanent(io::Error::new(kind, e)),
+            )
+        } else {
+            io::Error::new(kind, e)
+        }
     }
 }

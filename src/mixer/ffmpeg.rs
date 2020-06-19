@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, process::Stdio};
 use anyhow::anyhow;
 use tokio::{io, process::Command};
 
-use crate::{filter::silence, input::teamspeak, spec};
+use crate::{filter::silence, input::teamspeak, spec, util::Backoff};
 
 /// Mixer that performs mixing via [FFmpeg] invoked as a child process.
 ///
@@ -28,7 +28,9 @@ pub struct Mixer {
     cmd: Command,
 
     /// Audio data to be fed into [FFmpeg]'s STDIN.
-    stdin: Option<silence::Filler<teamspeak::Input>>,
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
+    stdin: Option<StdinInput>,
 }
 
 impl Mixer {
@@ -153,14 +155,18 @@ impl Mixer {
         if let Some(port) = cfg.url.port() {
             host = format!("{}:{}", host, port);
         }
+        let channel = cfg.url.path()[1..].to_string();
+        let name = format!(
+            "🤖 {}/{} <- {}/{}",
+            self.app, self.stream, self.name, name,
+        );
         self.stdin = Some(silence::Filler::new(
-            teamspeak::Input::new(host)
-                .channel(&cfg.url.path()[1..])
-                .name_as(format!(
-                    "🤖 {}/{} <- {}/{}",
-                    self.app, self.stream, self.name, name,
-                ))
-                .build(),
+            Backoff::new(Box::new(move || {
+                teamspeak::Input::new(host.as_str())
+                    .channel(&channel)
+                    .name_as(&name)
+                    .build()
+            })),
             8000, // Hz
         ));
 
@@ -212,3 +218,10 @@ impl Mixer {
         Ok(())
     }
 }
+
+/// Helper alias for the [`io::AsyncRead`] type being fed into [FFmpeg]'s STDIN.
+///
+/// [FFmpeg]: https://ffmpeg.org
+type StdinInput = silence::Filler<
+    Backoff<teamspeak::Input, Box<dyn Fn() -> teamspeak::Input + Send>>,
+>;
