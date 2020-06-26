@@ -44,8 +44,7 @@ use self::mixer::ffmpeg;
 pub use self::spec::Spec;
 
 /// Runs application, returning its exit code.
-#[must_use]
-pub fn run() -> i32 {
+pub async fn run() -> i32 {
     let opts = cli::Opts::from_args();
 
     // This guard should be held till the end of the program for the logger
@@ -65,26 +64,24 @@ pub fn run() -> i32 {
     let exit_code = Arc::new(AtomicI32::new(0));
     let exit_code_ref = exit_code.clone();
 
-    tokio_compat::run_std(
-        future::select(
-            async move {
-                if let Err(e) = run_mixers(&opts, &schema).await {
-                    log::crit!("Cannot run: {}", e);
-                    exit_code_ref.compare_and_swap(0, 1, Ordering::SeqCst);
-                }
+    let _ = future::select(
+        async move {
+            if let Err(e) = run_mixers(&opts, &schema).await {
+                log::crit!("Cannot run: {}", e);
+                exit_code_ref.compare_and_swap(0, 1, Ordering::SeqCst);
             }
-            .boxed(),
-            async {
-                match shutdown_signal().await {
-                    Ok(s) => log::info!("Received OS signal {}", s),
-                    Err(e) => log::error!("Failed to listen OS signals: {}", e),
-                }
-                log::info!("Shutting down...")
+        }
+        .boxed(),
+        async {
+            match shutdown_signal().await {
+                Ok(s) => log::info!("Received OS signal {}", s),
+                Err(e) => log::error!("Failed to listen OS signals: {}", e),
             }
-            .boxed(),
-        )
-        .map(|_| ()),
-    );
+            log::info!("Shutting down...")
+        }
+        .boxed(),
+    )
+    .await;
 
     // Unwrapping is OK here, because at this moment `exit_code` is not shared
     // anymore, as runtime has finished.

@@ -1,6 +1,6 @@
 use std::process;
 
-#[inline]
-fn main() {
-    process::exit(ephyr::run());
+#[tokio::main]
+async fn main() {
+    process::exit(ephyr::run().await);
 }

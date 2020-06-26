@@ -162,10 +162,11 @@ impl Mixer {
         );
         self.stdin = Some(silence::Filler::new(
             Backoff::new(Box::new(move || {
-                teamspeak::Input::new(host.as_str())
-                    .channel(&channel)
-                    .name_as(&name)
-                    .build()
+                teamspeak::Input::new(
+                    teamspeak::Config::new(host.as_str())
+                        .channel(channel.clone())
+                        .name(name.clone()),
+                )
             })),
             8000, // Hz
         ));

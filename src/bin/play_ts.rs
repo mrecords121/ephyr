@@ -12,7 +12,8 @@ use futures::{future, FutureExt as _};
 use slog_scope as log;
 use tokio::process::Command;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let mut opts = cli::Opts::default();
     opts.verbose = Some(slog::Level::Debug);
 
@@ -23,26 +24,24 @@ fn main() {
     let exit_code = Arc::new(AtomicI32::new(0));
     let exit_code_ref = exit_code.clone();
 
-    tokio_compat::run_std(
-        future::select(
-            async move {
-                if let Err(e) = run().await {
-                    log::crit!("Cannot run: {}", e);
-                    exit_code_ref.compare_and_swap(0, 1, Ordering::SeqCst);
-                }
+    let _ = future::select(
+        async move {
+            if let Err(e) = run().await {
+                log::crit!("Cannot run: {}", e);
+                exit_code_ref.compare_and_swap(0, 1, Ordering::SeqCst);
             }
-            .boxed(),
-            async {
-                match ephyr::shutdown_signal().await {
-                    Ok(s) => log::info!("Received OS signal {}", s),
-                    Err(e) => log::error!("Failed to listen OS signals: {}", e),
-                }
-                log::info!("Shutting down...")
+        }
+        .boxed(),
+        async {
+            match ephyr::shutdown_signal().await {
+                Ok(s) => log::info!("Received OS signal {}", s),
+                Err(e) => log::error!("Failed to listen OS signals: {}", e),
             }
-            .boxed(),
-        )
-        .map(|_| ()),
-    );
+            log::info!("Shutting down...")
+        }
+        .boxed(),
+    )
+    .await;
 
     // Unwrapping is OK here, because at this moment `exit_code` is not shared
     // anymore, as runtime has finished.
@@ -52,11 +51,10 @@ fn main() {
 
 #[allow(clippy::non_ascii_literal)]
 async fn run() -> Result<(), anyhow::Error> {
-    let ts_input = teamspeak::Input::new("ts3.ts3.online:8722")
+    let cfg = teamspeak::Config::new("ts3.ts3.online:8722")
         .channel("[cspacer]Best-of-Trance-Radio")
-        .name_as("🤖 ephyr::play_ts")
-        .build();
-    let mut ts_input = silence::Filler::new(ts_input, 8000);
+        .name("🤖 ephyr::play_ts");
+    let mut ts_input = silence::Filler::new(teamspeak::Input::new(cfg), 8000);
 
     let ffmpeg = Command::new("ffmpeg")
         .args(&["-loglevel", "debug"])
