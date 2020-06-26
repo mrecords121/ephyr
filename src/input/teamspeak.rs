@@ -7,13 +7,15 @@ use std::{
     fmt,
     pin::Pin,
     str,
+    sync::{Arc, Mutex},
     task::{Context, Poll},
 };
 
 use audiopus::coder::Decoder as OpusDecoder;
 use byteorder::{BigEndian, ByteOrder as _};
 use derive_more::{Display, Error};
-use futures::{ready, sink, Stream, StreamExt as _};
+use futures::{future, ready, sink, Stream, StreamExt as _};
+use once_cell::sync::Lazy;
 use rand::Rng as _;
 use slog_scope as log;
 use tokio::{
@@ -436,14 +438,10 @@ impl Drop for Input {
     /// some handshake.
     ///
     /// [TeamSpeak]: https://teamspeak.com
+    #[inline]
     fn drop(&mut self) {
-        if let Some(mut conn) = self.conn.take() {
-            let _: JoinHandle<Result<_, tsclientlib::Error>> =
-                tokio::spawn(async move {
-                    conn.disconnect(DisconnectOptions::default())?;
-                    let _ = conn.events().map(Ok).forward(sink::drain()).await;
-                    Ok(())
-                });
+        if let Some(conn) = self.conn.take() {
+            spawn_disconnect(conn)
         }
     }
 }
@@ -544,4 +542,63 @@ impl From<InputError> for io::Error {
             io::Error::new(kind, e)
         }
     }
+}
+
+/// Collection of [`Connection`]s being disconnecting at the moment.
+///
+/// [1]: https://github.com/tokio-rs/tokio/issues/2053
+#[allow(clippy::type_complexity)]
+static IN_PROGRESS_DISCONNECTS: Lazy<
+    Arc<Mutex<HashMap<u64, JoinHandle<Result<(), tsclientlib::Error>>>>>,
+> = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+
+/// [`tokio::spawn`]s disconnection of the given [`Connection`] and tracks its
+/// completion via [`IN_PROGRESS_DISCONNECTS`].
+///
+/// All disconnects can be awaited to be completed via
+/// [`finish_all_disconnects`] function.
+fn spawn_disconnect(mut conn: Connection) {
+    let mut disconnects = IN_PROGRESS_DISCONNECTS.lock().unwrap();
+
+    let id = loop {
+        let id = rand::thread_rng().gen::<u64>();
+        if !disconnects.contains_key(&id) {
+            break id;
+        }
+    };
+
+    let _ = disconnects.insert(
+        id,
+        tokio::spawn(async move {
+            conn.disconnect(DisconnectOptions::default())?;
+            let _ = conn.events().map(Ok).forward(sink::drain()).await;
+
+            let _ = IN_PROGRESS_DISCONNECTS.lock().unwrap().remove(&id);
+            Ok(())
+        }),
+    );
+}
+
+/// Awaits for all disconnections from [TeamSpeak] servers happening at the
+/// moment to be completed.
+///
+/// Call this function __before__ shutting down the [`tokio::runtime`],
+/// otherwise disconnects won't proceed normally.
+///
+/// This is required due to [`tokio::runtime`] [doesn't wait][1] all
+/// [`tokio::spawn`]ed tasks to be fully processed when shutting down.
+///
+/// [TeamSpeak]: https://teamspeak.com
+/// [1]: https://github.com/tokio-rs/tokio/issues/2053
+pub async fn finish_all_disconnects() {
+    let disconnects = {
+        IN_PROGRESS_DISCONNECTS
+            .lock()
+            .unwrap()
+            .drain()
+            .map(|(_, hndl)| hndl)
+            .collect::<Vec<_>>()
+    };
+
+    future::join_all(disconnects).await;
 }

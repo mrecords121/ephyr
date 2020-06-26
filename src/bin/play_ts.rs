@@ -1,19 +1,13 @@
-use std::{
-    process::{self, Stdio},
-    sync::{
-        atomic::{AtomicI32, Ordering},
-        Arc,
-    },
-};
+use std::process::Stdio;
 
 use anyhow::anyhow;
-use ephyr::{cli, filter::silence, input::teamspeak};
-use futures::{future, FutureExt as _};
+use ephyr::{cli, filter::silence, input::teamspeak, Failure};
+use futures::future;
 use slog_scope as log;
 use tokio::process::Command;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Failure> {
     let mut opts = cli::Opts::default();
     opts.verbose = Some(slog::Level::Debug);
 
@@ -21,32 +15,32 @@ async fn main() {
     // to present in global context.
     let _log_guard = slog_scope::set_global_logger(ephyr::main_logger(&opts));
 
-    let exit_code = Arc::new(AtomicI32::new(0));
-    let exit_code_ref = exit_code.clone();
-
-    let _ = future::select(
-        async move {
-            if let Err(e) = run().await {
+    let res = future::select(
+        Box::pin(async move {
+            run().await.map_err(|e| {
                 log::crit!("Cannot run: {}", e);
-                exit_code_ref.compare_and_swap(0, 1, Ordering::SeqCst);
-            }
-        }
-        .boxed(),
-        async {
-            match ephyr::shutdown_signal().await {
-                Ok(s) => log::info!("Received OS signal {}", s),
-                Err(e) => log::error!("Failed to listen OS signals: {}", e),
-            }
-            log::info!("Shutting down...")
-        }
-        .boxed(),
+                Failure
+            })
+        }),
+        Box::pin(async {
+            let res = ephyr::shutdown_signal()
+                .await
+                .map(|s| log::info!("Received OS signal {}", s))
+                .map_err(|e| {
+                    log::error!("Failed to listen OS signals: {}", e);
+                    Failure
+                });
+            log::info!("Shutting down...");
+            res
+        }),
     )
-    .await;
+    .await
+    .factor_first()
+    .0;
 
-    // Unwrapping is OK here, because at this moment `exit_code` is not shared
-    // anymore, as runtime has finished.
-    let code = Arc::try_unwrap(exit_code).unwrap().into_inner();
-    process::exit(code);
+    teamspeak::finish_all_disconnects().await;
+
+    res
 }
 
 #[allow(clippy::non_ascii_literal)]

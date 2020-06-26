@@ -28,23 +28,25 @@ pub mod mixer;
 pub mod spec;
 pub mod util;
 
-use std::sync::{
-    atomic::{AtomicI32, Ordering},
-    Arc,
-};
+use std::fmt;
 
 use anyhow::anyhow;
 use futures::{future, FutureExt as _};
 use slog_scope as log;
 use tokio::io;
 
-use self::mixer::ffmpeg;
+use self::{input::teamspeak, mixer::ffmpeg};
 
 #[doc(inline)]
 pub use self::spec::Spec;
 
-/// Runs application, returning its exit code.
-pub async fn run() -> i32 {
+/// Runs application.
+///
+/// # Errors
+///
+/// If running has failed and could not be performed. The appropriate error
+/// is logged.
+pub async fn run() -> Result<(), Failure> {
     let opts = cli::Opts::from_args();
 
     // This guard should be held till the end of the program for the logger
@@ -55,37 +57,38 @@ pub async fn run() -> i32 {
         Ok(s) => s,
         Err(e) => {
             log::crit!("Failed to parse specification: {}", e);
-            return 2;
+            return Err(Failure);
         }
     };
 
     log::info!("Schema: {:?}", schema);
 
-    let exit_code = Arc::new(AtomicI32::new(0));
-    let exit_code_ref = exit_code.clone();
-
-    let _ = future::select(
-        async move {
-            if let Err(e) = run_mixers(&opts, &schema).await {
+    let res = future::select(
+        Box::pin(async move {
+            run_mixers(&opts, &schema).await.map_err(|e| {
                 log::crit!("Cannot run: {}", e);
-                exit_code_ref.compare_and_swap(0, 1, Ordering::SeqCst);
-            }
-        }
-        .boxed(),
-        async {
-            match shutdown_signal().await {
-                Ok(s) => log::info!("Received OS signal {}", s),
-                Err(e) => log::error!("Failed to listen OS signals: {}", e),
-            }
-            log::info!("Shutting down...")
-        }
-        .boxed(),
+                Failure
+            })
+        }),
+        Box::pin(async {
+            let res = shutdown_signal()
+                .await
+                .map(|s| log::info!("Received OS signal {}", s))
+                .map_err(|e| {
+                    log::error!("Failed to listen OS signals: {}", e);
+                    Failure
+                });
+            log::info!("Shutting down...");
+            res
+        }),
     )
-    .await;
+    .await
+    .factor_first()
+    .0;
 
-    // Unwrapping is OK here, because at this moment `exit_code` is not shared
-    // anymore, as runtime has finished.
-    Arc::try_unwrap(exit_code).unwrap().into_inner()
+    teamspeak::finish_all_disconnects().await;
+
+    res
 }
 
 /// Runs all mixers of the application defined in [`Spec`] for the given
@@ -171,5 +174,15 @@ pub async fn shutdown_signal() -> io::Result<&'static str> {
 
         signal::ctrl_c().await;
         Ok("ctrl-c")
+    }
+}
+
+/// Error type indicating non-zero process exit code.
+pub struct Failure;
+
+impl fmt::Debug for Failure {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "")
     }
 }

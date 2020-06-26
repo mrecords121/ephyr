@@ -1,6 +1,4 @@
-use std::process;
-
 #[tokio::main]
-async fn main() {
-    process::exit(ephyr::run().await);
+async fn main() -> Result<(), ephyr::Failure> {
+    ephyr::run().await
 }
