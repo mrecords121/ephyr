@@ -14,7 +14,7 @@ use std::{
 use audiopus::coder::Decoder as OpusDecoder;
 use byteorder::{BigEndian, ByteOrder as _};
 use derive_more::{Display, Error};
-use futures::{future, ready, sink, Stream, StreamExt as _};
+use futures::{future, ready, sink, FutureExt as _, Stream, StreamExt as _};
 use once_cell::sync::Lazy;
 use rand::Rng as _;
 use slog_scope as log;
@@ -548,9 +548,8 @@ impl From<InputError> for io::Error {
 ///
 /// [1]: https://github.com/tokio-rs/tokio/issues/2053
 #[allow(clippy::type_complexity)]
-static IN_PROGRESS_DISCONNECTS: Lazy<
-    Arc<Mutex<HashMap<u64, JoinHandle<Result<(), tsclientlib::Error>>>>>,
-> = Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
+static IN_PROGRESS_DISCONNECTS: Lazy<Arc<Mutex<HashMap<u64, JoinHandle<()>>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
 /// [`tokio::spawn`]s disconnection of the given [`Connection`] and tracks its
 /// completion via [`IN_PROGRESS_DISCONNECTS`].
@@ -569,13 +568,26 @@ fn spawn_disconnect(mut conn: Connection) {
 
     let _ = disconnects.insert(
         id,
-        tokio::spawn(async move {
-            conn.disconnect(DisconnectOptions::default())?;
-            let _ = conn.events().map(Ok).forward(sink::drain()).await;
+        tokio::spawn(
+            async move {
+                // First, we should check whether `Connection` is established
+                // at all.
+                let _ = conn.get_state()?;
 
-            let _ = IN_PROGRESS_DISCONNECTS.lock().unwrap().remove(&id);
-            Ok(())
-        }),
+                // Then initiate disconnection by sending an appropriate packet.
+                conn.disconnect(DisconnectOptions::default())?;
+                // And wait until it's done.
+                let _ = conn.events().map(Ok).forward(sink::drain()).await;
+
+                Ok(())
+            }
+            .map(move |_: Result<_, tsclientlib::Error>| {
+                // Finally, we should remove this disconnect from the collection
+                // whenever it succeeds or errors. Otherwise, we could stuck
+                // on shutdown waiting eternally.
+                let _ = IN_PROGRESS_DISCONNECTS.lock().unwrap().remove(&id);
+            }),
+        ),
     );
 }
 
