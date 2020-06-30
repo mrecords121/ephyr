@@ -2,8 +2,8 @@
 # Stage 'build-ephyr' builds Ephyr for the final stage.
 #
 
-# https://github.com/jrottenberg/ffmpeg/blob/master/docker-images/4.1/centos7/Dockerfile
-FROM jrottenberg/ffmpeg:4.2-centos7 AS build-ephyr
+# https://github.com/jrottenberg/ffmpeg/blob/master/docker-images/4.3/centos7/Dockerfile
+FROM jrottenberg/ffmpeg:4.3-centos7 AS build-ephyr
 
 
 # Install Rust.
@@ -60,8 +60,8 @@ FROM ossrs/srs:3 AS build-srs
 # Stage 'runtime' creates final Docker image to use in runtime.
 #
 
-# https://github.com/jrottenberg/ffmpeg/blob/master/docker-images/4.1/centos7/Dockerfile
-FROM jrottenberg/ffmpeg:4.2-centos7 AS dist
+# https://github.com/jrottenberg/ffmpeg/blob/master/docker-images/4.3/centos7/Dockerfile
+FROM jrottenberg/ffmpeg:4.3-centos7 AS dist
 
 COPY --from=build-ephyr /tmp/ephyr/target/release/ephyr /usr/local/bin/ephyr
 
