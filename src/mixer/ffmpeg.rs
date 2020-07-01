@@ -74,29 +74,33 @@ impl Mixer {
             }
         }
 
-        let mut filters = Vec::with_capacity(srcs.len());
         let mut video_num = 0;
+        let mut filters = Vec::with_capacity(srcs.len());
         for (i, (name, src)) in &srcs {
+            if src.url.scheme() == "rtmp" {
+                video_num = *i;
+            }
+
             // WARNING: The filters order matters here!
-            let extra_filters = if src.url.scheme() == "ts" {
-                "aresample=async=1,"
-            } else {
-                ""
+            let mut extra_filters = String::new();
+            if src.url.scheme() == "ts" {
+                extra_filters.push_str("aresample=async=1,");
             };
+            let delay = src.delay.as_millis();
+            if delay > 0 {
+                extra_filters
+                    .push_str(&format!("adelay=delays={}:all=1,", delay));
+            }
             let filter_complex = format!(
                 "volume@{name}={volume},\
                  {extra_filters}\
-                 adelay=delays={delay}|all=1,\
                  azmq=bind_address=tcp\\\\\\://0.0.0.0\\\\\\:{zmq_port}",
-                delay = src.delay.as_millis(),
                 volume = src.volume,
                 extra_filters = extra_filters,
                 zmq_port = src.zmq.port,
                 name = name,
             );
-            if src.url.scheme() == "rtmp" {
-                video_num = *i;
-            }
+
             filters.push(format!(
                 "[{num}:a]{filter}[{name}]",
                 num = i,
