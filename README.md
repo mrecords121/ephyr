@@ -1,6 +1,10 @@
 Ephyr
 =====
 
+[![Docker Pulls](https://img.shields.io/docker/pulls/allatra/ephyr.svg)](https://hub.docker.com/r/allatra/ephyr)
+
+[Changelog](https://github.com/ALLATRA-IT/ephyr/blob/master/CHANGELOG.md)
+
 [SRS] + [FFmpeg] solution for server-side mixing of live streams powered by [Rust].
 
 
