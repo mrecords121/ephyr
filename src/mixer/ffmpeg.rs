@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, process::Stdio};
 use anyhow::anyhow;
 use tokio::{io, process::Command};
 
-use crate::{filter::silence, input::teamspeak, spec, util::Backoff};
+use crate::{input::teamspeak, spec};
 
 /// Mixer that performs mixing via [FFmpeg] invoked as a child process.
 ///
@@ -30,7 +30,7 @@ pub struct Mixer {
     /// Audio data to be fed into [FFmpeg]'s STDIN.
     ///
     /// [FFmpeg]: https://ffmpeg.org
-    stdin: Option<StdinInput>,
+    stdin: Option<teamspeak::Input>,
 }
 
 impl Mixer {
@@ -85,6 +85,9 @@ impl Mixer {
             let mut extra_filters = String::new();
             if src.url.scheme() == "ts" {
                 extra_filters.push_str("aresample=async=1,");
+            };
+            if src.url.scheme() == "rtmp" {
+                extra_filters.push_str("aresample=48000,");
             };
             let delay = src.delay.as_millis();
             if delay > 0 {
@@ -164,20 +167,15 @@ impl Mixer {
             "🤖 {}/{} <- {}/{}",
             self.app, self.stream, self.name, name,
         );
-        self.stdin = Some(silence::Filler::new(
-            Backoff::new(Box::new(move || {
-                teamspeak::Input::new(
-                    teamspeak::Config::new(host.as_str())
-                        .channel(channel.clone())
-                        .name(name.clone()),
-                )
-            })),
-            8000, // Hz
+        self.stdin = Some(teamspeak::Input::new(
+            teamspeak::Config::new(host.as_str())
+                .channel(channel)
+                .name(name),
         ));
 
         self.cmd
             .args(&["-thread_queue_size", "512"])
-            .args(&["-f", "f32be", "-sample_rate", "48000"])
+            .args(&["-f", "f32be", "-sample_rate", "48000", "-channels", "2"])
             .args(&["-use_wallclock_as_timestamps", "true"])
             .args(&["-i", "pipe:0"]);
     }
@@ -223,10 +221,3 @@ impl Mixer {
         Ok(())
     }
 }
-
-/// Helper alias for the [`io::AsyncRead`] type being fed into [FFmpeg]'s STDIN.
-///
-/// [FFmpeg]: https://ffmpeg.org
-type StdinInput = silence::Filler<
-    Backoff<teamspeak::Input, Box<dyn Fn() -> teamspeak::Input + Send>>,
->;

@@ -3,53 +3,56 @@
 //! [TeamSpeak]: https://teamspeak.com
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     fmt,
+    future::Future,
+    mem::ManuallyDrop,
     pin::Pin,
     str,
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
     task::{Context, Poll},
+    time::Duration,
 };
 
-use audiopus::coder::Decoder as OpusDecoder;
+use backoff::{future::FutureOperation as _, ExponentialBackoff};
 use byteorder::{BigEndian, ByteOrder as _};
 use derive_more::{Display, Error};
-use futures::{future, ready, sink, FutureExt as _, Stream, StreamExt as _};
+use futures::{
+    future, ready, sink, FutureExt as _, Stream, StreamExt as _,
+    TryFutureExt as _,
+};
 use once_cell::sync::Lazy;
 use rand::Rng as _;
 use slog_scope as log;
 use tokio::{
     io::{self, AsyncRead},
     task::JoinHandle,
+    time,
 };
 use tsclientlib::{Connection, DisconnectOptions, StreamItem};
-use tsproto_packets::packets::{AudioData, CodecType, InAudioBuf};
+use tsproto_packets::packets::AudioData;
 
 pub use tsclientlib::ConnectOptions as Config;
+
+/// Handler responsible for decoding, tracking and mixing audio of all
+/// [TeamSpeak] channel members.
+///
+/// [TeamSpeak]: https://teamspeak.com
+type AudioHandler = tsclientlib::audio::AudioHandler<MemberId>;
 
 /// Type of [TeamSpeak] channel member ID.
 ///
 /// [TeamSpeak]: https://teamspeak.com
 type MemberId = u16;
 
-/// Helper alias for [`OpusDecoder`]s collection used by [`Input`]. Each decoder
-/// is dedicated to a concrete [TeamSpeak] channel member.
-///
-/// [TeamSpeak]: https://teamspeak.com
-type OpusDecoders = HashMap<MemberId, OpusDecoder>;
-
-/// Collection of buffers for storing [PCM 32-bit floating-point][1] data
-/// decoded by [`OpusDecoder`]. Each buffer is dedicated to a concrete
-/// [TeamSpeak] channel member, which transmits any audio at the moment.
-///
-/// [1]: https://wiki.multimedia.cx/index.php/PCM
-/// [TeamSpeak]: https://teamspeak.com
-type PcmDataBuffers = HashMap<MemberId, VecDeque<f32>>;
-
 /// Audio input captured from [TeamSpeak] server.
 ///
-/// It produces [PCM 32-bit floating-point big-endian][1] encoded audio samples
-/// (`f32be` format in [FFmpeg]'s [notation][2]).
+/// It produces [PCM 32-bit floating-point big-endian][1] encoded
+/// [`Input::CHANNELS`]-stereo audio samples (`f32be` format in [FFmpeg]'s
+/// [notation][2]) with a constant [`Input::SAMPLE_RATE`].
 ///
 /// [FFmpeg]: https://ffmpeg.org
 /// [TeamSpeak]: https://teamspeak.com
@@ -59,65 +62,57 @@ pub struct Input {
     /// [`Config`] for establishing new [`Connection`] with.
     cfg: Config,
 
-    /// Established [`Connection`] with a [TeamSpeak] server.
+    /// Ticker that fires each [`Input::FREQUENCY_MILLIS`] and is used
+    /// to determine when samples should be emitted.
+    ticker: time::Interval,
+
+    /// Audio frame (samples sequence of [`Input::FRAME_SIZE`]) being emitted
+    /// on each [`Input::ticker`] tick.
+    frame: Vec<f32>,
+
+    /// Cursor indicating the position in [`Input::frame`] to start reading it
+    /// from.
+    cursor: usize,
+
+    /// Handler responsible for decoding, tracking and mixing audio of all
+    /// [TeamSpeak] channel members, for this [`Input`].
     ///
     /// [TeamSpeak]: https://teamspeak.com
-    conn: Option<Connection>,
+    audio: Arc<Mutex<AudioHandler>>,
 
-    /// Set of [`OpusDecoder`]s for each member of [TeamSpeak] channel.
+    /// Abort handle and waiter of the spawned [`AudioCapture`], which receives
+    /// audio packets from [TeamSpeak] server and feeds them into the
+    /// [`Input::audio`] handler.
     ///
-    /// Because [Opus] decoding is a stateful process, a single [`OpusDecoder`]
-    /// cannot process packets from multiple members simultaneously. That's why
-    /// each member should have its own instance of [`OpusDecoder`].
+    /// Abort handle is responsible for aborting [`AudioCapture`] execution.
     ///
-    /// [Opus]: https://opus-codec.org
+    /// Waiter is responsible for awaiting [`AudioCapture`] to complete all its
+    /// operations.
+    ///
     /// [TeamSpeak]: https://teamspeak.com
-    decoders: OpusDecoders,
+    conn: Option<(future::AbortHandle, JoinHandle<()>)>,
 
-    /// Buffer to temporarily hold a raw [PCM 32-bit floating-point][1] data
-    /// decoded by [`OpusDecoder`].
-    ///
-    /// It's reused for decoding each received packet instead of allocating new
-    /// memory each time. It's required, because the current API of
-    /// [`OpusDecoder`] doesn't allow to decode directly into a [`VecDeque`].
-    ///
-    /// [1]: https://wiki.multimedia.cx/index.php/PCM
-    decoding_buff: Vec<f32>,
-
-    /// Raw [PCM 32-bit floating-point][1] data decoded by [`OpusDecoder`].
-    ///
-    /// It stores decoded audio data of each [TeamSpeak] channel member
-    /// separately, so then it can be mixed into a single audio data stream with
-    /// a correct sample rate.
-    ///
-    /// [1]: https://wiki.multimedia.cx/index.php/PCM
-    /// [TeamSpeak]: https://teamspeak.com
-    data: PcmDataBuffers,
+    /// Indicator
+    is_conn_unrecoverable: Arc<AtomicBool>,
 }
 
 impl Input {
-    /// Maximum supported size of a decoded [Opus] audio frame received from
-    /// [TeamSpeak] server.
-    ///
-    /// Use 48 kHz, maximum of 120 ms frames (3 times 40 ms frames of which
-    /// there are 25 per second) and stereo data (2 channels).
-    /// This is a maximum of 11520 samples and 45 kiB.
-    ///
-    /// [Opus]: https://opus-codec.org
-    /// [TeamSpeak]: https://teamspeak.com
-    const OPUS_MAX_FRAME_SIZE: usize = 48000 / 25 * 3 * 2;
+    /// Sample rate that [`Input`] emits audio samples with.
+    pub const SAMPLE_RATE: usize = 48000;
 
-    /// Usual size of a decoded [Opus] audio frame received from [TeamSpeak]
-    /// server.
-    ///
-    /// Use 48 kHz, 20 ms frames (50 per second) and mono data (1 channel).
-    /// This means 1920 samples and 7.5 kiB.
-    ///
-    /// [Opus]: https://opus-codec.org
-    /// [TeamSpeak]: https://teamspeak.com
-    const OPUS_USUAL_FRAME_SIZE: usize = 48000 / 50;
+    /// Number of channels in stereo audion produced by [`INPUT`].
+    pub const CHANNELS: usize = 2;
 
-    /// Starts creation of a new [`Input`].
+    /// Frequency (in milliseconds) that [`Input`] emits audio samples with.
+    pub const FREQUENCY_MILLIS: usize = 20;
+
+    /// Size (in samples) of a single frame emitted by [`Input`] each
+    /// [`Input::FREQUENCY_MILLIS`].
+    pub const FRAME_SIZE: usize =
+        Self::SAMPLE_RATE / 1000 * Self::FREQUENCY_MILLIS * Self::CHANNELS;
+
+    /// Creates new [`Input`] with the provided [`Config`].
+    #[must_use]
     pub fn new<C: Into<Config>>(cfg: C) -> Self {
         let cfg = {
             use slog::Drain as _;
@@ -130,7 +125,6 @@ impl Input {
             //      https://github.com/ALLATRA-IT/ephyr/issues/6
             let mut cfg = cfg
                 .into()
-                .hardware_id(Self::new_hwid())
                 .logger(lgr)
                 .log_commands(is_debug)
                 .log_packets(is_trace);
@@ -144,12 +138,205 @@ impl Input {
             cfg
         };
 
+        let lgr = slog_scope::logger();
         Self {
             cfg,
+            ticker: time::interval(Duration::from_millis(
+                Self::FREQUENCY_MILLIS as u64,
+            )),
+            frame: vec![0.0; Self::FRAME_SIZE],
+            cursor: 0,
+            audio: Arc::new(Mutex::new(AudioHandler::new(lgr))),
             conn: None,
-            decoders: OpusDecoders::new(),
-            decoding_buff: vec![0_f32; Input::OPUS_USUAL_FRAME_SIZE],
-            data: PcmDataBuffers::new(),
+            is_conn_unrecoverable: Arc::new(AtomicBool::default()),
+        }
+    }
+
+    /// Spawns [`AudioCapture`] associated with this [`Input`], retrying it
+    /// endlessly with an [`ExponentialBackoff`] if it fails in a recoverable
+    /// way.
+    fn spawn_audio_capturing(&mut self) {
+        let cfg = self.cfg.clone();
+        let audio = self.audio.clone();
+        let is_conn_unrecoverable = self.is_conn_unrecoverable.clone();
+
+        let capturing = (move || {
+            AudioCapture::run(cfg.clone(), audio.clone())
+                .map_err(AudioCaptureError::into_backoff)
+        })
+        .retry_notify(
+            ExponentialBackoff {
+                max_elapsed_time: None,
+                ..ExponentialBackoff::default()
+            },
+            |err, dur| {
+                log::error!(
+                    "Backoff TeamSpeak server audio capturing for {} due to \
+                     error: {}",
+                    humantime::format_duration(dur),
+                    err,
+                )
+            },
+        )
+        .map_err(move |e| {
+            log::error!("Cannot capture audio from TeamSpeak server: {}", e);
+            is_conn_unrecoverable.store(true, Ordering::SeqCst)
+        });
+
+        let (abort, on_abort) = future::AbortHandle::new_pair();
+        let waiter = tokio::spawn(
+            future::Abortable::new(capturing, on_abort).map(|_| ()),
+        );
+
+        self.conn = Some((abort, waiter));
+    }
+}
+
+impl AsyncRead for Input {
+    /// Emits audio frame of [`Input::FRAME_SIZE`] each
+    /// [`Input::FREQUENCY_MILLIS`]. The frame contains mixed audio of all
+    /// [TeamSpeak] channel members talking at the moment. If there is no
+    /// talking members, the just a silence is emitted.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    fn poll_read(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut [u8],
+    ) -> Poll<io::Result<usize>> {
+        if self.conn.is_none() {
+            self.spawn_audio_capturing();
+        }
+        if !self.is_conn_unrecoverable.load(Ordering::SeqCst) {
+            return Poll::Ready(Err(InputError::NoData.into()));
+        }
+
+        if self.cursor >= self.frame.len() {
+            // `time::Interval` stream never returns `None`, so we can omit
+            // checking it to be finished.
+            let _ = ready!(Pin::new(&mut self.ticker).poll_next(cx));
+
+            self.cursor = 0;
+            // TODO: Use `Vec::fill` once stabilized:
+            //     https://doc.rust-lang.org/std/vec/struct.Vec.html#method.fill
+            for sample in &mut self.frame {
+                *sample = 0.0;
+            }
+            let _ = self
+                .audio
+                .clone()
+                .lock()
+                .unwrap()
+                .fill_buffer(&mut self.frame);
+        }
+
+        let cursor = self.cursor;
+
+        // Detect how much samples we can mix and write into `dst`.
+        let src_size = self.frame.len() - cursor;
+
+        // `f32` takes 4 bytes in big endian, so we should fit in there.
+        let dst_size = buf.len() / 4;
+        if dst_size == 0 {
+            return Poll::Ready(Err(InputError::TooSmallBuffer.into()));
+        }
+
+        let size = src_size.min(dst_size);
+        let size_in_bytes = size * 4;
+
+        BigEndian::write_f32_into(
+            &self.frame[cursor..(cursor + size)],
+            &mut buf[..size_in_bytes],
+        );
+        self.cursor += size;
+
+        Poll::Ready(Ok(size_in_bytes))
+    }
+}
+
+impl fmt::Debug for Input {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Input")
+            .field("cfg", &self.cfg)
+            .field("ticker", &self.ticker)
+            .field("frame", &self.frame)
+            .field("cursor", &self.cursor)
+            .field("audio", &"Arc<Mutex<AudioHandler>>")
+            .field("conn", &self.conn)
+            .field("is_conn_unrecoverable", &self.is_conn_unrecoverable)
+            .finish()
+    }
+}
+
+impl Drop for Input {
+    /// Spawns the [`Input::conn`] waiter to be fully awaited for ensuring
+    /// normal disconnecting from [TeamSpeak] server.
+    ///
+    /// This is required, because disconnecting from [TeamSpeak] server by
+    /// [`AudioCapture`] implies some handshake, and so awaited for completion.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    #[inline]
+    fn drop(&mut self) {
+        if let Some((conn, waiter)) = self.conn.take() {
+            conn.abort();
+            spawn_waiter(waiter);
+        }
+    }
+}
+
+/// Possible errors of reading [`Input`].
+#[derive(Debug, Display, Error)]
+pub enum InputError {
+    /// No data can be received from [TeamSpeak] server.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    #[display(fmt = "Unable to receive data from TeamSpeak server")]
+    NoData,
+
+    /// Input buffer provided to read [`Input`] is too small to read any data.
+    #[display(fmt = "Input buffer is too small")]
+    TooSmallBuffer,
+}
+
+impl From<InputError> for io::Error {
+    fn from(e: InputError) -> Self {
+        use InputError as E;
+
+        let kind = match e {
+            E::NoData => io::ErrorKind::NotConnected,
+            E::TooSmallBuffer => io::ErrorKind::InvalidData,
+        };
+        io::Error::new(kind, e)
+    }
+}
+
+/// Listener of [TeamSpeak] channel, which captures audio packets of each
+/// talking channel member and feeds them into an [`AudioHandler`] to be mixed.
+///
+/// [TeamSpeak]: https://teamspeak.com
+pub struct AudioCapture {
+    /// Established [`Connection`] with [TeamSpeak] server.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    conn: ManuallyDrop<Connection>,
+
+    /// Handler of audio packets received from [TeamSpeak] server.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    audio: Arc<Mutex<AudioHandler>>,
+}
+
+impl AudioCapture {
+    /// Creates new [`AudioCapture`] from the given [`Connection`] and for
+    /// the given [`AudioHandler`].
+    #[inline]
+    #[must_use]
+    pub fn new(conn: Connection, audio: Arc<Mutex<AudioHandler>>) -> Self {
+        audio.lock().unwrap().reset();
+        Self {
+            conn: ManuallyDrop::new(conn),
+            audio,
         }
     }
 
@@ -179,260 +366,69 @@ impl Input {
         }
     }
 
-    /// Writes decoded [PCM 32-bit floating-point][1] audio data of this
-    /// [`Input`] into the given `dst` buffer in big endian, and returns the
-    /// number of written bytes.
+    /// Creates new [`AudioCapture`] using the given [`Config`] for the given
+    /// [`AudioHandler`] and awaits its completion.
     ///
-    /// # Sample rate preservation
+    /// Generates new HWID (hardware identification string) to uniquely
+    /// distinguish this [`AudioCapture`] for [TeamSpeak] server.
     ///
-    /// We cannot simply write into the `dst` buffer all the decoded audio data
-    /// "as is", because multiple [TeamSpeak] channel members may transmit audio
-    /// at the same moment, so for each member we receive a separate audio
-    /// stream and decode it with some sample rate separately. Writing decoded
-    /// audio data "as is" for each member will result in a broken sample rate
-    /// of the resulting audio data stream (given 2 transmitting members at the
-    /// same moment we will produce a 2x48kHz sample rate instead of the
-    /// expected 48kHz).
+    /// # Errors
     ///
-    /// That's why, if multiple members transmit audio at the same moment, we
-    /// should mix it, sample by sample, and produce data with an expected 48kHz
-    /// sample rate. We can do that only once we have a decoded data for all
-    /// [TeamSpeak] channel members transmitting at the moment.
+    /// Errors when:
+    /// - receiving audio from [TeamSpeak] server fails;
+    /// - processing received audio packets with [`AudioHandler`] fails.
     ///
-    /// [1]: https://wiki.multimedia.cx/index.php/PCM
     /// [TeamSpeak]: https://teamspeak.com
-    fn write_mixed_audio_be(&mut self, dst: &mut [u8]) -> Option<usize> {
-        let Self {
-            data: src,
-            decoders,
-            ..
-        } = self;
-
-        // If there are any empty buffers left for the members, which don't
-        // transmit anymore, we should remove them, to not stuck eternally by
-        // waiting new data for them.
-        src.retain(|k, data| !data.is_empty() || decoders.contains_key(k));
-
-        // Detect how much samples we can mix and write into `dst`.
-        let src_size = src.iter().min_by_key(|(_, data)| data.len())?.1.len();
-        if src_size == 0 {
-            // If there is not enough samples for mixing, or no samples at all,
-            // then just don't write anything and wait for the data being
-            // enough.
-            return None;
-        }
-
-        // `f32` takes 4 bytes in big endian, so we should fit in there.
-        let dst_size = dst.len() / 4;
-        if dst_size == 0 {
-            // If there is no enough space to write data, then just don't write
-            // anything.
-            return None;
-        }
-
-        // We only can write as much data as we have, or as much as `dst` buffer
-        // can contain.
-        let size = src_size.min(dst_size);
-        let size_in_bytes = size * 4;
-
-        let mut src_iter = src.iter_mut();
-        // First, choose data buffer as the one where we will do the mixing.
-        let (_, mixed_data) = src_iter.next()?;
-        for (_, data) in src_iter {
-            // Then, mix into the resulting audio data stream, sample by sample.
-            for (i, f) in &mut mixed_data.iter_mut().take(size).enumerate() {
-                *f += data[i];
-            }
-        }
-
-        let (head, tail) = mixed_data.as_slices();
-        if head.len() < size {
-            let head_size = head.len();
-            let head_size_in_bytes = head_size * 4;
-            BigEndian::write_f32_into(
-                &head[..head_size],
-                &mut dst[..head_size_in_bytes],
-            );
-            BigEndian::write_f32_into(
-                &tail[..(size - head_size)],
-                &mut dst[head_size_in_bytes..size_in_bytes],
-            );
-        } else {
-            BigEndian::write_f32_into(&head[..size], &mut dst[..size_in_bytes]);
-        }
-
-        // Finally, strip all the written data from the buffers.
-        for (_, data) in src.iter_mut() {
-            data.drain(..size);
-        }
-
-        // We should return the number of written bytes, not samples.
-        Some(size_in_bytes)
-    }
-
-    /// Decodes the given [`InAudio`] packet received from [TeamSpeak] server
-    /// into a [PCM 32-bit floating-point][1] audio data, returning the number
-    /// of decoded samples.
-    ///
-    /// If no number is returned, the no decoding happened, indicating that
-    /// given [`InAudio`] packet is not the one could be decoded.
-    ///
-    /// At the moment, only [Opus]-encoded [`InAudio`] packets are supported.
-    ///
-    /// [`InAudio`]: tsproto_packets::packets::InAudio
-    /// [Opus]: https://opus-codec.org
-    /// [TeamSpeak]: https://teamspeak.com
-    /// [1]: https://wiki.multimedia.cx/index.php/PCM
-    fn decode(
-        &mut self,
-        src: &InAudioBuf,
-    ) -> Result<Option<usize>, InputError> {
-        use InputError::{
-            DecoderCreationFailed, DecodingFailed, MaxBufferSizeExceeded,
-            UnsupportedCodec,
-        };
-
-        if let AudioData::S2C {
-            from, codec, data, ..
-        }
-        | AudioData::S2CWhisper {
-            from, codec, data, ..
-        } = src.data().data()
-        {
-            if !matches!(codec, CodecType::OpusVoice | CodecType::OpusMusic) {
-                return Err(UnsupportedCodec(*codec));
-            }
-
-            // When audio stream of member ends (for example, when Push-to-Talk
-            // button is released) TeamSpeak server sends 1-byte (or empty)
-            // control frame, which represents an invalid Opus data and breaks
-            // the decoding. However, instead of decoding, we can use it to
-            // remove the appropriate `OpusDecoder` as it's not necessary
-            // anymore.
-            if data.len() <= 1 {
-                let _ = self.decoders.remove(from);
-                // Also, remove decoded data buffer of this member, if it
-                // doesn't contain any unread data anymore.
-                if let Some(true) = self.data.get(from).map(VecDeque::is_empty)
-                {
-                    self.data.remove(from);
-                }
-                return Ok(None);
-            }
-
-            if !self.decoders.contains_key(from) {
-                let dcdr = OpusDecoder::new(
-                    audiopus::SampleRate::Hz48000,
-                    // TODO #2: Use stereo?
-                    //      https://github.com/ALLATRA-IT/ephyr/issues/2
-                    audiopus::Channels::Mono,
-                )
-                .map_err(DecoderCreationFailed)?;
-                self.decoders.insert(*from, dcdr);
-            }
-            let decoder = self.decoders.get_mut(from).unwrap();
-
-            let samples_num = loop {
-                // TODO #3: Use `fec` for decoding?
-                //      https://github.com/ALLATRA-IT/ephyr/issues/3
-                match decoder.decode_float(
-                    Some(*data),
-                    &mut self.decoding_buff[..],
-                    false,
-                ) {
-                    Ok(n) => break n,
-                    Err(audiopus::Error::Opus(
-                        audiopus::ErrorCode::BufferTooSmall,
-                    )) => {
-                        // Enlarge the `self.decoding_buff` buffer.
-                        let buff_len = self.decoding_buff.len();
-                        if buff_len >= Input::OPUS_MAX_FRAME_SIZE {
-                            return Err(MaxBufferSizeExceeded(buff_len));
-                        } else if buff_len * 2 > Input::OPUS_MAX_FRAME_SIZE {
-                            self.decoding_buff
-                                .resize(Input::OPUS_MAX_FRAME_SIZE, 0_f32);
-                        } else {
-                            self.decoding_buff.resize(buff_len * 2, 0_f32);
-                        }
-                    }
-                    Err(e) => {
-                        log::error!("Failed to decode Opus data: {:?}", data);
-                        return Err(DecodingFailed(e));
-                    }
-                }
-            };
-            // Shrink the `self.decoding_buff` buffer to fit the decoded data
-            // exactly.
-            if samples_num < self.decoding_buff.len() {
-                self.decoding_buff.truncate(samples_num);
-            }
-
-            // Append decoded data to the member's buffer.
-            self.data
-                .entry(*from)
-                .or_default()
-                .extend(self.decoding_buff.iter().copied());
-
-            Ok(Some(samples_num))
-        } else {
-            Ok(None)
-        }
+    pub async fn run(
+        cfg: Config,
+        audio: Arc<Mutex<AudioHandler>>,
+    ) -> Result<(), AudioCaptureError> {
+        log::debug!("Connecting to TeamSpeak server...");
+        let conn = Connection::new(cfg.hardware_id(Self::new_hwid()))
+            .map_err(AudioCaptureError::InitializationFailed)?;
+        AudioCapture::new(conn, audio).await
     }
 }
 
-impl AsyncRead for Input {
-    fn poll_read(
+impl Future for AudioCapture {
+    type Output = Result<(), AudioCaptureError>;
+
+    /// Processes [`AudioCapture::conn`] lifecycle and feeds all received audio
+    /// packets into [`AudioHandler`].
+    fn poll(
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-        buf: &mut [u8],
-    ) -> Poll<io::Result<usize>> {
-        use InputError as E;
-
-        if self.conn.is_none() {
-            log::debug!("Connecting to TeamSpeak server...");
-            self.conn = Some(
-                Connection::new(self.cfg.clone())
-                    .map_err(E::InitializationFailed)?,
-            )
-        }
-
+    ) -> Poll<Self::Output> {
+        use AudioCaptureError as E;
         loop {
-            // If not all `data` was read yet, then read it as much as possible.
-            if let Some(num) = self.write_mixed_audio_be(buf) {
-                return Poll::Ready(Ok(num));
-            }
-
-            let audio_packet = {
-                let mut events = self.conn.as_mut().unwrap().events();
-                match ready!(Pin::new(&mut events).poll_next(cx))
-                    .ok_or_else(|| E::ReceivingFinished)?
+            let audio_packet =
+                match ready!(Pin::new(&mut self.conn.events()).poll_next(cx))
+                    .ok_or_else(|| E::UnexpectedFinish)?
                     .map_err(E::ConnectionFailed)?
                 {
                     StreamItem::Audio(packet) => packet,
                     _ => continue,
-                }
+                };
+
+            let member_id = match audio_packet.data().data() {
+                AudioData::S2C { from, .. }
+                | AudioData::S2CWhisper { from, .. } => *from,
+                _ => return Poll::Ready(Err(E::UnexpectedC2sPacket))?,
             };
 
-            let _ = self.decode(&audio_packet)?;
+            let _ = self
+                .audio
+                .lock()
+                .unwrap()
+                .handle_packet(member_id, audio_packet)
+                .map_err(E::DecodingFailed)?;
         }
     }
 }
 
-impl fmt::Debug for Input {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Input")
-            .field("cfg", &self.cfg)
-            .field("conn", &self.conn.as_ref().map(|_| "Connection"))
-            .field("data", &self.data)
-            .field("decoders", &self.decoders)
-            .field("decoding_buff", &self.decoding_buff)
-            .finish()
-    }
-}
-
-impl Drop for Input {
-    /// Spawns the inner [`Connection`] to be fully drained for disconnecting
-    /// from [TeamSpeak] server normally.
+impl Drop for AudioCapture {
+    /// Spawns the [`AudioCapture::conn`] waiter to be fully drained, so
+    /// disconnecting from [TeamSpeak] server normally.
     ///
     /// This is required, because disconnecting from [TeamSpeak] server implies
     /// some handshake.
@@ -440,17 +436,18 @@ impl Drop for Input {
     /// [TeamSpeak]: https://teamspeak.com
     #[inline]
     fn drop(&mut self) {
-        if let Some(conn) = self.conn.take() {
-            spawn_disconnect(conn)
-        }
+        // This is totally safe, because `self.conn` field is guaranteed to be
+        // never used again later, so `ManuallyDrop` won't be touched again.
+        #[allow(unsafe_code)]
+        spawn_disconnect(unsafe { ManuallyDrop::take(&mut self.conn) });
     }
 }
 
-/// Possible errors of capturing audio [`Input`] from [TeamSpeak] server.
+/// Possible errors of capturing audio from [TeamSpeak] server.
 ///
 /// [TeamSpeak]: https://teamspeak.com
 #[derive(Debug, Display, Error)]
-pub enum InputError {
+pub enum AudioCaptureError {
     /// Initializing [`Connection`] with [TeamSpeak] server failed.
     ///
     /// [TeamSpeak]: https://teamspeak.com
@@ -472,90 +469,84 @@ pub enum InputError {
     #[display(
         fmt = "Receiving packets from TeamSpeak server finished unexpectedly"
     )]
-    ReceivingFinished,
+    UnexpectedFinish,
 
-    /// Received [`InAudio`] packet from [TeamSpeak] server is encoded with
-    /// unsupported codec.
+    /// Received from [TeamSpeak] server C2S (client-to-server) audio packet,
+    /// while only S2C (server-to-client) audio packets are allowed.
     ///
-    /// At the moment, only [Opus]-encoded [`InAudio`] packets are supported.
-    ///
-    /// [`InAudio`]: tsproto_packets::packets::InAudio
-    /// [Opus]: https://opus-codec.org
     /// [TeamSpeak]: https://teamspeak.com
     #[display(
-        fmt = "Unsupported audio codec {:?}, only Opus is supported",
-        _0
+        fmt = "Received C2S audio packet, while only S2C packets are allowed"
     )]
-    UnsupportedCodec(#[error(not(source))] CodecType),
+    UnexpectedC2sPacket,
 
-    /// Failed to instantiate new [`OpusDecoder`].
-    #[display(fmt = "Creating OpusDecoder failed: {}", _0)]
-    DecoderCreationFailed(audiopus::Error),
-
-    /// [`OpusDecoder`] failed to decode [Opus] data from received [`InAudio`]
-    /// packet.
+    /// Failed to decode audio packet received from [TeamSpeak] server.
     ///
-    /// [`InAudio`]: tsproto_packets::packets::InAudio
-    /// [Opus]: https://opus-codec.org
-    #[display(fmt = "OpusDecoder failed to decode Opus packet: {}", _0)]
-    DecodingFailed(audiopus::Error),
-
-    /// Size of received [Opus] data in [`InAudio`] packet exceeds the maximum
-    /// allowed one.
-    ///
-    /// [`InAudio`]: tsproto_packets::packets::InAudio
-    /// [Opus]: https://opus-codec.org
-    #[display(
-        fmt = "Received Opus packet size {} exceeds maximum allowed size {}",
-        _0,
-        Input::OPUS_MAX_FRAME_SIZE
-    )]
-    MaxBufferSizeExceeded(#[error(not(source))] usize),
+    /// [TeamSpeak]: https://teamspeak.com
+    #[display(fmt = "Failed to decode audio packet: {}", _0)]
+    DecodingFailed(tsclientlib::audio::Error),
 }
 
-impl From<InputError> for io::Error {
-    fn from(e: InputError) -> Self {
-        use InputError as E;
+impl AudioCaptureError {
+    /// Wraps this [`AudioCaptureError`] into [`backoff::Error`] carefully
+    /// distinguishing transient and permanent errors.
+    #[must_use]
+    pub fn into_backoff(self) -> backoff::Error<Self> {
+        use tsclientlib::audio::Error as E;
 
-        let (kind, is_permanent) = match e {
-            E::ConnectionFailed(_) => (io::ErrorKind::ConnectionRefused, false),
-
-            E::ReceivingFinished => (io::ErrorKind::BrokenPipe, false),
-
-            E::UnsupportedCodec(_) => (io::ErrorKind::InvalidData, true),
-
-            E::DecodingFailed(_) | E::MaxBufferSizeExceeded(_) => {
-                (io::ErrorKind::InvalidData, false)
-            }
-
-            E::InitializationFailed(_) | E::DecoderCreationFailed(_) => {
-                (io::ErrorKind::Other, true)
-            }
+        let is_permanent = match &self {
+            Self::InitializationFailed(_) => true,
+            Self::ConnectionFailed(_)
+            | Self::UnexpectedFinish
+            | Self::UnexpectedC2sPacket => false,
+            Self::DecodingFailed(err) => match err {
+                E::CreateDecoder(_) | E::UnsupportedCodec(_) => true,
+                E::Decode { .. }
+                | E::Duplicate(_)
+                | E::GetPacketSample(_)
+                | E::QueueFull
+                | E::TooLate { .. }
+                | E::TooManySamples => false,
+            },
         };
-
         if is_permanent {
-            io::Error::new(
-                kind,
-                backoff::Error::Permanent(io::Error::new(kind, e)),
-            )
+            backoff::Error::Permanent(self)
         } else {
-            io::Error::new(kind, e)
+            backoff::Error::Transient(self)
         }
     }
 }
 
-/// Collection of [`Connection`]s being disconnecting at the moment.
+/// Collection of [`JoinHandle`]s being awaited for completion at the moment.
 ///
-/// [1]: https://github.com/tokio-rs/tokio/issues/2053
+/// See [`finish_all_disconnects`]'s documentation for details.
 #[allow(clippy::type_complexity)]
 static IN_PROGRESS_DISCONNECTS: Lazy<Arc<Mutex<HashMap<u64, JoinHandle<()>>>>> =
     Lazy::new(|| Arc::new(Mutex::new(HashMap::new())));
 
+/// Registers the given [`JoinHandle`] and tracks its completion via
+/// [`IN_PROGRESS_DISCONNECTS`].
+///
+/// All disconnects can be awaited for completion via [`finish_all_disconnects`]
+/// function.
+fn spawn_waiter(waiter: JoinHandle<()>) {
+    let mut disconnects = IN_PROGRESS_DISCONNECTS.lock().unwrap();
+
+    let id = loop {
+        let id = rand::thread_rng().gen::<u64>();
+        if !disconnects.contains_key(&id) {
+            break id;
+        }
+    };
+
+    disconnects.insert(id, waiter);
+}
+
 /// [`tokio::spawn`]s disconnection of the given [`Connection`] and tracks its
 /// completion via [`IN_PROGRESS_DISCONNECTS`].
 ///
-/// All disconnects can be awaited to be completed via
-/// [`finish_all_disconnects`] function.
+/// All disconnects can be awaited for completion via [`finish_all_disconnects`]
+/// function.
 fn spawn_disconnect(mut conn: Connection) {
     let mut disconnects = IN_PROGRESS_DISCONNECTS.lock().unwrap();
 

@@ -6,6 +6,30 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## TBD [0.2.0] · 2020-07-??
+[0.2.0]: /../../tree/v0.2.0
+
+### BC Breaks
+
+- `teamspeak::Input` now produces a constant sample rate;
+- `silence::Filter` is removed (`teamspeak::Input` produces silence samples itself, when there is no audio in a [TeamSpeak] channel).
+
+### Changed
+
+- `ffmpeg::Mixer` now re-samples [RTMP] stream's audio to 48kHz _before_ mixing with [TeamSpeak] audio.
+
+### Improved
+
+- `teamspeak::Input`:
+    - Emit 2-channels stereo audio ([#2]);
+    - Use [Opus] FEC (forward error correction) ([#3]).
+    
+[#2]: /../../issues/2
+[#3]: /../../issues/3
+
+
+
+
 ## [0.1.0] · 2020-06-04
 [0.1.0]: /../../tree/v0.1.0
 
@@ -34,6 +58,7 @@ All user visible changes to this project will be documented in this file. This p
 
 [Docker]: https://www.docker.com
 [FFmpeg]: https://ffmpeg.org
+[Opus]: https://opus-codec.org
 [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 [Semantic Versioning 2.0.0]: https://semver.org
 [SRS]: https://ossrs.net

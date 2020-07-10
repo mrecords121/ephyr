@@ -22,11 +22,9 @@
 )]
 
 pub mod cli;
-pub mod filter;
 pub mod input;
 pub mod mixer;
 pub mod spec;
-pub mod util;
 
 use std::fmt;
 
