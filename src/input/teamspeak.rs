@@ -207,7 +207,7 @@ impl AsyncRead for Input {
         if self.conn.is_none() {
             self.spawn_audio_capturing();
         }
-        if !self.is_conn_unrecoverable.load(Ordering::SeqCst) {
+        if self.is_conn_unrecoverable.load(Ordering::SeqCst) {
             return Poll::Ready(Err(InputError::NoData.into()));
         }
 
