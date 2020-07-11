@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "ephyr"
-version = "0.2.0-dev"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "backoff",

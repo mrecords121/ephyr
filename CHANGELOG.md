@@ -6,12 +6,14 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
-## TBD [0.2.0] · 2020-07-??
+## [0.2.0] · 2020-07-11
 [0.2.0]: /../../tree/v0.2.0
+
+[Diff](https://github.com/ALLATRA-IT/ephyr/compare/v0.1.0..v0.2.0)
 
 ### BC Breaks
 
-- `teamspeak::Input` now produces a constant sample rate;
+- `teamspeak::Input` now produces a constant 48kHz sample rate;
 - `silence::Filter` is removed (`teamspeak::Input` produces silence samples itself, when there is no audio in a [TeamSpeak] channel).
 
 ### Changed
@@ -30,7 +32,7 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
-## [0.1.0] · 2020-06-04
+## [0.1.0] · 2020-07-04
 [0.1.0]: /../../tree/v0.1.0
 
 ### Implemented

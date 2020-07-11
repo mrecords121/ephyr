@@ -1,7 +1,7 @@
 Ephyr
 =====
 
-[![Docker Pulls](https://img.shields.io/docker/pulls/allatra/ephyr.svg)](https://hub.docker.com/r/allatra/ephyr)
+[![GitHub Release](https://img.shields.io/github/v/release/ALLATRA-IT/ephyr)](https://github.com/ALLATRA-IT/ephyr/releases) [![Docker Pulls](https://img.shields.io/docker/pulls/allatra/ephyr.svg)](https://hub.docker.com/r/allatra/ephyr)
 
 [Changelog](https://github.com/ALLATRA-IT/ephyr/blob/master/CHANGELOG.md)
 
