@@ -1,6 +1,8 @@
 //! CLI (command line interface).
 
-use std::str::FromStr as _;
+pub mod command;
+
+use std::{fmt, str::FromStr as _};
 
 use anyhow::anyhow;
 use structopt::StructOpt;
@@ -143,3 +145,13 @@ pub enum ServeCommand {
 #[derive(Clone, Copy, Debug, StructOpt)]
 #[structopt(about = "Server of VOD (video on demand) playlists")]
 pub struct VodPlaylistOpts {}
+
+/// Error type indicating non-zero process exit code.
+pub struct Failure;
+
+impl fmt::Debug for Failure {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "")
+    }
+}

@@ -24,19 +24,6 @@
 pub mod cli;
 pub mod input;
 pub mod mixer;
-pub mod spec;
-
-use std::fmt;
-
-use anyhow::anyhow;
-use futures::{future, FutureExt as _};
-use slog_scope as log;
-use tokio::io;
-
-use self::{input::teamspeak, mixer::ffmpeg};
-
-#[doc(inline)]
-pub use self::spec::Spec;
 
 /// Runs application.
 ///
@@ -44,7 +31,7 @@ pub use self::spec::Spec;
 ///
 /// If running has failed and could not be performed. The appropriate error
 /// is logged.
-pub async fn run() -> Result<(), Failure> {
+pub fn run() -> Result<(), cli::Failure> {
     let opts = cli::Opts::from_args();
 
     // This guard should be held till the end of the program for the logger
@@ -52,85 +39,13 @@ pub async fn run() -> Result<(), Failure> {
     let _log_guard = slog_scope::set_global_logger(main_logger(opts.verbose));
 
     match opts.cmd {
-        cli::Command::Mix(opts) => run_mix_command(&opts).await,
+        cli::Command::Mix(opts) => cli::command::mix::run(&opts),
         cli::Command::Serve { cmd } => match cmd {
-            cli::ServeCommand::VodPlaylist(_) => todo!(),
+            cli::ServeCommand::VodPlaylist(opts) => {
+                cli::command::serve::vod_playlist::run(&opts)
+            }
         },
     }
-}
-
-/// Runs [`cli::Command::Mix`].
-///
-/// # Errors
-///
-/// If running has failed and could not be performed. The appropriate error
-/// is logged.
-pub async fn run_mix_command(opts: &cli::MixOpts) -> Result<(), Failure> {
-    let schema = match Spec::parse(opts) {
-        Ok(s) => s,
-        Err(e) => {
-            log::crit!("Failed to parse specification: {}", e);
-            return Err(Failure);
-        }
-    };
-
-    log::info!("Schema: {:?}", schema);
-
-    let res = future::select(
-        Box::pin(async move {
-            run_mixers(opts, &schema).await.map_err(|e| {
-                log::crit!("Cannot run: {}", e);
-                Failure
-            })
-        }),
-        Box::pin(async {
-            let res = shutdown_signal()
-                .await
-                .map(|s| log::info!("Received OS signal {}", s))
-                .map_err(|e| {
-                    log::error!("Failed to listen OS signals: {}", e);
-                    Failure
-                });
-            log::info!("Shutting down...");
-            res
-        }),
-    )
-    .await
-    .factor_first()
-    .0;
-
-    teamspeak::finish_all_disconnects().await;
-
-    res
-}
-
-/// Runs all mixers of the application defined in [`Spec`] for the given
-/// [`cli::Opts::app`].
-///
-/// # Errors
-///
-/// - If [`Spec`] doesn't contain [`cli::Opts::app`].
-/// - If at least one mixer fails to run.
-pub async fn run_mixers(
-    opts: &cli::MixOpts,
-    schema: &Spec,
-) -> Result<(), anyhow::Error> {
-    let mixers_spec = schema.spec.get(&opts.app).ok_or_else(|| {
-        anyhow!("Spec doesn't allows '{}' live stream app", opts.app)
-    })?;
-
-    if mixers_spec.is_empty() {
-        future::pending::<()>().await;
-        return Ok(());
-    }
-
-    future::try_join_all(mixers_spec.iter().map(|(name, cfg)| {
-        ffmpeg::Mixer::new(&opts.ffmpeg, &opts.app, &opts.stream, name, cfg)
-            .run()
-    }))
-    .await?;
-
-    Ok(())
 }
 
 /// Creates, configures and returns main [`Logger`] of the application.
@@ -154,49 +69,4 @@ pub fn main_logger(level: Option<slog::Level>) -> slog::Logger {
         .fuse();
 
     slog::Logger::root(drain, slog::o!())
-}
-
-/// Awaits the first OS signal for shutdown and returns its name.
-///
-/// # Errors
-///
-/// If listening to OS signals fails.
-pub async fn shutdown_signal() -> io::Result<&'static str> {
-    #[cfg(unix)]
-    #[allow(clippy::mut_mut)]
-    {
-        use tokio::signal::unix::{signal, SignalKind};
-
-        let mut hangup = signal(SignalKind::hangup())?;
-        let mut interrupt = signal(SignalKind::interrupt())?;
-        let mut pipe = signal(SignalKind::pipe())?;
-        let mut quit = signal(SignalKind::quit())?;
-        let mut terminate = signal(SignalKind::terminate())?;
-
-        Ok(futures::select! {
-            _ = hangup.recv().fuse() => "SIGHUP",
-            _ = interrupt.recv().fuse() => "SIGINT",
-            _ = pipe.recv().fuse() => "SIGPIPE",
-            _ = quit.recv().fuse() => "SIGQUIT",
-            _ = terminate.recv().fuse() => "SIGTERM",
-        })
-    }
-
-    #[cfg(not(unix))]
-    {
-        use tokio::signal;
-
-        signal::ctrl_c().await;
-        Ok("ctrl-c")
-    }
-}
-
-/// Error type indicating non-zero process exit code.
-pub struct Failure;
-
-impl fmt::Debug for Failure {
-    #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "")
-    }
 }

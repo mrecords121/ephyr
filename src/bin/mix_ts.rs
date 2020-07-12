@@ -1,13 +1,13 @@
 use std::process::Stdio;
 
 use anyhow::anyhow;
-use ephyr::{input::teamspeak, Failure};
+use ephyr::{cli, input::teamspeak};
 use futures::future;
 use slog_scope as log;
 use tokio::process::Command;
 
 #[tokio::main]
-async fn main() -> Result<(), Failure> {
+async fn main() -> Result<(), cli::Failure> {
     // This guard should be held till the end of the program for the logger
     // to present in global context.
     let _log_guard = slog_scope::set_global_logger(ephyr::main_logger(None));
@@ -16,16 +16,16 @@ async fn main() -> Result<(), Failure> {
         Box::pin(async move {
             run().await.map_err(|e| {
                 log::crit!("Cannot run: {}", e);
-                Failure
+                cli::Failure
             })
         }),
         Box::pin(async {
-            let res = ephyr::shutdown_signal()
+            let res = cli::command::mix::shutdown_signal()
                 .await
                 .map(|s| log::info!("Received OS signal {}", s))
                 .map_err(|e| {
                     log::error!("Failed to listen OS signals: {}", e);
-                    Failure
+                    cli::Failure
                 });
             log::info!("Shutting down...");
             res

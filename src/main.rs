@@ -1,4 +1,3 @@
-#[tokio::main]
-async fn main() -> Result<(), ephyr::Failure> {
-    ephyr::run().await
+fn main() -> Result<(), ephyr::cli::Failure> {
+    ephyr::run()
 }

@@ -7,7 +7,9 @@ use std::{collections::BTreeMap, process::Stdio};
 use anyhow::anyhow;
 use tokio::{io, process::Command};
 
-use crate::{input::teamspeak, spec};
+use crate::input::teamspeak;
+
+use super::spec;
 
 /// Mixer that performs mixing via [FFmpeg] invoked as a child process.
 ///
