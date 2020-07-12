@@ -1,19 +1,16 @@
 use std::process::Stdio;
 
 use anyhow::anyhow;
-use ephyr::{cli, input::teamspeak, Failure};
+use ephyr::{input::teamspeak, Failure};
 use futures::future;
 use slog_scope as log;
 use tokio::process::Command;
 
 #[tokio::main]
 async fn main() -> Result<(), Failure> {
-    let mut opts = cli::Opts::default();
-    opts.verbose = Some(slog::Level::Info);
-
     // This guard should be held till the end of the program for the logger
     // to present in global context.
-    let _log_guard = slog_scope::set_global_logger(ephyr::main_logger(&opts));
+    let _log_guard = slog_scope::set_global_logger(ephyr::main_logger(None));
 
     let res = future::select(
         Box::pin(async move {

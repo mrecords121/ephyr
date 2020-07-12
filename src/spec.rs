@@ -104,7 +104,7 @@ impl Spec {
     ///
     /// - If [`Spec`] fails to be parsed from file or environment variables.
     /// - If [`Spec`] fails its validation.
-    pub fn parse(opts: &cli::Opts) -> Result<Self, ConfigError> {
+    pub fn parse(opts: &cli::MixOpts) -> Result<Self, ConfigError> {
         let mut spec = Config::new();
         spec.merge(
             config::File::with_name(opts.spec.as_str())

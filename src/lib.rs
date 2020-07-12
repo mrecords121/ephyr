@@ -49,9 +49,24 @@ pub async fn run() -> Result<(), Failure> {
 
     // This guard should be held till the end of the program for the logger
     // to present in global context.
-    let _log_guard = slog_scope::set_global_logger(main_logger(&opts));
+    let _log_guard = slog_scope::set_global_logger(main_logger(opts.verbose));
 
-    let schema = match Spec::parse(&opts) {
+    match opts.cmd {
+        cli::Command::Mix(opts) => run_mix_command(&opts).await,
+        cli::Command::Serve { cmd } => match cmd {
+            cli::ServeCommand::VodPlaylist(_) => todo!(),
+        },
+    }
+}
+
+/// Runs [`cli::Command::Mix`].
+///
+/// # Errors
+///
+/// If running has failed and could not be performed. The appropriate error
+/// is logged.
+pub async fn run_mix_command(opts: &cli::MixOpts) -> Result<(), Failure> {
+    let schema = match Spec::parse(opts) {
         Ok(s) => s,
         Err(e) => {
             log::crit!("Failed to parse specification: {}", e);
@@ -63,7 +78,7 @@ pub async fn run() -> Result<(), Failure> {
 
     let res = future::select(
         Box::pin(async move {
-            run_mixers(&opts, &schema).await.map_err(|e| {
+            run_mixers(opts, &schema).await.map_err(|e| {
                 log::crit!("Cannot run: {}", e);
                 Failure
             })
@@ -97,7 +112,7 @@ pub async fn run() -> Result<(), Failure> {
 /// - If [`Spec`] doesn't contain [`cli::Opts::app`].
 /// - If at least one mixer fails to run.
 pub async fn run_mixers(
-    opts: &cli::Opts,
+    opts: &cli::MixOpts,
     schema: &Spec,
 ) -> Result<(), anyhow::Error> {
     let mixers_spec = schema.spec.get(&opts.app).ok_or_else(|| {
@@ -122,15 +137,16 @@ pub async fn run_mixers(
 ///
 /// [`Logger`]: slog::Logger
 #[must_use]
-pub fn main_logger(opts: &cli::Opts) -> slog::Logger {
+pub fn main_logger(level: Option<slog::Level>) -> slog::Logger {
     use slog::Drain as _;
     use slog_async::OverflowStrategy::Drop;
 
     let decorator = slog_term::TermDecorator::new().build();
     let drain = slog_term::CompactFormat::new(decorator).build().fuse();
 
-    let level = opts.verbose.unwrap_or(slog::Level::Error);
-    let drain = drain.filter_level(level).fuse();
+    let drain = drain
+        .filter_level(level.unwrap_or(slog::Level::Error))
+        .fuse();
 
     let drain = slog_async::Async::new(drain)
         .overflow_strategy(Drop)
