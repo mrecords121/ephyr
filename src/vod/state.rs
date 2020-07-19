@@ -72,9 +72,10 @@ impl Playlist {
     /// Hydrates the intersection of video resolutions provided by all
     /// [`Playlist`]'s [`Clip`]s returning a set of mutual resolutions (such
     /// ones that all [`Clip`]s have them).
+    #[must_use]
     pub fn mutual_src_sizes(&self) -> HashSet<SrcSize> {
         let mut mutual: Option<HashSet<SrcSize>> = None;
-        for (_, clips) in &self.clips {
+        for clips in self.clips.values() {
             for clip in clips {
                 if let Some(m) = &mut mutual {
                     m.retain(|size| clip.sources.contains_key(size))
@@ -216,8 +217,8 @@ mod spec {
 
     #[test]
     fn deserializes_example() {
-        let serialized = fs::read("example.vod.playlists.json")
-            .expect("No example file found");
+        let serialized =
+            fs::read("example.vod.meta.json").expect("No example file found");
         let state = serde_json::from_slice::<State>(&serialized);
 
         assert!(state.is_ok(), "deserialization fails");

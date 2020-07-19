@@ -2,4 +2,4 @@
 //!
 //! [`cli::Command::Serve`]: crate::cli::Command::Serve
 
-pub mod vod_playlist;
+pub mod vod_meta;

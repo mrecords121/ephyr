@@ -11,6 +11,10 @@ use serde::{
 
 /// Serializes [`Duration`] into a `%H:%M:%S` time-like format (`123:05:01`,
 /// for example).
+///
+/// # Errors
+///
+/// Never errors.
 pub fn serialize<S>(dur: &Duration, ser: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -23,12 +27,16 @@ where
 
 /// Deserializes [`Duration`] from a `%H:%M:%S` time-like format (`123:05:01`,
 /// for example).
+///
+/// # Errors
+///
+/// If an input is not time-like formatted or does contain invalid time.
 pub fn deserialize<'a, D>(de: D) -> Result<Duration, D::Error>
 where
     D: Deserializer<'a>,
 {
     let s = <Cow<'_, str>>::deserialize(de)?;
-    let mut iter = s.split(":");
+    let mut iter = s.split(':');
 
     let hours: u64 = iter
         .next()
@@ -72,6 +80,10 @@ pub mod opt {
     use serde::{de::Deserializer, ser::Serializer, Deserialize};
 
     /// Serializes [`Option`]ed [`Duration`] into a `%H:%M:%S` time-like format.
+    ///
+    /// # Errors
+    ///
+    /// Never errors.
     #[inline]
     pub fn serialize<S>(
         dur: &Option<Duration>,
@@ -88,6 +100,10 @@ pub mod opt {
 
     /// Deserializes [`Option`]ed [`Duration`] from a `%H:%M:%S` time-like
     /// format.
+    ///
+    /// # Errors
+    ///
+    /// If an input is not time-like formatted or does contain invalid time.
     pub fn deserialize<'a, D>(d: D) -> Result<Option<Duration>, D::Error>
     where
         D: Deserializer<'a>,

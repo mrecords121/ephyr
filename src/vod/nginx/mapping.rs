@@ -100,13 +100,13 @@ impl From<&state::Playlist> for Set {
         let mut sequences: HashMap<_, _> = sizes
             .iter()
             .map(|size| {
-                let seq = Sequence {
+                let sequence = Sequence {
                     id: Some(format!("{}p", *size as u16)),
                     language: Some(pl.lang),
                     label: Some(format!("{}p", *size as u16)),
                     ..Sequence::default()
                 };
-                (*size, seq)
+                (*size, sequence)
             })
             .collect();
 
@@ -117,7 +117,7 @@ impl From<&state::Playlist> for Set {
             let tomorrow = today + DateDuration::days(1);
 
             if let Some(today_clips) = pl.clips.get(&today.weekday()) {
-                let mut time = today.clone();
+                let mut time = today;
 
                 // Unfortunately, nginx-vod-module loops the whole playlist
                 // only, and is unable to loop a part of playlist in the given
@@ -321,6 +321,7 @@ impl SourceClip {
     /// acceptable by the [`nginx-vod-module`][1].
     ///
     /// [1]: https://github.com/kaltura/nginx-vod-module
+    #[must_use]
     pub fn parse_url_path(url: &Url) -> PathBuf {
         let (old_prefix, new_prefix) = match url.scheme() {
             "file" => ("/var/lib/ephyr/vod", "/local"),

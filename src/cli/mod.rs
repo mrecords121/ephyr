@@ -135,16 +135,15 @@ pub struct MixOpts {
 /// Possible commands, supported by the `serve` [`Command`].
 #[derive(Clone, Copy, Debug, StructOpt)]
 pub enum ServeCommand {
-    /// `vod-playlist` command, running a server of VOD (video on demand)
-    /// playlists.
+    /// `vod-meta` command, running a server of VOD (video on demand) metadata.
     #[structopt(about = "Runs VOD playlists server")]
-    VodPlaylist(VodPlaylistOpts),
+    VodMeta(VodMetaOpts),
 }
 
-/// CLI (command line interface) of the `vod-playlist` [`ServeCommand`].
+/// CLI (command line interface) of the `vod-meta` [`ServeCommand`].
 #[derive(Clone, Copy, Debug, StructOpt)]
-#[structopt(about = "Server of VOD (video on demand) playlists")]
-pub struct VodPlaylistOpts {}
+#[structopt(about = "Server of VOD (video on demand) metadata")]
+pub struct VodMetaOpts {}
 
 /// Error type indicating non-zero process exit code.
 pub struct Failure;

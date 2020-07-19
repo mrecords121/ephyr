@@ -15,7 +15,12 @@ use serde::{
 
 /// Serializes [`TimeZone`] in a [RFC 3339 format][1] (`+04:03`, for example).
 ///
+/// # Errors
+///
+/// Never errors.
+///
 /// [1]: https://tools.ietf.org/html/rfc3339#section-4.2
+#[allow(clippy::trivially_copy_pass_by_ref)]
 #[inline]
 pub fn serialize<S>(tz: &TimeZone, ser: S) -> Result<S::Ok, S::Error>
 where
@@ -26,6 +31,11 @@ where
 
 /// Deserializes [`TimeZone`] from a [RFC 3339 format][1] (`+04:03`, for
 /// example).
+///
+/// # Errors
+///
+/// If an input is not [RFC 3339 formatted][1] timezone or does contain invalid
+/// timezone.
 ///
 /// [1]: https://tools.ietf.org/html/rfc3339#section-4.2
 pub fn deserialize<'a, D>(de: D) -> Result<TimeZone, D::Error>
@@ -41,7 +51,7 @@ where
             return Err(D::Error::custom(format!("invalid timezone: {}", s)))
         }
     };
-    let mut iter = s.split(":");
+    let mut iter = s.split(':');
 
     let hours: u32 = iter
         .next()
@@ -86,7 +96,12 @@ pub mod opt {
     /// Serializes [`Option`]ed [`TimeZone`] in a [RFC 3339 format][1]
     /// (`+04:03`, for example).
     ///
+    /// # Errors
+    ///
+    /// Never errors.
+    ///
     /// [1]: https://tools.ietf.org/html/rfc3339#section-4.2
+    #[allow(clippy::trivially_copy_pass_by_ref)]
     #[inline]
     pub fn serialize<S>(
         tz: &Option<TimeZone>,
@@ -103,6 +118,11 @@ pub mod opt {
 
     /// Deserializes [`Option`]ed [`TimeZone`] from a [RFC 3339 format][1]
     /// (`+04:03`, for example).
+    ///
+    /// # Errors
+    ///
+    /// If an input is not [RFC 3339 formatted][1] timezone or does contain
+    /// invalid timezone.
     ///
     /// [1]: https://tools.ietf.org/html/rfc3339#section-4.2
     pub fn deserialize<'a, D>(d: D) -> Result<Option<TimeZone>, D::Error>

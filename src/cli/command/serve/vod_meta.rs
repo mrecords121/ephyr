@@ -1,6 +1,6 @@
-//! Implementation of [`cli::ServeCommand::VodPlaylist`].
+//! Implementation of [`cli::ServeCommand::VodMeta`].
 //!
-//! [`cli::ServeCommand::VodPlaylist`]: crate::cli::ServeCommand::VodPlaylist
+//! [`cli::ServeCommand::VodMeta`]: crate::cli::ServeCommand::VodMeta
 
 use std::fs;
 
@@ -12,16 +12,16 @@ use crate::{
     vod::{nginx, state::State},
 };
 
-/// Runs [`cli::ServeCommand::VodPlaylist`].
+/// Runs [`cli::ServeCommand::VodMeta`].
 ///
 /// # Errors
 ///
 /// If running has failed and could not be performed. The appropriate error
 /// is logged.
 #[actix_rt::main]
-pub async fn run(_opts: &cli::VodPlaylistOpts) -> Result<(), cli::Failure> {
+pub async fn run(_opts: &cli::VodMetaOpts) -> Result<(), cli::Failure> {
     let state = serde_json::from_slice::<State>(
-        &fs::read("example.vod.playlists.json").map_err(|e| {
+        &fs::read("example.vod.meta.json").map_err(|e| {
             log::error!("Failed to read persisted state: {}", e);
             cli::Failure
         })?,

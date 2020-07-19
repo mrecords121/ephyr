@@ -7,12 +7,12 @@ services:
     build:
       context: .
     entrypoint: ["ephyr"]
-    command: ["-v", "INFO", "serve", "vod-playlist"]
+    command: ["-v", "INFO", "serve", "vod-meta"]
     working_dir: /
     ports:
       - 8080:8080      # http  ephyr-vod-meta
     volumes:
-      - ./example.vod.playlists.json:/example.vod.playlists.json:ro
+      - ./example.vod.meta.json:/example.vod.meta.json:ro
   nginx:
     container_name: ${COMPOSE_PROJECT_NAME}-nginx
     image: nytimes/nginx-vod-module:1.4
