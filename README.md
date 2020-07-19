@@ -68,4 +68,4 @@ As for any pre-built image usage, it is the image user's responsibility to ensur
 [SRS]: https://github.com/ossrs/srs
 [TeamSpeak]: https://teamspeak.com
 
-[1]: https://github.com/ALLATRA-IT/ephyr/blob/master/example.spec.json
+[1]: https://github.com/ALLATRA-IT/ephyr/blob/master/example.mix.spec.json

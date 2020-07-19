@@ -24,6 +24,8 @@
 pub mod cli;
 pub mod input;
 pub mod mixer;
+pub mod util;
+pub mod vod;
 
 /// Runs application.
 ///

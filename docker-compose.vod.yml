@@ -1,0 +1,23 @@
+version: "2"
+
+services:
+  vod-meta:
+    container_name: ${COMPOSE_PROJECT_NAME}-vod-meta
+    image: ${IMAGE_NAME}:${IMAGE_TAG}
+    build:
+      context: .
+    entrypoint: ["ephyr"]
+    command: ["-v", "INFO", "serve", "vod-playlist"]
+    working_dir: /
+    ports:
+      - 8080:8080      # http  ephyr-vod-meta
+    volumes:
+      - ./example.vod.playlists.json:/example.vod.playlists.json:ro
+  nginx:
+    container_name: ${COMPOSE_PROJECT_NAME}-nginx
+    image: nytimes/nginx-vod-module:1.4
+    ports:
+      - 80:80          # http  nginx
+    volumes:
+      - ./vod.nginx.conf:/usr/local/nginx/conf/nginx.conf:ro
+      - ./.cache/vod/videos/:/opt/static/videos/

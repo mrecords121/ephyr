@@ -1,0 +1,99 @@
+{
+  "cnn-live": {
+    "slug": "cnn-live",
+    "title": "CNN Live",
+    "lang": "rus",
+    "tz": "+03:00",
+    "clips": {
+      "sun": [{
+        "youtube_id": "xUol2En95x0",
+        "title": "В поисках себя",
+        "view": {
+          "from": "00:00:00",
+          "to": "02:00:00"
+        },
+        "sources": {
+          "360": {
+            "url": {
+              "upstream": "https://api.allatra.video/storage/videos/2Q/Jd/7558/xUol2En95x0_360p.mp4",
+              "local": "file:///var/lib/ephyr/vod/xUol2En95x0/360p.mp4"
+            },
+            "type": "video/mp4",
+            "size": 360
+          },
+          "720": {
+            "url": {
+              "upstream": "https://api.allatra.video/storage/videos/2Q/Jd/7558/xUol2En95x0_720p.mp4",
+              "local": null
+            },
+            "type": "video/mp4",
+            "size": 720
+          }
+        }
+      }, {
+        "youtube_id": "Q69gFVmrCiI",
+        "title": "ПРАВДА ЖИЗНИ",
+        "view": {
+          "from": "01:00:00",
+          "to": "02:00:00"
+        },
+        "sources": {
+          "360": {
+            "url": {
+              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
+              "local": "file:///var/lib/ephyr/vod/Q69gFVmrCiI/360p.mp4"
+            },
+            "type": "video/mp4",
+            "size": 360
+          },
+          "720": {
+            "url": {
+              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
+              "local": null
+            },
+            "type": "video/mp4",
+            "size": 720
+          }
+        }
+      }],
+      "tue": [],
+      "wed": [],
+      "sat": [],
+      "mon": [{
+        "youtube_id": "Q69gFVmrCiI",
+        "title": "ПРАВДА ЖИЗНИ",
+        "view": {
+          "from": "00:00:00",
+          "to": "01:00:00"
+        },
+        "sources": {
+          "360": {
+            "url": {
+              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
+              "local": "file:///var/lib/ephyr/vod/Q69gFVmrCiI/360p.mp4"
+            },
+            "type": "video/mp4",
+            "size": 360
+          },
+          "720": {
+            "url": {
+              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
+              "local": null
+            },
+            "type": "video/mp4",
+            "size": 720
+          }
+        }
+      }],
+      "fri": [],
+      "thu": []
+    }
+  },
+  "divan-tv": {
+    "slug": "divan-tv",
+    "title": "Divan TV",
+    "lang": "ukr",
+    "tz": "+00:00",
+    "clips": {}
+  }
+}

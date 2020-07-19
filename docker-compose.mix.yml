@@ -12,4 +12,4 @@ services:
       - 60002:60002    # zmq   "music" audio filter
     volumes:
       - ./origin.srs.conf:/usr/local/srs/conf/srs.conf:ro
-      - ./example.spec.json:/etc/ephyr/spec.json:ro
+      - ./example.mix.spec.json:/etc/ephyr/mix.json:ro

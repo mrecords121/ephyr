@@ -174,14 +174,17 @@ endif
 # Docker commands #
 ###################
 
+docker-compose-file = docker-compose.$(if $(call eq,$(app),),mix,vod).yml
+
+
 # Stop project in Docker Compose development environment
 # and remove all related containers.
 #
 # Usage:
-#	make docker.down
+#	make docker.down [app=(mix|vod)]
 
 docker.down:
-	docker-compose down --rmi=local -v
+	docker-compose --file=$(docker-compose-file) down --rmi=local -v
 
 
 # Build project Docker image.
@@ -200,13 +203,13 @@ docker.image:
 # Run project in Docker Compose development environment.
 #
 # Usage:
-#	make docker.up [rebuild=(no|yes)] [background=(no|yes)]
+#	make docker.up [app=(mix|vod)] [rebuild=(no|yes)] [background=(no|yes)]
 
 docker.up: docker.down
 ifeq ($(rebuild),yes)
 	@make docker.image
 endif
-	docker-compose up \
+	docker-compose --file=$(docker-compose-file) up \
 		$(if $(call eq,$(background),yes),-d,--abort-on-container-exit)
 
 
