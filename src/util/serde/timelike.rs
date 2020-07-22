@@ -9,20 +9,27 @@ use serde::{
     Deserialize as _,
 };
 
+/// Formats the given [`Duration`] as a `%H:%M:%S` time-like string (`03:05:01`,
+/// for example).
+#[must_use]
+pub fn format(duration: &Duration) -> String {
+    let secs = duration.as_secs();
+    let mins = secs / 60;
+    format!("{:02}:{:02}:{:02}", mins / 60, mins % 60, secs % 60)
+}
+
 /// Serializes [`Duration`] into a `%H:%M:%S` time-like format (`123:05:01`,
 /// for example).
 ///
 /// # Errors
 ///
 /// Never errors.
+#[inline]
 pub fn serialize<S>(dur: &Duration, ser: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
-    let secs = dur.as_secs();
-    let mins = secs / 60;
-    let s = format!("{:02}:{:02}:{:02}", mins / 60, mins % 60, secs % 60);
-    ser.serialize_str(&s)
+    ser.serialize_str(&format(dur))
 }
 
 /// Deserializes [`Duration`] from a `%H:%M:%S` time-like format (`123:05:01`,

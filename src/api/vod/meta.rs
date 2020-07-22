@@ -1,0 +1,199 @@
+//! Definitions of API provided by `vod-meta` server of this application.
+
+use std::{collections::HashMap, time::Duration};
+
+use chrono::{FixedOffset as TimeZone, Weekday};
+use isolang::Language;
+use serde::{Deserialize, Serialize};
+use url::Url;
+
+use crate::util::serde::{timelike, timezone};
+
+pub use crate::vod::meta::state::PlaylistSlug;
+
+/// Set of [`Playlist`]s to be provided by `vod-meta` server.
+pub type Request = HashMap<PlaylistSlug, Playlist>;
+
+/// Playlist of [`Clip`]s to be played for some audience.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Playlist {
+    /// Human-readable title of this [`Playlist`].
+    pub title: String,
+
+    /// Language of the audience this [`Playlist`] is intended for.
+    pub lang: Language,
+
+    /// Timezone of the audience this [`Playlist`] is intended for.
+    ///
+    /// [`Playlist::clips`] are scheduled in this timezone according to the
+    /// provided [`Weekday`]s.
+    #[serde(with = "timezone")]
+    pub tz: TimeZone,
+
+    /// [`Clips`] which form this [`Playlist`], distributed by [`Weekday`]s.
+    ///
+    /// The total duration of all [`Clip`]s in the one [`Weekday`] hasn't to be
+    /// exactly 24 hours, but cannot be more than that, and hast to be a
+    /// fraction of 24 hours. This is this dictated by the necessity to
+    /// correctly loop the [`Weekday`]'s schedule to fill the whole 24 hours.
+    ///
+    /// All the [`Clip`]s provided for a single [`Weekday`] will be scheduled
+    /// one after another sequentially, in the order they were provided, and
+    /// without any gaps between them.
+    pub clips: HashMap<Weekday, Vec<Clip>>,
+}
+
+/// Clip in a [`Playlist`].
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Clip {
+    /// [YouTube]'s full URL of this [`Clip`] (not shortened).
+    ///
+    /// [YouTube]: https://youtube.com
+    pub url: Url,
+
+    /// Human-readable title of this [`Clip`].
+    pub title: String,
+
+    /// Starting timing position to play this [`Clip`] from.
+    #[serde(with = "timelike")]
+    pub from: Duration,
+
+    /// Finish timing position to play this [`Clip`] until.
+    ///
+    /// Obviously, should be always greater than [`Clip::from`] for at least
+    /// 1 second.
+    #[serde(with = "timelike")]
+    pub to: Duration,
+}
+
+#[cfg(test)]
+mod spec {
+    use super::*;
+
+    mod playlist {
+        use super::*;
+
+        #[test]
+        fn deserializes_valid() {
+            const RAW_JSON: &str = r#"{
+              "title": "Передачи с Игорем Михайловичем",
+              "lang": "rus",
+              "tz": "+03:00",
+              "clips": {
+                "mon": [{
+                  "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                  "title": "Круг Жизни",
+                  "from": "00:00:00",
+                  "to": "1:51:26"
+                }, {
+                  "url": "https://www.youtube.com/watch?v=Q69gFVmrCiI",
+                  "title": "ПРАВДА ЖИЗНИ",
+                  "from": "00:00:00",
+                  "to": "1:00:00"
+                }]
+              }
+            }"#;
+
+            let res = serde_json::from_str::<Playlist>(RAW_JSON);
+            assert!(res.is_ok(), "failed to deserialize: {}", res.unwrap_err());
+        }
+
+        #[test]
+        fn fails_deserialize_invalid() {
+            for json in &[
+                r#"{
+                  "title": "Передачи с Игорем Михайловичем",
+                  "lang": "rus",
+                  "tz": "dddd",
+                  "clips": {
+                    "mon": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:51:26"
+                    }]
+                  }
+                }"#,
+                r#"{
+                  "title": "Передачи с Игорем Михайловичем",
+                  "lang": null,
+                  "tz": "+03:00",
+                  "clips": {
+                    "mon": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:51:26"
+                    }]
+                  }
+                }"#,
+                r#"{
+                  "title": "Передачи с Игорем Михайловичем",
+                  "lang": "rus",
+                  "tz": "+03:00",
+                  "clips": {
+                    "fin": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:51:26"
+                    }]
+                  }
+                }"#,
+            ] {
+                let res = serde_json::from_str::<Playlist>(*json);
+                assert!(res.is_err(), "should not deserialize: {}", json);
+            }
+        }
+    }
+
+    mod clip {
+        use super::*;
+
+        #[test]
+        fn deserializes_valid() {
+            const RAW_JSON: &str = r#"{
+              "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+              "title": "Круг Жизни",
+              "from": "00:00:00",
+              "to": "1:51:26"
+            }"#;
+
+            let res = serde_json::from_str::<Clip>(RAW_JSON);
+            assert!(res.is_ok(), "failed to deserialize: {}", res.unwrap_err());
+        }
+
+        #[test]
+        fn fails_deserialize_invalid() {
+            for json in &[
+                r#"{
+                  "url": null,
+                  "title": "Круг Жизни",
+                  "from": "00:00:00",
+                  "to": "1:51:26"
+                }"#,
+                r#"{
+                  "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                  "title": 123,
+                  "from": "00:00:00",
+                  "to": "1:51:26"
+                }"#,
+                r#"{
+                  "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                  "title": "Круг Жизни",
+                  "from": "ababa",
+                  "to": "1:51:26"
+                }"#,
+                r#"{
+                  "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                  "title": "Круг Жизни",
+                  "from": "00:00:00",
+                  "to": "galamaga"
+                }"#,
+            ] {
+                let res = serde_json::from_str::<Clip>(*json);
+                assert!(res.is_err(), "should not deserialize: {}", json);
+            }
+        }
+    }
+}

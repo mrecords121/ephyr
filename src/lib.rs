@@ -21,6 +21,7 @@
     unreachable_pub
 )]
 
+pub mod api;
 pub mod cli;
 pub mod input;
 pub mod mixer;

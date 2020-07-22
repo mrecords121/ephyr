@@ -24,7 +24,7 @@ use crate::cli;
 /// # Example
 ///
 /// ```
-/// # use ephyr::Spec;
+/// # use ephyr::mixer::Spec;
 /// # use validator::Validate as _;
 /// let spec = r#"{"spec": {
 ///   "input": {

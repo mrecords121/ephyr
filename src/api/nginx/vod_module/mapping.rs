@@ -3,21 +3,16 @@
 //! [1]: https://github.com/kaltura/nginx-vod-module#mapping-response-format
 
 use std::{
-    collections::HashMap,
     path::{Path, PathBuf},
     time::Duration,
 };
 
-use chrono::{
-    serde::ts_milliseconds, DateTime, Datelike, Duration as DateDuration, Utc,
-};
+use chrono::{serde::ts_milliseconds, DateTime, Utc};
 use derive_more::{From, Into};
 use isolang::Language;
 use serde::{Deserialize, Serialize};
 use smart_default::SmartDefault;
 use url::Url;
-
-use crate::vod::state;
 
 /// Top level object in the [`nginx-vod-module` mapping][2] JSON, representing
 /// several [`Sequence`]s that play together as an [adaptive set][1].
@@ -81,129 +76,6 @@ impl Set {
     pub const MAX_DURATIONS_LEN: usize = 128;
 }
 
-impl From<&state::Playlist> for Set {
-    fn from(pl: &state::Playlist) -> Self {
-        let mut set = Self {
-            id: Some(pl.slug.clone()),
-            playlist_type: PlaylistType::Live,
-            discontinuity: true,
-            ..Self::default()
-        };
-
-        // Because all `Set::sequences` must have the same length, we should
-        // define the minimal mutual intersection of all quality sizes and use
-        // only them to form a `Set`.
-        let sizes = pl.mutual_src_sizes();
-        if sizes.is_empty() {
-            return set;
-        }
-        let mut sequences: HashMap<_, _> = sizes
-            .iter()
-            .map(|size| {
-                let sequence = Sequence {
-                    id: Some(format!("{}p", *size as u16)),
-                    language: Some(pl.lang),
-                    label: Some(format!("{}p", *size as u16)),
-                    ..Sequence::default()
-                };
-                (*size, sequence)
-            })
-            .collect();
-
-        let now = Utc::now().with_timezone(&pl.tz);
-        let mut today = now.date().and_hms(0, 0, 0);
-        'whole_loop: for i in 0..7 {
-            let in_today = i == 0;
-            let tomorrow = today + DateDuration::days(1);
-
-            if let Some(today_clips) = pl.clips.get(&today.weekday()) {
-                let mut time = today;
-
-                // Unfortunately, nginx-vod-module loops the whole playlist
-                // only, and is unable to loop a part of playlist in the given
-                // time window. That's why, to loop all clips of today's day
-                // without affecting tomorrow's playlist, we need to repeat the
-                // playlist manually, until tomorrow comes.
-                'day_loop: while time < tomorrow {
-                    let mut is_at_least_one_clip_considered = false;
-
-                    for clip in today_clips {
-                        let clip_duration = clip.view.to - clip.view.from;
-                        let next_time = time
-                            + DateDuration::from_std(clip_duration).unwrap();
-
-                        // There is no sense to return today's clips, which have
-                        // been already finished. Instead, we start from the
-                        // first non-finished today's clip. This way we reserve
-                        // more space for future clips, considering the
-                        // nginx-vod-module `Set::MAX_DURATIONS_LEN` limitation.
-                        let should_skip = in_today && next_time <= now;
-
-                        // "Considered" means that clip's duration is considered
-                        // for building the sequence timestamps. However, it
-                        // doesn't necessarily mean that clip is added to this
-                        // sequence.
-                        let mut is_clip_considered = false;
-
-                        for (size, src) in &clip.sources {
-                            if let Some(seq) = sequences.get_mut(size) {
-                                if !should_skip {
-                                    seq.clips.push(Clip {
-                                        r#type: SourceClip {
-                                            path: SourceClip::parse_url_path(
-                                                src.url
-                                                    .local
-                                                    .as_ref()
-                                                    .unwrap_or(
-                                                        &src.url.upstream,
-                                                    ),
-                                            ),
-                                            from: Some(clip.view.from.into()),
-                                            to: Some(clip.view.to.into()),
-                                        }
-                                        .into(),
-                                    });
-                                }
-
-                                is_clip_considered = true;
-                            }
-                        }
-
-                        if !is_clip_considered {
-                            continue;
-                        }
-                        is_at_least_one_clip_considered = true;
-
-                        if !should_skip {
-                            set.clip_times
-                                .push(time.clone().with_timezone(&Utc).into());
-
-                            set.durations.push(clip_duration.into());
-                            if set.durations.len() >= Self::MAX_DURATIONS_LEN {
-                                break 'whole_loop;
-                            }
-                        }
-
-                        time = next_time;
-                        if time >= tomorrow {
-                            break 'day_loop;
-                        }
-                    }
-
-                    if !is_at_least_one_clip_considered {
-                        break;
-                    }
-                }
-            }
-
-            today = tomorrow;
-        }
-
-        set.sequences = sequences.into_iter().map(|(_, seq)| seq).collect();
-        set
-    }
-}
-
 /// Possible playlist types of [`Set`].
 #[derive(
     Clone, Copy, Debug, Deserialize, Eq, Serialize, SmartDefault, PartialEq,
@@ -228,7 +100,7 @@ pub struct Sequence {
     /// String that identifies this [`Sequence`]. It can be retrieved by
     /// `$vod_sequence_id`.
     ///
-    /// By default is named after [`state::SrcSize`] this [`Sequence`] holds
+    /// By default is named after [`state::Resolution`] this [`Sequence`] holds
     /// videos of.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<String>,
@@ -322,7 +194,7 @@ impl SourceClip {
     ///
     /// [1]: https://github.com/kaltura/nginx-vod-module
     #[must_use]
-    pub fn parse_url_path(url: &Url) -> PathBuf {
+    pub fn get_url_path(url: &Url) -> PathBuf {
         let (old_prefix, new_prefix) = match url.scheme() {
             "file" => ("/var/lib/ephyr/vod", "/local"),
             "http" | "https" => match url.host() {
@@ -409,6 +281,6 @@ mod spec {
 
         let res = serde_json::to_string_pretty(&mapping);
 
-        assert!(res.is_ok(), "serialization fails");
+        assert!(res.is_ok(), "serialization fails: {}", res.unwrap_err());
     }
 }

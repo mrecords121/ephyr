@@ -2,14 +2,21 @@
 //!
 //! [`cli::ServeCommand::VodMeta`]: crate::cli::ServeCommand::VodMeta
 
-use std::fs;
+use std::{
+    fs,
+    sync::{Arc, Mutex},
+};
 
 use actix_web::{error, web, App, HttpServer};
 use slog_scope as log;
 
 use crate::{
+    api::{nginx, vod},
     cli,
-    vod::{nginx, state::State},
+    vod::meta::{
+        schedule_nginx_vod_module_set,
+        state::{PlaylistSlug, State},
+    },
 };
 
 /// Runs [`cli::ServeCommand::VodMeta`].
@@ -31,11 +38,16 @@ pub async fn run(_opts: &cli::VodMetaOpts) -> Result<(), cli::Failure> {
         cli::Failure
     })?;
 
+    let state = Arc::new(Mutex::new(state));
+
     let _ = HttpServer::new(move || {
-        App::new().data(state.clone()).route(
-            "/{location}/{playlist}/{filename}",
-            web::get().to(produce_meta),
-        )
+        App::new()
+            .data(state.clone())
+            .route(
+                "/{location}/{playlist}/{filename}",
+                web::get().to(produce_meta),
+            )
+            .route("/", web::put().to(renew_state))
     })
     .bind("0.0.0.0:8080")
     .map_err(|e| {
@@ -53,14 +65,26 @@ pub async fn run(_opts: &cli::VodMetaOpts) -> Result<(), cli::Failure> {
 ///
 /// [1]: https://github.com/kaltura/nginx-vod-module#mapping-response-format
 async fn produce_meta(
-    state: web::Data<State>,
+    state: web::Data<Arc<Mutex<State>>>,
     path: web::Path<(String, String, String)>,
-) -> Result<web::Json<nginx::mapping::Set>, error::Error> {
-    state
-        .0
-        .get(&path.1)
-        .map(|playlist| web::Json(nginx::mapping::Set::from(playlist)))
+) -> Result<web::Json<nginx::vod_module::mapping::Set>, error::Error> {
+    PlaylistSlug::new(&path.1)
+        .and_then(|slug| state.lock().unwrap().0.get(&slug).cloned())
+        .map(|playlist| web::Json(schedule_nginx_vod_module_set(&playlist)))
         .ok_or_else(|| {
             error::ErrorNotFound(format!("Unknown playlist '{}'", path.1))
         })
+}
+
+/// Renews the `vod-meta` server [`State`] with the new opne provided in
+/// [`vod::meta::Request`].
+async fn renew_state(
+    state: web::Data<Arc<Mutex<State>>>,
+    req: web::Json<vod::meta::Request>,
+) -> Result<&'static str, error::Error> {
+    let new_state = State::parse_request(req.0)
+        .await
+        .map_err(error::ErrorBadRequest)?;
+    *state.lock().unwrap() = new_state;
+    Ok("Ok")
 }
