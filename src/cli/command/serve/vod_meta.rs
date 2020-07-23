@@ -2,21 +2,13 @@
 //!
 //! [`cli::ServeCommand::VodMeta`]: crate::cli::ServeCommand::VodMeta
 
-use std::{
-    fs,
-    sync::{Arc, Mutex},
-};
-
 use actix_web::{error, web, App, HttpServer};
 use slog_scope as log;
 
 use crate::{
     api::{nginx, vod},
     cli,
-    vod::meta::{
-        schedule_nginx_vod_module_set,
-        state::{PlaylistSlug, State},
-    },
+    vod::meta::{schedule_nginx_vod_module_set, state, State},
 };
 
 /// Runs [`cli::ServeCommand::VodMeta`].
@@ -27,18 +19,12 @@ use crate::{
 /// is logged.
 #[actix_rt::main]
 pub async fn run(_opts: &cli::VodMetaOpts) -> Result<(), cli::Failure> {
-    let state = serde_json::from_slice::<State>(
-        &fs::read("example.vod.meta.json").map_err(|e| {
-            log::error!("Failed to read persisted state: {}", e);
+    let state = state::Manager::try_new("example.vod.meta.json")
+        .await
+        .map_err(|e| {
+            log::error!("Failed to initialize vod::meta::State: {}", e);
             cli::Failure
-        })?,
-    )
-    .map_err(|e| {
-        log::error!("Failed to deserialize persisted state: {}", e);
-        cli::Failure
-    })?;
-
-    let state = Arc::new(Mutex::new(state));
+        })?;
 
     let _ = HttpServer::new(move || {
         App::new()
@@ -65,26 +51,34 @@ pub async fn run(_opts: &cli::VodMetaOpts) -> Result<(), cli::Failure> {
 ///
 /// [1]: https://github.com/kaltura/nginx-vod-module#mapping-response-format
 async fn produce_meta(
-    state: web::Data<Arc<Mutex<State>>>,
+    state: web::Data<state::Manager>,
     path: web::Path<(String, String, String)>,
 ) -> Result<web::Json<nginx::vod_module::mapping::Set>, error::Error> {
-    PlaylistSlug::new(&path.1)
-        .and_then(|slug| state.lock().unwrap().0.get(&slug).cloned())
-        .map(|playlist| web::Json(schedule_nginx_vod_module_set(&playlist)))
-        .ok_or_else(|| {
-            error::ErrorNotFound(format!("Unknown playlist '{}'", path.1))
-        })
+    let slug = state::PlaylistSlug::new(&path.1).ok_or_else(|| {
+        error::ErrorBadRequest(format!("Invalid playlist slug '{}'", path.1))
+    })?;
+
+    let playlist = state.playlist(&slug).await.ok_or_else(|| {
+        error::ErrorNotFound(format!("Unknown playlist '{}'", slug))
+    })?;
+
+    Ok(web::Json(schedule_nginx_vod_module_set(&playlist)))
 }
 
-/// Renews the `vod-meta` server [`State`] with the new opne provided in
+/// Renews the `vod-meta` server [`State`] with the new one provided in
 /// [`vod::meta::Request`].
 async fn renew_state(
-    state: web::Data<Arc<Mutex<State>>>,
+    state: web::Data<state::Manager>,
     req: web::Json<vod::meta::Request>,
 ) -> Result<&'static str, error::Error> {
-    let new_state = State::parse_request(req.0)
+    let new = State::parse_request(req.0)
         .await
         .map_err(error::ErrorBadRequest)?;
-    *state.lock().unwrap() = new_state;
+
+    state
+        .set_state(new)
+        .await
+        .map_err(error::ErrorInternalServerError)?;
+
     Ok("Ok")
 }

@@ -11,6 +11,8 @@
 //! [`Clip`]: crate::vod::meta::state::Clip
 //! [`Playlist`]: crate::vod::meta::state::Playlist
 
+pub mod manager;
+
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -35,10 +37,12 @@ use crate::{
 
 pub use crate::api::allatra::video::{Resolution, YoutubeId};
 
+pub use self::manager::Manager;
+
 /// State of a `vod-meta` server, representing a set of [`Playlist`]s for
 /// different audiences.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct State(pub HashMap<PlaylistSlug, Playlist>);
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct State(HashMap<PlaylistSlug, Playlist>);
 
 impl State {
     /// Parses new [`State`] from the given `vod-meta` server API request.

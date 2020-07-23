@@ -51,7 +51,9 @@ validator_derive = "0.10"
     features = ["serde-float"]
 [dependencies.tokio]
     version = "0.2"
-    features = ["io-util", "process", "rt-core", "signal", "stream"]
+    features = [
+        "fs", "io-util", "process", "rt-core", "signal", "stream", "sync",
+    ]
 [dependencies.tsclientlib]
     git = "https://github.com/ALLATRA-IT/tsclientlib"
     rev = "9a063409430d95b4fc64dfbf44758d938ebc8d59" # branch = "master"
