@@ -16,6 +16,9 @@ jobs:
         with:
           ref: ${{ github.ref }}
 
+      - name: Install libopus
+        run: sudo apt-get install opus-tools
+
       - name: Run unit tests
         uses: actions-rs/cargo@v1
         with:
