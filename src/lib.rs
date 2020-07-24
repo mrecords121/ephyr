@@ -45,7 +45,7 @@ pub fn run() -> Result<(), cli::Failure> {
         cli::Command::Mix(opts) => cli::command::mix::run(&opts),
         cli::Command::Serve { cmd } => match cmd {
             cli::ServeCommand::VodMeta(opts) => {
-                cli::command::serve::vod_meta::run(&opts)
+                cli::command::serve::vod_meta::run(opts)
             }
         },
     }

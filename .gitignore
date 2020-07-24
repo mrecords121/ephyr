@@ -6,4 +6,5 @@
 
 /target/
 
-/spec.json
+/mix.spec.json
+/state.vod-meta.json

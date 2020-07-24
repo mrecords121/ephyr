@@ -2,7 +2,7 @@
 
 pub mod command;
 
-use std::{fmt, str::FromStr as _};
+use std::{fmt, net::IpAddr, path::PathBuf, str::FromStr as _};
 
 use anyhow::anyhow;
 use structopt::StructOpt;
@@ -111,8 +111,8 @@ pub struct MixOpts {
     #[structopt(
         short,
         long,
-        env = "MIX.SPEC.FILE",
-        default_value = "spec.json",
+        env = "EPHYR.MIX.SPEC.FILE",
+        default_value = "mix.spec.json",
         help = "Path to mixing spec file",
         long_help = "Path to spec file"
     )]
@@ -133,7 +133,7 @@ pub struct MixOpts {
 }
 
 /// Possible commands, supported by the `serve` [`Command`].
-#[derive(Clone, Copy, Debug, StructOpt)]
+#[derive(Clone, Debug, StructOpt)]
 pub enum ServeCommand {
     /// `vod-meta` command, running a server of VOD (video on demand) metadata.
     #[structopt(about = "Runs VOD playlists server")]
@@ -141,9 +141,43 @@ pub enum ServeCommand {
 }
 
 /// CLI (command line interface) of the `vod-meta` [`ServeCommand`].
-#[derive(Clone, Copy, Debug, StructOpt)]
+#[derive(Clone, Debug, StructOpt)]
 #[structopt(about = "Server of VOD (video on demand) metadata")]
-pub struct VodMetaOpts {}
+pub struct VodMetaOpts {
+    /// IP address for the `vod-meta` server to listen HTTP requests on.
+    #[structopt(
+        long,
+        env = "EPHYR.VOD_META.HTTP.IP",
+        default_value = "0.0.0.0",
+        help = "IP to listen HTTP on",
+        long_help = "IP address for `vod-meta` server to listen HTTP requests \
+                     on"
+    )]
+    pub http_ip: IpAddr,
+
+    /// Port for the `vod-meta` server to listen HTTP requests on.
+    #[structopt(
+        long,
+        env = "EPHYR.VOD_META.HTTP.PORT",
+        default_value = "8080",
+        help = "Port to listen HTTP on",
+        long_help = "Port for `vod-meta` server to listen HTTP requests on"
+    )]
+    pub http_port: u16,
+
+    /// Path to the file with a persisted [`vod::meta::State`].
+    ///
+    /// [`vod::meta::State`]: crate::vod::meta::State
+    #[structopt(
+        short,
+        long,
+        env = "EPHYR.VOD_META.STATE.FILE",
+        default_value = "state.vod-meta.json",
+        help = "Path to file with persisted state",
+        long_help = "Path to file with persisted state of `vod-meta` server"
+    )]
+    pub state: PathBuf,
+}
 
 /// Error type indicating non-zero process exit code.
 pub struct Failure;

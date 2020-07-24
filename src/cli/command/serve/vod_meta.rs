@@ -18,13 +18,11 @@ use crate::{
 /// If running has failed and could not be performed. The appropriate error
 /// is logged.
 #[actix_rt::main]
-pub async fn run(_opts: &cli::VodMetaOpts) -> Result<(), cli::Failure> {
-    let state = state::Manager::try_new("example.vod.meta.json")
-        .await
-        .map_err(|e| {
-            log::error!("Failed to initialize vod::meta::State: {}", e);
-            cli::Failure
-        })?;
+pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
+    let state = state::Manager::try_new(&opts.state).await.map_err(|e| {
+        log::error!("Failed to initialize vod::meta::State: {}", e);
+        cli::Failure
+    })?;
 
     let _ = HttpServer::new(move || {
         App::new()
@@ -35,7 +33,7 @@ pub async fn run(_opts: &cli::VodMetaOpts) -> Result<(), cli::Failure> {
             )
             .route("/", web::put().to(renew_state))
     })
-    .bind("0.0.0.0:8080")
+    .bind((opts.http_ip, opts.http_port))
     .map_err(|e| {
         log::error!("Failed to bind web server: {}", e);
         cli::Failure
