@@ -260,6 +260,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-web-httpauth"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ea25b3a3e113d04ae74bfbc3ba617f6254437dbd03576d9b479e8e8df894285"
+dependencies = [
+ "actix-service",
+ "actix-web",
+ "base64 0.12.3",
+ "bytes",
+ "futures-util",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -853,6 +866,7 @@ version = "0.3.0-dev"
 dependencies = [
  "actix-rt",
  "actix-web",
+ "actix-web-httpauth",
  "anyhow",
  "backoff",
  "byteorder",
@@ -870,6 +884,7 @@ dependencies = [
  "rand 0.7.3",
  "regex",
  "reqwest",
+ "rust-argon2 0.8.2",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -2094,7 +2109,7 @@ checksum = "09b23093265f8d200fa7b4c2c76297f47e681c655f6f1285a8780d6a022f7431"
 dependencies = [
  "getrandom",
  "redox_syscall",
- "rust-argon2",
+ "rust-argon2 0.7.0",
 ]
 
 [[package]]
@@ -2209,6 +2224,17 @@ dependencies = [
  "blake2b_simd",
  "constant_time_eq",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "rust-argon2"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dab61250775933275e84053ac235621dfb739556d5c54a2f2e9313b7cf43a19"
+dependencies = [
+ "base64 0.12.3",
+ "blake2b_simd",
+ "constant_time_eq",
 ]
 
 [[package]]

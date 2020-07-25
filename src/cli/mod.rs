@@ -177,6 +177,23 @@ pub struct VodMetaOpts {
         long_help = "Path to file with persisted state of `vod-meta` server"
     )]
     pub state: PathBuf,
+
+    /// [`argon2`] hash of [Bearer HTTP token] authorizing the `PUT` HTTP
+    /// request which modifies [`vod::meta::State`].
+    ///
+    /// [1]: https://tools.ietf.org/html/rfc6750#section-2.1
+    #[structopt(
+        short,
+        long,
+        env = "EPHYR.VOD_META.AUTH.TOKEN_HASH",
+        default_value = "$argon2i$v=19$m=1024,t=1,p=1$Nm11fkVNWUxncWhqMy5cYD85a\
+                         yY$ueazmtaC7ypqTPCCQAJ+8nIhPqvG4ZW5+ufVhrqN/Hc",
+        help = "Argon2 hash of authorization token to modify state",
+        long_help = "Argon2 hash of authorization token accepted by PUT HTTP \
+                     endpoint, which modifies state of `vod-meta` server \
+                     (default value represents Argon2i hash of `qwerty`)"
+    )]
+    pub auth_token_hash: String,
 }
 
 /// Error type indicating non-zero process exit code.

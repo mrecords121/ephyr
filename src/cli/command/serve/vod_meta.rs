@@ -3,6 +3,7 @@
 //! [`cli::ServeCommand::VodMeta`]: crate::cli::ServeCommand::VodMeta
 
 use actix_web::{error, web, App, HttpServer};
+use actix_web_httpauth::extractors::bearer::{self, BearerAuth};
 use slog_scope as log;
 
 use crate::{
@@ -23,10 +24,13 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
         log::error!("Failed to initialize vod::meta::State: {}", e);
         cli::Failure
     })?;
+    let auth_token_hash = AuthTokenHash(opts.auth_token_hash);
 
     let _ = HttpServer::new(move || {
         App::new()
             .data(state.clone())
+            .data(auth_token_hash.clone())
+            .data(bearer::Config::default().realm("Restricted area"))
             .route(
                 "/{location}/{playlist}/{filename}",
                 web::get().to(produce_meta),
@@ -65,10 +69,36 @@ async fn produce_meta(
 
 /// Renews the `vod-meta` server [`State`] with the new one provided in
 /// [`vod::meta::Request`].
+///
+/// # Authorization
+///
+/// __Mandatory.__ The [`vod::meta::Request`] must be authorized with
+/// [Bearer HTTP token][1], which value is verified against
+/// [`cli::VodMetaOpts::auth_token_hash`].
+///
+/// [1]: https://tools.ietf.org/html/rfc6750#section-2.1
 async fn renew_state(
     state: web::Data<state::Manager>,
     req: web::Json<vod::meta::Request>,
+    auth_token_hash: web::Data<AuthTokenHash>,
+    auth: BearerAuth,
 ) -> Result<&'static str, error::Error> {
+    web::block(move || {
+        argon2::verify_encoded(
+            &auth_token_hash.as_ref().0,
+            auth.token().as_bytes(),
+        )
+    })
+    .await
+    .map_err(error::ErrorInternalServerError)
+    .and_then(|ok| {
+        if ok {
+            Ok(())
+        } else {
+            Err(error::ErrorUnauthorized("Invalid Bearer token provided"))
+        }
+    })?;
+
     let new = State::parse_request(req.0)
         .await
         .map_err(error::ErrorBadRequest)?;
@@ -80,3 +110,8 @@ async fn renew_state(
 
     Ok("Ok")
 }
+
+/// Helper wrapper for extracting [`cli::VodMetaOpts::auth_token_hash`] in
+/// [`actix_web`] handlers.
+#[derive(Clone, Debug)]
+struct AuthTokenHash(String);
