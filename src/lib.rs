@@ -40,6 +40,7 @@ pub fn run() -> Result<(), cli::Failure> {
     // This guard should be held till the end of the program for the logger
     // to present in global context.
     let _log_guard = slog_scope::set_global_logger(main_logger(opts.verbose));
+    slog_stdlog::init().unwrap();
 
     match opts.cmd {
         cli::Command::Mix(opts) => cli::command::mix::run(&opts),

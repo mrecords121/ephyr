@@ -2,7 +2,7 @@
 //!
 //! [`cli::ServeCommand::VodMeta`]: crate::cli::ServeCommand::VodMeta
 
-use actix_web::{error, web, App, HttpServer};
+use actix_web::{error, middleware, web, App, HttpServer};
 use actix_web_httpauth::extractors::bearer::{self, BearerAuth};
 use slog_scope as log;
 
@@ -31,6 +31,7 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
             .data(state.clone())
             .data(auth_token_hash.clone())
             .data(bearer::Config::default().realm("Restricted area"))
+            .wrap(middleware::Logger::default())
             .route(
                 "/{location}/{playlist}/{filename}",
                 web::get().to(produce_meta),
