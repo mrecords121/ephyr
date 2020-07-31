@@ -948,7 +948,9 @@ dependencies = [
  "slog-term",
  "smart-default",
  "structopt",
+ "tempfile",
  "tokio",
+ "tokio-util 0.3.1",
  "tsclientlib",
  "tsproto-packets",
  "url",
@@ -2954,6 +2956,7 @@ checksum = "be8242891f2b6cbef26a2d7e8605133c2c554cd35b3e4948ea892d6d68436499"
 dependencies = [
  "bytes",
  "futures-core",
+ "futures-io",
  "futures-sink",
  "log",
  "pin-project-lite",

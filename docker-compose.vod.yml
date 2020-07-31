@@ -13,6 +13,7 @@ services:
       - 8080:8080      # http  ephyr-vod-meta
     volumes:
       - ./example.vod.meta.json:/state.vod-meta.json
+      - ./.cache/vod/videos/:/var/lib/ephyr/vod/cache/
   nginx:
     container_name: ${COMPOSE_PROJECT_NAME}-nginx
     image: nytimes/nginx-vod-module:1.4

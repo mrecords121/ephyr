@@ -33,6 +33,7 @@ use url::Url;
 use crate::{
     api::{self, allatra},
     util::serde::{timelike, timezone},
+    vod::file,
 };
 
 pub use crate::api::allatra::video::{Resolution, YoutubeId};
@@ -62,6 +63,45 @@ impl State {
                 .try_collect()
                 .await?,
         ))
+    }
+
+    /// Inspects all [`Src`]s of this [`State`] and fills them with information
+    /// about [VOD] files available in the given `cache`.
+    ///
+    /// [VOD]: https://en.wikipedia.org/wiki/Video_on_demand
+    pub async fn fill_with_cache_files(
+        &mut self,
+        cache: &file::cache::Manager,
+    ) -> Result<(), anyhow::Error> {
+        for pl in self.0.values_mut() {
+            for clips in pl.clips.values_mut() {
+                for cl in clips.iter_mut() {
+                    for src in cl.sources.values_mut() {
+                        if src.url.local.is_some() {
+                            continue;
+                        }
+                        if let Some(path) = cache
+                            .get_cached_path(&src.url.upstream)
+                            .await
+                            .map_err(|e| {
+                                anyhow!(
+                                    "Failed to get cached file path for '{}' \
+                                     URL: {}",
+                                    src.url.upstream,
+                                    e,
+                                )
+                            })?
+                        {
+                            src.url.local = Some(Url::parse(&format!(
+                                "file:///{}",
+                                path.display(),
+                            ))?);
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -341,7 +381,7 @@ impl Clip {
                     let src = Src {
                         url: SrcUrl {
                             upstream: source.src,
-                            local: None, // TODO: preserve
+                            local: None,
                         },
                         mime_type: source.r#type,
                         size: source.size,
@@ -426,9 +466,12 @@ pub struct SrcUrl {
     /// Supports `http://` and `https://` schemes only.
     pub upstream: Url,
 
-    /// Local URL of the locally cached version of the source file.
+    /// Local URL of the locally cached version of the source file in the
+    /// [VOD] files cache directory (NOT the absolute path in filesystem).
     ///
     /// Supports `file://` scheme only.
+    ///
+    /// [VOD]: https://en.wikipedia.org/wiki/Video_on_demand
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub local: Option<Url>,
 }

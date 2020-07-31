@@ -2,14 +2,22 @@
 //!
 //! [`cli::ServeCommand::VodMeta`]: crate::cli::ServeCommand::VodMeta
 
+use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};
+
 use actix_web::{error, middleware, web, App, HttpServer};
 use actix_web_httpauth::extractors::bearer::{self, BearerAuth};
+use futures::{sink, FutureExt as _, StreamExt as _};
 use slog_scope as log;
+use tokio::time;
 
 use crate::{
     api::{nginx, vod},
     cli,
-    vod::meta::{schedule_nginx_vod_module_set, state, State},
+    util::display_panic,
+    vod::{
+        file,
+        meta::{schedule_nginx_vod_module_set, state, State},
+    },
 };
 
 /// Runs [`cli::ServeCommand::VodMeta`].
@@ -24,11 +32,26 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
         log::error!("Failed to initialize vod::meta::State: {}", e);
         cli::Failure
     })?;
+
+    let cache = Arc::new(
+        file::cache::Manager::try_new(opts.cache_dir).map_err(|e| {
+            log::error!("Failed to initialize vod::file::cache: {}", e);
+            cli::Failure
+        })?,
+    );
+
+    tokio::spawn(refill_state_with_cache_files(
+        state.clone(),
+        cache.clone(),
+        Duration::from_secs(10),
+    ));
+
     let auth_token_hash = AuthTokenHash(opts.auth_token_hash);
 
     let _ = HttpServer::new(move || {
         App::new()
             .data(state.clone())
+            .data(cache.clone())
             .data(auth_token_hash.clone())
             .data(bearer::Config::default().realm("Restricted area"))
             .wrap(middleware::Logger::default())
@@ -80,6 +103,7 @@ async fn produce_meta(
 /// [1]: https://tools.ietf.org/html/rfc6750#section-2.1
 async fn renew_state(
     state: web::Data<state::Manager>,
+    cache: web::Data<Arc<file::cache::Manager>>,
     req: web::Json<vod::meta::Request>,
     auth_token_hash: web::Data<AuthTokenHash>,
     auth: BearerAuth,
@@ -100,16 +124,68 @@ async fn renew_state(
         }
     })?;
 
-    let new = State::parse_request(req.0)
+    let mut new = State::parse_request(req.0)
         .await
         .map_err(error::ErrorBadRequest)?;
 
+    new.fill_with_cache_files(&cache)
+        .await
+        .map_err(error::ErrorInternalServerError)?;
+
     state
-        .set_state(new)
+        .set_state(new, None)
         .await
         .map_err(error::ErrorInternalServerError)?;
 
     Ok("Ok")
+}
+
+/// Runs job, which periodically (with the given `period`) refills the given
+/// `state` with information about files available in the given `cache`.
+async fn refill_state_with_cache_files(
+    state: state::Manager,
+    cache: Arc<file::cache::Manager>,
+    period: Duration,
+) {
+    async fn refill(
+        state: state::Manager,
+        cache: Arc<file::cache::Manager>,
+    ) -> Result<(), anyhow::Error> {
+        let (mut curr, ver) = state.state_and_version().await;
+        curr.fill_with_cache_files(&cache).await?;
+        state.set_state(curr, Some(ver)).await?;
+        Ok(())
+    }
+
+    let _ = time::interval(period)
+        .then(move |_| {
+            log::debug!(
+                "Refilling vod::meta::State with vod::file::cache triggered",
+            );
+            let (state, cache) = (state.clone(), cache.clone());
+            async move {
+                AssertUnwindSafe(refill(state, cache))
+                    .catch_unwind()
+                    .await
+                    .map_err(|p| {
+                        log::error!(
+                            "Panicked while refilling vod::meta::State with \
+                             vod::file::cache: {}",
+                            display_panic(&p),
+                        )
+                    })?
+                    .map_err(|e| {
+                        log::error!(
+                            "Failed to refill vod::meta::State with \
+                             vod::file::cache: {}",
+                            e,
+                        )
+                    })
+            }
+        })
+        .map(Ok)
+        .forward(sink::drain())
+        .await;
 }
 
 /// Helper wrapper for extracting [`cli::VodMetaOpts::auth_token_hash`] in

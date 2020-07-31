@@ -65,6 +65,11 @@ pub fn main_logger(level: Option<slog::Level>) -> slog::Logger {
 
     let drain = drain
         .filter_level(level.unwrap_or(slog::Level::Error))
+        .filter(|rec| {
+            // Disable annoying DEBUG logs from `hyper` crate.
+            !(rec.level() == slog::Level::Debug
+                && rec.module() == "hyper::proto::h1::io")
+        })
         .fuse();
 
     let drain = slog_async::Async::new(drain)

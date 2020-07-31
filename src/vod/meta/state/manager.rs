@@ -19,8 +19,11 @@ pub struct Manager {
     /// Path to the file where the [`Manager::state`] should be persisted.
     file: Arc<PathBuf>,
 
-    /// `vod-meta` server's [`State`] to keep synchronized and persisted.
-    state: Arc<RwLock<State>>,
+    /// `vod-meta` server's [`State`] to keep synchronized and persisted, along
+    /// with its current version.
+    ///
+    /// Version is used for CAS (compare and swap) operations.
+    state: Arc<RwLock<(State, u8)>>,
 }
 
 impl Manager {
@@ -70,29 +73,56 @@ impl Manager {
 
         Ok(Self {
             file: Arc::new(file.to_owned()),
-            state: Arc::new(RwLock::new(state)),
+            state: Arc::new(RwLock::new((state, 0))),
         })
     }
 
     /// Returns the copy of the current actual [`State`].
     #[inline]
     pub async fn state(&self) -> State {
-        self.state.read().await.clone()
+        self.state.read().await.0.clone()
+    }
+
+    /// Returns the copy of the current actual [`State`] along with it's current
+    /// version.
+    #[inline]
+    pub async fn state_and_version(&self) -> (State, u8) {
+        let state = self.state.read().await;
+        (state.0.clone(), state.1)
     }
 
     /// Returns from the current actual [`State`] the copy of the [`Playlist`]
     /// identified by its `slug`.
     #[inline]
     pub async fn playlist(&self, slug: &PlaylistSlug) -> Option<Playlist> {
-        self.state.read().await.0.get(slug).cloned()
+        (self.state.read().await.0).0.get(slug).cloned()
     }
 
     /// Replaces the current [`State`] with a `new` one.
     ///
+    /// If `ver` is specified, then makes sure that it matches the version of
+    /// the current [`State`], and if it doesn't, then no-op. This provides a
+    /// basic [optimistic concurrency][1] allowing to modify the current
+    /// [`State`] without holding the inner lock the whole modifying time.
+    ///
     /// # Errors
     ///
     /// If the `new` [`State`] fails to be persisted.
-    pub async fn set_state(&self, new: State) -> Result<(), anyhow::Error> {
+    ///
+    /// [1]: https://en.wikipedia.org/wiki/Optimistic_concurrency_control
+    pub async fn set_state(
+        &self,
+        new: State,
+        ver: Option<u8>,
+    ) -> Result<(), anyhow::Error> {
+        let mut state = self.state.write().await;
+
+        if let Some(new_ver) = ver {
+            if new_ver != state.1 {
+                return Ok(());
+            }
+        }
+
         fs::write(
             &*self.file,
             serde_json::to_vec(&new)
@@ -107,7 +137,8 @@ impl Manager {
             )
         })?;
 
-        *self.state.write().await = new;
+        state.0 = new;
+        state.1 = state.1.checked_add(1).unwrap_or_default();
 
         Ok(())
     }

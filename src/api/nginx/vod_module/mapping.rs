@@ -196,7 +196,7 @@ impl SourceClip {
     #[must_use]
     pub fn get_url_path(url: &Url) -> PathBuf {
         let (old_prefix, new_prefix) = match url.scheme() {
-            "file" => ("/var/lib/ephyr/vod", "/local"),
+            "file" => ("/", "/local"),
             "http" | "https" => match url.host() {
                 Some(url::Host::Domain("api.allatra.video")) => {
                     ("/storage/videos", "/api.allatra.video")
@@ -212,7 +212,7 @@ impl SourceClip {
                 url,
             ),
         };
-        PathBuf::from(new_prefix)
+        Path::new(new_prefix)
             .join(Path::new(url.path()).strip_prefix(old_prefix).unwrap())
     }
 }

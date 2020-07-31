@@ -194,6 +194,21 @@ pub struct VodMetaOpts {
                      (default value represents Argon2i hash of `qwerty`)"
     )]
     pub auth_token_hash: String,
+
+    /// Path to the directory where [VOD] files should be downloaded from
+    /// upstream servers to, and cached.
+    ///
+    /// [VOD]: https://en.wikipedia.org/wiki/Video_on_demand
+    #[structopt(
+        short,
+        long,
+        env = "EPHYR.VOD_META.CACHE.DIR",
+        default_value = "/var/lib/ephyr/vod/cache",
+        help = "Path to directory with cached VOD files",
+        long_help = "Path to directory with cached VOD files of `vod-meta` \
+                     server"
+    )]
+    pub cache_dir: PathBuf,
 }
 
 /// Error type indicating non-zero process exit code.
