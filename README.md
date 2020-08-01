@@ -5,7 +5,7 @@ Ephyr
 
 [Changelog](https://github.com/ALLATRA-IT/ephyr/blob/master/CHANGELOG.md)
 
-Server-side kit for streaming solution, powered by [Rust].
+Server-side kit for streaming solutions, powered by [Rust].
 
 
 
@@ -62,7 +62,7 @@ make tune volume=0.4 track=original
 ```
 
 
-## [VOD] meta info HTTP server
+### [VOD] meta info HTTP server
 
 To boot up a simple example, run:
 ```bash
