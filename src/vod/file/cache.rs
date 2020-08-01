@@ -80,6 +80,11 @@ impl Manager {
     ///
     /// If there is no cached file for the given [`Url`], then schedules it for
     /// downloading.
+    ///
+    /// # Errors
+    ///
+    /// - If the given [`Url`] is not supported for downloading.
+    /// - If the given [`Url`] cannot be scheduled for downloading.
     pub async fn get_cached_path(
         &self,
         url: &Url,
@@ -166,6 +171,7 @@ impl Manager {
     /// - If the given [`Url`] couldn't be reached or responses with non-success
     ///   HTTP code.
     /// - If downloading of file from the given [`Url`] fails or is interrupted.
+    #[allow(clippy::too_many_lines)]
     async fn download(
         url: &Url,
         dst_dir: &Path,

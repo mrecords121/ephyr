@@ -68,6 +68,10 @@ impl State {
     /// Inspects all [`Src`]s of this [`State`] and fills them with information
     /// about [VOD] files available in the given `cache`.
     ///
+    /// # Errors
+    ///
+    /// If some [`Src`] is not supported to reside in `cache`.
+    ///
     /// [VOD]: https://en.wikipedia.org/wiki/Video_on_demand
     pub async fn fill_with_cache_files(
         &mut self,

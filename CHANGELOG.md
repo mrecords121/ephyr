@@ -6,6 +6,31 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.3.0] · 2020-08-01
+[0.3.0]: /../../tree/v0.3.0
+
+[Diff](https://github.com/ALLATRA-IT/ephyr/compare/v0.2.0..v0.3.0)
+
+### BC Breaks
+
+- CLI:
+    - Default mixing `ephyr` command moved to `ephyr mix` sub-command.
+
+### Added
+
+- CLI:
+    - `ephyr serve vod-meta` sub-command to run [VOD] meta info HTTP server.
+- [VOD] meta info HTTP server:
+    - Endpoints:
+        - `GET /<proto>/<playlist>/<file>`: prepares meta information for [`kaltura/nginx-vod-module`];
+        - `PUT /`: renews meta information (authorized).
+    - Background:
+        - Downloading [VOD] files to `--cache-dir`;
+        - Synchronization of meta information with [VOD] files cache every 10 seconds.
+
+
+
+
 ## [0.2.0] · 2020-07-11
 [0.2.0]: /../../tree/v0.2.0
 
@@ -65,4 +90,7 @@ All user visible changes to this project will be documented in this file. This p
 [Semantic Versioning 2.0.0]: https://semver.org
 [SRS]: https://ossrs.net
 [TeamSpeak]: https://teamspeak.com
+[VOD]: https://en.wikipedia.org/wiki/Video_on_demand
 [ZeroMQ]: https://zeromq.org
+
+[`kaltura/nginx-vod-module`]: https://github.com/kaltura/nginx-vod-module

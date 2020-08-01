@@ -5,25 +5,44 @@ Ephyr
 
 [Changelog](https://github.com/ALLATRA-IT/ephyr/blob/master/CHANGELOG.md)
 
-[SRS] + [FFmpeg] solution for server-side mixing of live streams powered by [Rust].
+Server-side kit for streaming solution, powered by [Rust].
 
 
 
 
 ## Overview
 
-Ephyr represents a wrapper over [FFmpeg] binary and performs mixing according to specified schema (see [example][1]). At the moment, it's intended to be called as [SRS] `exec.publish` directive, so performs mixing on-demand (when [RTMP] stream is pushed to [SRS]).
+
+### `ephyr mix` command
+
+Represents a wrapper over [FFmpeg] binary, which performs mixing according to specified schema (see [example][1]). At the moment, it's intended to be called as [SRS] `exec.publish` directive, so performs mixing on-demand (when [RTMP] stream is pushed to [SRS]).
 
 Ephyr is able to capture audio from [TeamSpeak] server, and feed it to [FFmpeg] for mixing with [RTMP] stream.
+
+See `ephyr mix --help` for details.
+
+
+### `ephyr serve vod-meta` command
+
+Represents a simple HTTP server, which provides a meta information for [`kaltura/nginx-vod-module`] to play a scheduled [VOD] playlists. Each playlists schedules on weekly basis (see [example][2]).
+
+New schedule may be specified via `PUT` HTTP request.
+
+Also, supports background downloading of remote video files into a local files cache.
+
+See `ephyr serve vod-meta --help` for details.
 
 
 
 
 ## Try it out
 
+
+### [SRS] + [FFmpeg] server-side mixing
+
 To boot up a simple example, run:
 ```bash
-make up rebuild=yes
+make up app=mix rebuild=yes
 ```
 
 Now, publish an RTMP stream to `rtmp://127.0.0.1:1935/input/mic` endpoint either with [OBS], or any other RTMP publisher. You may also use `FFmpeg` for that:
@@ -40,6 +59,20 @@ Also, you may tune volume on-fly:
 ```bash
 make tune volume=1 track=music
 make tune volume=0.4 track=original
+```
+
+
+## [VOD] meta info HTTP server
+
+To boot up a simple example, run:
+```bash
+make up app=vod rebuild=yes
+```
+
+Now, open an [HLS] or [DASH] stream in a [VLC] or any other media player supporting HTTP streaming:
+```bash
+http://localhost/hls/cnn-live/master.m3u8    # to play HLS stream
+http://localhost/dash/cnn-live/manifest.mpd  # to play DASH stream
 ```
 
 
@@ -61,11 +94,18 @@ As for any pre-built image usage, it is the image user's responsibility to ensur
 
 
 
+[DASH]: https://en.wikipedia.org/wiki/Dynamic_Adaptive_Streaming_over_HTTP
 [FFmpeg]: https://ffmpeg.org
+[HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming
 [OBS]: https://obsproject.com
 [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 [Rust]: https://www.rust-lang.org
 [SRS]: https://github.com/ossrs/srs
 [TeamSpeak]: https://teamspeak.com
+[VLC]: http://www.videolan.org/vlc
+[VOD]: https://en.wikipedia.org/wiki/Video_on_demand
+
+[`kaltura/nginx-vod-module`]: https://github.com/kaltura/nginx-vod-module
 
 [1]: https://github.com/ALLATRA-IT/ephyr/blob/master/example.mix.spec.json
+[2]: https://github.com/ALLATRA-IT/ephyr/blob/master/example.vod.meta.json
