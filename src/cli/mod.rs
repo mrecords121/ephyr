@@ -5,6 +5,7 @@ pub mod command;
 use std::{fmt, net::IpAddr, path::PathBuf, str::FromStr as _};
 
 use anyhow::anyhow;
+use byte_unit::Byte;
 use structopt::StructOpt;
 
 /// CLI (command line interface) of the application.
@@ -209,6 +210,18 @@ pub struct VodMetaOpts {
                      server"
     )]
     pub cache_dir: PathBuf,
+
+    /// Maximum allowed size of the JSON body accepted by `PUT` HTTP request,
+    /// which modifies [`vod::meta::State`].
+    #[structopt(
+        long,
+        env = "EPHYR.VOD_META.REQUEST.MAX_SIZE",
+        default_value = "1MB",
+        help = "Maximum allowed size of request to modify state",
+        long_help = "Maximum allowed size of the JSON body accepted by PUT \
+                     HTTP endpoint, which modifies state of `vod-meta` server"
+    )]
+    pub request_max_size: Byte,
 }
 
 /// Error type indicating non-zero process exit code.

@@ -6,6 +6,27 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.3.1] · 2020-08-??
+[0.3.1]: /../../tree/v0.3.1
+
+[Diff](https://github.com/ALLATRA-IT/ephyr/compare/v0.3.0..v0.3.1)
+
+### Added
+
+- CLI:
+    - `ephyr serve vod-meta`:
+        - `--request-max-size` option to configure maximum allowed size of the JSON body accepted by `PUT` HTTP request which renews [VOD] meta information.
+
+### Fixed
+
+- [VOD] meta info HTTP server:
+    - Endpoints:
+        - `PUT /`:
+            - Missing response body when request JSON fails to parse. 
+
+
+
+
 ## [0.3.0] · 2020-08-01
 [0.3.0]: /../../tree/v0.3.0
 

@@ -2,9 +2,11 @@
 //!
 //! [`cli::ServeCommand::VodMeta`]: crate::cli::ServeCommand::VodMeta
 
-use std::{panic::AssertUnwindSafe, sync::Arc, time::Duration};
+use std::{
+    convert::TryInto as _, panic::AssertUnwindSafe, sync::Arc, time::Duration,
+};
 
-use actix_web::{error, middleware, web, App, HttpServer};
+use actix_web::{error, middleware, web, App, FromRequest as _, HttpServer};
 use actix_web_httpauth::extractors::bearer::{self, BearerAuth};
 use futures::{sink, FutureExt as _, StreamExt as _};
 use slog_scope as log;
@@ -28,6 +30,12 @@ use crate::{
 /// is logged.
 #[actix_rt::main]
 pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
+    let request_max_size =
+        opts.request_max_size.get_bytes().try_into().map_err(|e| {
+            log::error!("Maximum request size has too big value: {}", e);
+            cli::Failure
+        })?;
+
     let state = state::Manager::try_new(&opts.state).await.map_err(|e| {
         log::error!("Failed to initialize vod::meta::State: {}", e);
         cli::Failure
@@ -55,6 +63,14 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
             .data(auth_token_hash.clone())
             .data(bearer::Config::default().realm("Restricted area"))
             .wrap(middleware::Logger::default())
+            .app_data(web::Json::<vod::meta::Request>::configure(|cfg| {
+                cfg.limit(request_max_size).error_handler(|err, _| {
+                    error::ErrorBadRequest(format!(
+                        "Invalid request body: {}",
+                        err,
+                    ))
+                })
+            }))
             .route(
                 "/{location}/{playlist}/{filename}",
                 web::get().to(produce_meta),
