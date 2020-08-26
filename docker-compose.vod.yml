@@ -9,16 +9,18 @@ services:
     entrypoint: ["ephyr"]
     command: ["-v", "INFO", "serve", "vod-meta"]
     working_dir: /
-    ports:
-      - 8080:8080      # http  ephyr-vod-meta
     volumes:
       - ./example.vod.meta.json:/state.vod-meta.json
-      - ./.cache/vod/videos/:/var/lib/ephyr/vod/cache/
+      - ./.cache/vod/video/:/var/lib/ephyr/vod/cache/
+      - ./.cache/vod/ephyr/tmp/:/tmp/
+    network_mode: service:nginx
   nginx:
     container_name: ${COMPOSE_PROJECT_NAME}-nginx
     image: nytimes/nginx-vod-module:1.4
     ports:
       - 80:80          # http  nginx
+      - 8080:8080      # http  ephyr-vod-meta
     volumes:
       - ./vod.nginx.conf:/usr/local/nginx/conf/nginx.conf:ro
-      - ./.cache/vod/videos/:/opt/static/videos/
+      - ./.cache/vod/video/:/local/:ro
+      - ./.cache/vod/nginx/temp/:/usr/local/nginx/proxy_temp/
