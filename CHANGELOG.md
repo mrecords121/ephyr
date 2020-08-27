@@ -6,10 +6,10 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
-## [0.3.?] · 2020-08-??
-[0.3.?]: /../../tree/v0.3.?
+## [0.3.2] · 2020-08-27
+[0.3.2]: /../../tree/v0.3.2
 
-[Diff](https://github.com/ALLATRA-IT/ephyr/compare/v0.3.1..v0.3.?)
+[Diff](https://github.com/ALLATRA-IT/ephyr/compare/v0.3.1..v0.3.2)
 
 ### Fixed
 
