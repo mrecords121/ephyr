@@ -3,11 +3,7 @@
 
 use std::{borrow::Cow, time::Duration};
 
-use serde::{
-    de::{Deserializer, Error as _},
-    ser::Serializer,
-    Deserialize as _,
-};
+use serde::{de::Error as _, Deserialize as _, Deserializer, Serializer};
 
 /// Formats the given [`Duration`] as a `%H:%M:%S` time-like string (`03:05:01`,
 /// for example).

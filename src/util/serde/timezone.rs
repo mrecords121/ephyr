@@ -7,11 +7,7 @@
 use std::{borrow::Cow, convert::TryFrom as _};
 
 use chrono::FixedOffset as TimeZone;
-use serde::{
-    de::{Deserializer, Error as _},
-    ser::Serializer,
-    Deserialize as _,
-};
+use serde::{de::Error as _, Deserialize as _, Deserializer, Serializer};
 
 /// Serializes [`TimeZone`] in a [RFC 3339 format][1] (`+04:03`, for example).
 ///

@@ -6,6 +6,21 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.3.?] · 2020-08-??
+[0.3.?]: /../../tree/v0.3.?
+
+[Diff](https://github.com/ALLATRA-IT/ephyr/compare/v0.3.1..v0.3.?)
+
+### Fixed
+
+- [VOD] meta info HTTP server:
+    - Endpoints:
+        - `PUT /`:
+            - Inability to parse information from [allatra.video] API about videos with duration less than hour.
+
+
+
+
 ## [0.3.1] · 2020-08-26
 [0.3.1]: /../../tree/v0.3.1
 
@@ -104,6 +119,7 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+[allatra.video]: https://allatra.video/
 [Docker]: https://www.docker.com
 [FFmpeg]: https://ffmpeg.org
 [Opus]: https://opus-codec.org

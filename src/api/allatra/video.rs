@@ -9,7 +9,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::time::Duration;
 use url::Url;
 
-use crate::util::serde::timelike;
+use crate::util::serde::seconds;
 
 /// [API] of [allatra.video][1] site.
 ///
@@ -76,7 +76,7 @@ pub struct Video {
     pub youtube_id: YoutubeId,
 
     /// Total duration of this [`Video`].
-    #[serde(rename = "durationFormatted", with = "timelike")]
+    #[serde(with = "seconds")]
     pub duration: Duration,
 
     /// [`Source`]s of this [`Video`] where it can be read from.
@@ -221,6 +221,49 @@ mod spec {
                 &format!(
                     "https://api.allatra.video/storage/videos/0A/w4/8679\
                                                       /0wAtNWA93hM_{}p.mp4",
+                    source.size as u16,
+                ),
+                "URL parsed incorrectly for source {}",
+                i,
+            );
+            assert_eq!(
+                source.r#type, "video/mp4",
+                "MIME type parsed incorrectly for source {}",
+                i,
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn parses_vlad_darwin() {
+        let resp =
+            reqwest::get(&format!("{}/videos/yt/amksbZL9Dyo", Api::V1_URL))
+                .await
+                .expect("Failed to perform API request");
+        if !resp.status().is_success() {
+            panic!("Cannot access 'amksbZL9Dyo' video in API");
+        }
+
+        let res = resp.json::<Response<Video>>().await;
+        assert!(res.is_ok(), "cannot deserialize: {}", res.unwrap_err());
+
+        let video = res.unwrap().data;
+        assert_eq!(
+            video.youtube_id, "amksbZL9Dyo",
+            "YouTube ID parsed incorrectly",
+        );
+        assert_eq!(
+            video.duration,
+            Duration::from_secs(2289),
+            "duration parsed incorrectly",
+        );
+        assert_eq!(video.sources.len(), 5, "sources set parsed incorrectly");
+        for (i, source) in video.sources.iter().enumerate() {
+            assert_eq!(
+                source.src.as_ref(),
+                &format!(
+                    "https://api.allatra.video/storage/videos/0G/EG/8673\
+                                                      /amksbZL9Dyo_{}p.mp4",
                     source.size as u16,
                 ),
                 "URL parsed incorrectly for source {}",
