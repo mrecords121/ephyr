@@ -49,6 +49,15 @@ pub struct Set {
     #[serde(default)]
     pub discontinuity: bool,
 
+    /// Duration of [`Clip`]'s segments in milliseconds.
+    ///
+    /// This field, if specified, takes priority over the value set in
+    /// [`vod_segment_duration`][1].
+    ///
+    /// [1]: https://github.com/kaltura/nginx-vod-module#vod_segment_duration
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub segment_duration: Option<MillisDuration>,
+
     /// [`Clip`] durations in milliseconds. It must contain at least one element
     /// and up to [`Clip::MAX_DURATIONS_LEN`] elements.
     #[serde(default)]

@@ -28,6 +28,7 @@ use mime::Mime;
 use once_cell::sync::Lazy;
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize};
+use smart_default::SmartDefault;
 use url::Url;
 
 use crate::{
@@ -130,6 +131,14 @@ pub struct Playlist {
     #[serde(with = "timezone")]
     pub tz: TimeZone,
 
+    /// Duration of segments to serve [`Playlist`]'s [`Clip`]s with.
+    ///
+    /// All [`Clip`]s in [`Playlist`] are mandatory cut to this duration
+    /// segments when are served. That's why [`Clip`]'s duration should divide
+    /// on [`SegmentDuration`] without any fractions.
+    #[serde(default)]
+    pub segment_duration: SegmentDuration,
+
     /// [`Clips`] which form this [`Playlist`], distributed by [`Weekday`]s.
     ///
     /// The total duration of all [`Clip`]s in the one [`Weekday`] hasn't to be
@@ -186,12 +195,14 @@ impl Playlist {
             ));
         }
 
+        let segment_duration = req.segment_duration.unwrap_or_default();
         let clips =
             stream::iter(req.clips.into_iter().flat_map(|(day, clips)| {
                 clips.into_iter().map(move |c| (day, c))
             }))
             .map(|(day, req)| {
-                Clip::parse_request(req).map_ok(move |c| (day, c))
+                Clip::parse_request(req, segment_duration)
+                    .map_ok(move |c| (day, c))
             })
             .buffered(CONCURRENT_REQUESTS)
             .try_fold(
@@ -232,6 +243,7 @@ impl Playlist {
             title: req.title,
             lang: req.lang,
             tz: req.tz,
+            segment_duration,
             clips,
         })
     }
@@ -300,7 +312,8 @@ pub struct Clip {
 }
 
 impl Clip {
-    /// Parses new [`Clip`] from the given `vod-meta` server API request.
+    /// Parses new [`Clip`] from the given `vod-meta` server API request, with
+    /// accordance to the given [`SegmentDuration`].
     ///
     /// # Errors
     ///
@@ -312,6 +325,7 @@ impl Clip {
     /// [YouTube]: https://youtube.com
     pub async fn parse_request(
         req: api::vod::meta::Clip,
+        segment_duration: SegmentDuration,
     ) -> Result<Self, anyhow::Error> {
         if req.title.is_empty() {
             return Err(anyhow!(
@@ -368,6 +382,18 @@ impl Clip {
                 req.title,
                 timelike::format(&req.to),
                 timelike::format(&req.from),
+            ));
+        }
+
+        let clip_secs = (req.to - req.from).as_secs();
+        let segment_secs = segment_duration.as_duration().as_secs();
+        if clip_secs % segment_secs != 0 {
+            return Err(anyhow!(
+                "Duration of clip '{}' should be divisible on {} seconds \
+                 segment duration, but it is {} seconds",
+                req.title,
+                segment_secs,
+                clip_secs,
             ));
         }
 
@@ -480,6 +506,59 @@ pub struct SrcUrl {
     pub local: Option<Url>,
 }
 
+/// Duration of a [`Clip`]'s segment.
+#[derive(
+    Clone, Copy, Debug, Eq, Hash, Into, PartialEq, Serialize, SmartDefault,
+)]
+pub struct SegmentDuration(
+    #[default(Duration::from_secs(10))]
+    #[serde(with = "serde_humantime")]
+    Duration,
+);
+
+impl SegmentDuration {
+    /// Creates new [`SegmentDuration`] from the given [`Duration`] if it
+    /// represents a [valid segment duration][1].
+    ///
+    /// [1]: SegmentDuration::validate
+    #[must_use]
+    pub fn new(dur: Duration) -> Option<Self> {
+        if Self::validate(dur) {
+            Some(Self(dur))
+        } else {
+            None
+        }
+    }
+
+    /// Validates whether the given [`Duration`] represents a valid
+    /// [`SegmentDuration`].
+    ///
+    /// Valid segment durations are between 5 and 30 seconds (inclusively).
+    #[must_use]
+    pub fn validate(dur: Duration) -> bool {
+        let secs = dur.as_secs();
+        secs >= 5 && secs <= 30
+    }
+
+    /// Converts this [`SegmentDuration`] to a regular [`Duration`] value.
+    #[inline]
+    #[must_use]
+    pub fn as_duration(&self) -> Duration {
+        self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for SegmentDuration {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error as _;
+        Ok(Self::new(serde_humantime::deserialize(deserializer)?)
+            .ok_or_else(|| D::Error::custom("not a valid segment duration"))?)
+    }
+}
+
 #[cfg(test)]
 mod spec {
     use std::fs;
@@ -518,7 +597,27 @@ mod spec {
                 ("djk-s___f0", "incorrect symbols"),
             ] {
                 let actual = PlaylistSlug::new(*input);
-                assert!(actual.is_none(), "disallows {}", desc);
+                assert!(actual.is_none(), "allows {}", desc);
+            }
+        }
+    }
+
+    mod segment_duration {
+        use super::*;
+
+        #[test]
+        fn allows_valid_durations() {
+            for input in &[5, 10, 30] {
+                let actual = SegmentDuration::new(Duration::from_secs(*input));
+                assert!(actual.is_some(), "disallows {} seconds", input);
+            }
+        }
+
+        #[test]
+        fn disallows_invalid_slugs() {
+            for input in &[1, 31, 60] {
+                let actual = SegmentDuration::new(Duration::from_secs(*input));
+                assert!(actual.is_none(), "allows {} seconds", input);
             }
         }
     }
@@ -533,19 +632,20 @@ mod spec {
                   "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
                   "title": "Круг Жизни",
                   "from": "00:00:00",
-                  "to": "1:51:26"
+                  "to": "1:50:20"
                 }"#,
             )
             .expect("Failed to deserialize request");
 
-            let res = Clip::parse_request(req).await;
+            let res =
+                Clip::parse_request(req, SegmentDuration::default()).await;
             assert!(res.is_ok(), "failed to parse: {}", res.unwrap_err());
 
             let clip = res.unwrap();
             assert_eq!(&clip.youtube_id, "0wAtNWA93hM");
             assert_eq!(&clip.title, "Круг Жизни");
             assert_eq!(clip.view.from, Duration::from_secs(0));
-            assert_eq!(clip.view.to, Duration::from_secs(6686));
+            assert_eq!(clip.view.to, Duration::from_secs(6620));
             assert_eq!(clip.sources.len(), 5);
         }
 
@@ -580,7 +680,8 @@ mod spec {
                 let req = serde_json::from_str::<api::vod::meta::Clip>(&json)
                     .expect("Failed to deserialize request");
 
-                let res = Clip::parse_request(req).await;
+                let res =
+                    Clip::parse_request(req, SegmentDuration::default()).await;
                 assert!(res.is_err(), "allows non-YouTube URL in: {}", json);
             }
         }
@@ -612,11 +713,18 @@ mod spec {
                   "from": "00:00:00",
                   "to": "02:00:03"
                 }"#,
+                r#"{
+                  "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                  "title": "Круг Жизни",
+                  "from": "00:00:00",
+                  "to": "1:50:23"
+                }"#,
             ] {
                 let req = serde_json::from_str::<api::vod::meta::Clip>(&json)
                     .expect("Failed to deserialize request");
 
-                let res = Clip::parse_request(req).await;
+                let res =
+                    Clip::parse_request(req, SegmentDuration::default()).await;
                 assert!(res.is_err(), "allows invalid duration in: {}", json);
             }
         }
@@ -633,6 +741,7 @@ mod spec {
                   "title": "Передачи с Игорем Михайловичем",
                   "lang": "rus",
                   "tz": "+03:00",
+                  "segment_duration": "10s",
                   "clips": {
                     "mon": [{
                       "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
@@ -671,6 +780,7 @@ mod spec {
                   "title": "Передачи с Игорем Михайловичем",
                   "lang": "rus",
                   "tz": "+03:00",
+                  "segment_duration": "10s",
                   "clips": {
                     "mon": [{
                       "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
@@ -684,6 +794,7 @@ mod spec {
                   "title": "Передачи с Игорем Михайловичем",
                   "lang": "rus",
                   "tz": "+03:00",
+                  "segment_duration": "10s",
                   "clips": {
                     "tue": [{
                       "url": "https://vimeo.com/watch?v=0wAtNWA93hM",
@@ -711,6 +822,7 @@ mod spec {
                   "title": "Передачи с Игорем Михайловичем",
                   "lang": "rus",
                   "tz": "+03:00",
+                  "segment_duration": "10s",
                   "clips": {
                     "sat": [{
                       "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
@@ -724,6 +836,7 @@ mod spec {
                   "title": "Передачи с Игорем Михайловичем",
                   "lang": "rus",
                   "tz": "+03:00",
+                  "segment_duration": "10s",
                   "clips": {
                     "sun": [{
                       "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
@@ -760,6 +873,7 @@ mod spec {
                   "title": "Передачи с Игорем Михайловичем",
                   "lang": "rus",
                   "tz": "+03:00",
+                  "segment_duration": "10s",
                   "clips": {
                     "sat": [{
                       "url": "https://www.youtube.com/watch?v=R29rL-CIsbo",
@@ -788,6 +902,7 @@ mod spec {
                   "title": "Передачи с Игорем Михайловичем",
                   "lang": "rus",
                   "tz": "+03:00",
+                  "segment_duration": "10s",
                   "clips": {
                     "mon": [{
                       "url": "https://www.youtube.com/watch?v=Q69gFVmrCiI",

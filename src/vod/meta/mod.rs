@@ -38,6 +38,7 @@ pub fn schedule_nginx_vod_module_set(
         id: Some(pl.slug.clone().into()),
         playlist_type: mapping::PlaylistType::Live,
         discontinuity: true,
+        segment_duration: Some(pl.segment_duration.as_duration().into()),
         ..mapping::Set::default()
     };
 

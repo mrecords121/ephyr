@@ -9,7 +9,7 @@ use url::Url;
 
 use crate::util::serde::{timelike, timezone};
 
-pub use crate::vod::meta::state::PlaylistSlug;
+pub use crate::vod::meta::state::{PlaylistSlug, SegmentDuration};
 
 /// Set of [`Playlist`]s to be provided by `vod-meta` server.
 pub type Request = HashMap<PlaylistSlug, Playlist>;
@@ -29,6 +29,17 @@ pub struct Playlist {
     /// provided [`Weekday`]s.
     #[serde(with = "timezone")]
     pub tz: TimeZone,
+
+    /// Optional duration of segments to serve [`Playlist`]'s [`Clip`]s with.
+    ///
+    /// All [`Clip`]s in [`Playlist`] are mandatory cut to this duration
+    /// segments when are served. That's why [`Clip`]'s duration should divide
+    /// on [`SegmentDuration`] without any fractions.
+    ///
+    /// If not specified then default value of [`SegmentDuration`] will be used
+    /// for this [`Playlist`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub segment_duration: Option<SegmentDuration>,
 
     /// [`Clips`] which form this [`Playlist`], distributed by [`Weekday`]s.
     ///
@@ -79,6 +90,7 @@ mod spec {
               "title": "Передачи с Игорем Михайловичем",
               "lang": "rus",
               "tz": "+03:00",
+              "segment_duration": "6s",
               "clips": {
                 "mon": [{
                   "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
@@ -118,6 +130,20 @@ mod spec {
                   "title": "Передачи с Игорем Михайловичем",
                   "lang": null,
                   "tz": "+03:00",
+                  "clips": {
+                    "mon": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:51:26"
+                    }]
+                  }
+                }"#,
+                r#"{
+                  "title": "Передачи с Игорем Михайловичем",
+                  "lang": "rus",
+                  "tz": "+03:00",
+                  "segment_duration": "3s",
                   "clips": {
                     "mon": [{
                       "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
