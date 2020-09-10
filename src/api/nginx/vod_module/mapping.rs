@@ -58,6 +58,35 @@ pub struct Set {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub segment_duration: Option<MillisDuration>,
 
+    /// Index of the first [`Clip`] in the playlist of this [`Set`].
+    ///
+    /// Mandatory for non-continuous live streams that mix videos having
+    /// different encoding parameters (SPS/PPS).
+    ///
+    /// Whenever a [`Clip`] is pushed out of the head of the playlist, this
+    /// value must be incremented by one, because [`nginx-vod-module`][1] uses
+    /// this number to numerate segments returned to clients. Not doing this
+    /// will result in a broken playback on client side.
+    ///
+    /// [1]: https://github.com/kaltura/nginx-vod-module
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_clip_index: Option<u64>,
+
+    /// Index of the first segment in the playlist of this [`Set`].
+    ///
+    /// Mandatory for non-continuous live streams that mix videos having
+    /// different encoding parameters (SPS/PPS).
+    ///
+    /// Whenever a [`Clip`] is pushed out of the head of the playlist, this
+    /// value must be incremented by the number of segments in the removed
+    /// [`Clip`], because [`nginx-vod-module`][1] uses this number to numerate
+    /// segments returned to clients. Not doing this will result in a broken
+    /// playback on client side.
+    ///
+    /// [1]: https://github.com/kaltura/nginx-vod-module
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_segment_index: Option<u64>,
+
     /// [`Clip`] durations in milliseconds. It must contain at least one element
     /// and up to [`Clip::MAX_DURATIONS_LEN`] elements.
     #[serde(default)]

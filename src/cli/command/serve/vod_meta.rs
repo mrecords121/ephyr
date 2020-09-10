@@ -18,7 +18,7 @@ use crate::{
     util::display_panic,
     vod::{
         file,
-        meta::{schedule_nginx_vod_module_set, state, State},
+        meta::{state, State},
     },
 };
 
@@ -99,12 +99,15 @@ async fn produce_meta(
     let slug = state::PlaylistSlug::new(&path.1).ok_or_else(|| {
         error::ErrorBadRequest(format!("Invalid playlist slug '{}'", path.1))
     })?;
-
-    let playlist = state.playlist(&slug).await.ok_or_else(|| {
-        error::ErrorNotFound(format!("Unknown playlist '{}'", slug))
-    })?;
-
-    Ok(web::Json(schedule_nginx_vod_module_set(&playlist)))
+    Ok(web::Json(
+        state
+            .playlist(&slug)
+            .await
+            .ok_or_else(|| {
+                error::ErrorNotFound(format!("Unknown playlist '{}'", slug))
+            })?
+            .schedule_nginx_vod_module_set(),
+    ))
 }
 
 /// Renews the `vod-meta` server [`State`] with the new one provided in

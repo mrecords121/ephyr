@@ -20,7 +20,10 @@ use std::{
 };
 
 use anyhow::anyhow;
-use chrono::{FixedOffset as TimeZone, Weekday};
+use chrono::{
+    DateTime, Datelike as _, Duration as DateDuration, FixedOffset as TimeZone,
+    Utc, Weekday,
+};
 use derive_more::{Display, Into};
 use futures::{stream, StreamExt as _, TryFutureExt as _, TryStreamExt as _};
 use isolang::Language;
@@ -32,7 +35,7 @@ use smart_default::SmartDefault;
 use url::Url;
 
 use crate::{
-    api::{self, allatra},
+    api::{self, allatra, nginx},
     util::serde::{timelike, timezone},
     vod::file,
 };
@@ -139,6 +142,18 @@ pub struct Playlist {
     #[serde(default)]
     pub segment_duration: SegmentDuration,
 
+    /// Initial position of this [`Playlist`] to start building
+    /// [`nginx::vod_module::mapping`] schedule from.
+    ///
+    /// If [`None`] then today in the [`Playlist`]'s timezone will be used as
+    /// the starting point.
+    ///
+    /// Any call of [`Playlist::schedule_nginx_vod_module_set`] method may
+    /// update this field and will initialize it automatically in case it's
+    /// [`None`].
+    #[serde(default)]
+    pub initial: Option<PlaylistInitialPosition>,
+
     /// [`Clips`] which form this [`Playlist`], distributed by [`Weekday`]s.
     ///
     /// The total duration of all [`Clip`]s in the one [`Weekday`] hasn't to be
@@ -244,9 +259,233 @@ impl Playlist {
             lang: req.lang,
             tz: req.tz,
             segment_duration,
+            initial: None,
             clips,
         })
     }
+
+    /// Schedules the given [`Playlist`] to be played by [`nginx-vod-module`][1]
+    /// starting from now.
+    ///
+    /// # Algorithm
+    ///
+    /// Schedule is created starting from today and now until the
+    /// [`nginx::vod_module::mapping::Set::MAX_DURATIONS_LEN`] limitation
+    /// allows.
+    ///
+    /// Each day is fully filled with clips without any gaps (looping the
+    /// weekday's [`Clip`]s), if it has at least one [`Clip`].
+    ///
+    /// All [`Clip`]s are scheduled in the [`Playlist`]'s timezone.
+    ///
+    /// Algorithm automatically cares about segment indexing in
+    /// [`nginx-vod-module`][1] being monotonically increasing in a correct way,
+    /// without any gaps, basing on the provided [`PlaylistInitialPosition`] and
+    /// updating it whenever it's feasible.
+    ///
+    /// [1]: https://github.com/kaltura/nginx-vod-module
+    #[allow(clippy::too_many_lines)]
+    #[must_use]
+    pub fn schedule_nginx_vod_module_set(
+        &mut self,
+    ) -> nginx::vod_module::mapping::Set {
+        use nginx::vod_module::mapping;
+
+        let mut set = mapping::Set {
+            id: Some(self.slug.clone().into()),
+            playlist_type: mapping::PlaylistType::Live,
+            discontinuity: true,
+            segment_duration: Some(self.segment_duration.as_duration().into()),
+            ..mapping::Set::default()
+        };
+
+        // Because all `mapping::Set::sequences` must have the same length, we
+        // should define the minimal mutual intersection of all quality sizes
+        // and use only them to form a `mapping::Set`.
+        let sizes = self.mutual_src_sizes();
+        if sizes.is_empty() {
+            return set;
+        }
+        let mut sequences: HashMap<_, _> = sizes
+            .iter()
+            .map(|&size| {
+                let sequence = mapping::Sequence {
+                    id: Some(format!("{}p", size as u16)),
+                    language: Some(self.lang),
+                    label: Some(format!("{}p", size as u16)),
+                    ..mapping::Sequence::default()
+                };
+                (size, sequence)
+            })
+            .collect();
+
+        let segment_duration_secs =
+            self.segment_duration.as_duration().as_secs();
+
+        let now = Utc::now().with_timezone(&self.tz);
+        let today = now.date().and_hms(0, 0, 0);
+
+        let (mut clip_index, mut segment_index, mut start_time) =
+            self.initial.as_ref().map_or_else(
+                || (0, 0, today),
+                |init| {
+                    let at = init.at.with_timezone(&self.tz);
+                    (init.clip_index, init.segment_index, at)
+                },
+            );
+
+        'whole_loop: loop {
+            let day = start_time.date().and_hms(0, 0, 0);
+            let next_day = day + DateDuration::days(1);
+
+            if let Some(day_clips) = self.clips.get(&day.weekday()) {
+                let mut time = day;
+
+                // Unfortunately, nginx-vod-module loops the whole playlist
+                // only, and is unable to loop a part of playlist in the given
+                // time window. That's why, to loop all clips of the current day
+                // without affecting next day's playlist, we need to repeat the
+                // playlist manually, until the next day comes.
+                'day_loop: while time < next_day {
+                    // This preserves us from an infinite loop if there would be
+                    // no clips for consideration (so the `time` wouldn't
+                    // change).
+                    let mut is_at_least_one_clip_considered = false;
+
+                    for clip in day_clips {
+                        let clip_duration = clip.view.to - clip.view.from;
+                        let next_time = time
+                            + DateDuration::from_std(clip_duration).unwrap();
+
+                        // There is no sense to return clips, which have been
+                        // already finished. Instead, we start from the first
+                        // non-finished today's clip. This way we reserve more
+                        // space for future clips, considering the
+                        // nginx-vod-module's `mapping::Set::MAX_DURATIONS_LEN`
+                        // limitation.
+                        //
+                        // A drift in 1 minute is required to omit "clip is
+                        // absent" errors when its playing segment is requested
+                        // slightly after the current clip changes (due to the
+                        // fact that HTTP requests from client are not an
+                        // immediate thing). This way the metadata for all
+                        // requested segments remains valid at any time.
+                        let is_clip_returned =
+                            (next_time + DateDuration::minutes(1)) > now;
+
+                        // "Considered" means that clip's duration is considered
+                        // for building the sequence timestamps. However, it
+                        // doesn't necessarily mean that clip is returned in
+                        // this sequence.
+                        let mut is_clip_considered = false;
+
+                        for (size, src) in &clip.sources {
+                            if let Some(seq) = sequences.get_mut(size) {
+                                if is_clip_returned {
+                                    let path =
+                                        mapping::SourceClip::get_url_path(
+                                            src.url
+                                                .local
+                                                .as_ref()
+                                                .unwrap_or(&src.url.upstream),
+                                        );
+                                    seq.clips.push(mapping::Clip {
+                                        r#type: mapping::SourceClip {
+                                            path,
+                                            from: Some(clip.view.from.into()),
+                                            to: Some(clip.view.to.into()),
+                                        }
+                                        .into(),
+                                    });
+                                }
+
+                                is_clip_considered = true;
+                            }
+                        }
+
+                        if !is_clip_considered {
+                            continue;
+                        }
+                        is_at_least_one_clip_considered = true;
+
+                        if is_clip_returned {
+                            set.clip_times
+                                .push(time.clone().with_timezone(&Utc).into());
+
+                            set.durations.push(clip_duration.into());
+                            if set.durations.len()
+                                >= mapping::Set::MAX_DURATIONS_LEN
+                            {
+                                break 'whole_loop;
+                            }
+
+                            if set.initial_clip_index.is_none() {
+                                set.initial_clip_index = Some(clip_index);
+                                set.initial_segment_index = Some(segment_index);
+
+                                // Update the playlist's initial position to the
+                                // most recent one.
+                                self.initial = Some(PlaylistInitialPosition {
+                                    clip_index,
+                                    segment_index,
+                                    at: time.with_timezone(&Utc),
+                                });
+                            }
+                        }
+
+                        // If there is some `self.initial` state, then we should
+                        // ensure that we count indices starting from the
+                        // specified initial time, not the day's beginning.
+                        if time >= start_time {
+                            clip_index += 1;
+                            segment_index +=
+                                clip_duration.as_secs() / segment_duration_secs;
+                        }
+
+                        time = next_time;
+                        if time >= next_day {
+                            break 'day_loop;
+                        }
+                    }
+
+                    if !is_at_least_one_clip_considered {
+                        break;
+                    }
+                }
+            }
+
+            start_time = next_day;
+        }
+
+        set.sequences = sequences.into_iter().map(|(_, seq)| seq).collect();
+        set
+    }
+}
+
+/// Position of a [`Playlist`] indicating a fixed point in time to start
+/// building [`nginx::vod_module::mapping`] schedule from and initial [`Clip`]
+/// and segment indices that should be used for that.
+///
+/// This position is intended to be continuously updated in time following the
+/// schedule updates, so any repeated requests from [`nginx-vod-module`][1] will
+/// receive a correct schedule guaranteeing smooth transitions between [`Clip`]s
+/// without any interruptions ever, even when [`Clip`]s are removed from the
+/// schedule's head.
+///
+/// [1]: https://github.com/kaltura/nginx-vod-module
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PlaylistInitialPosition {
+    /// Index of a [`Clip`] that should play at the
+    /// [`PlaylistInitialPosition::at`] time.
+    pub clip_index: u64,
+
+    /// Index of a segment that should play at the
+    /// [`PlaylistInitialPosition::at`] time.
+    pub segment_index: u64,
+
+    /// Fixed point in time that this [`PlaylistInitialPosition`] is applicable
+    /// at.
+    pub at: DateTime<Utc>,
 }
 
 /// [URL slug][1] of a [`Playlist`].
