@@ -123,9 +123,41 @@ impl Manager {
             }
         }
 
+        self.persist_state(&new).await?;
+
+        state.0 = new;
+        state.1 = state.1.checked_add(1).unwrap_or_default();
+
+        Ok(())
+    }
+
+    /// Refreshes all [`Playlist::initial`] positions in the [`State`] managed
+    /// by this [`Manager`].
+    ///
+    /// # Errors
+    ///
+    /// If updated [`State`] fails to be persisted.
+    pub async fn refresh_playlists_positions(
+        &self,
+    ) -> Result<(), anyhow::Error> {
+        let mut state = self.state.write().await;
+
+        for playlist in state.0.values_mut() {
+            let _ = playlist.schedule_nginx_vod_module_set();
+        }
+
+        self.persist_state(&state.0).await
+    }
+
+    /// Persists the given [`State`] to this [`Manager::file`].
+    ///
+    /// # Errors
+    ///
+    /// If the [`State`] fails to be persisted.
+    async fn persist_state(&self, state: &State) -> Result<(), anyhow::Error> {
         fs::write(
             &*self.file,
-            serde_json::to_vec(&new)
+            serde_json::to_vec(state)
                 .expect("Failed to serialize vod::meta::State"),
         )
         .await
@@ -135,11 +167,6 @@ impl Manager {
                 self.file.display(),
                 e,
             )
-        })?;
-
-        state.0 = new;
-        state.1 = state.1.checked_add(1).unwrap_or_default();
-
-        Ok(())
+        })
     }
 }

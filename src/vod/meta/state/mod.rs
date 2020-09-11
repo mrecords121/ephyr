@@ -24,7 +24,7 @@ use chrono::{
     DateTime, Datelike as _, Duration as DateDuration, FixedOffset as TimeZone,
     Utc, Weekday,
 };
-use derive_more::{Display, Into};
+use derive_more::{Deref, DerefMut, Display, Into};
 use futures::{stream, StreamExt as _, TryFutureExt as _, TryStreamExt as _};
 use isolang::Language;
 use mime::Mime;
@@ -46,7 +46,7 @@ pub use self::manager::Manager;
 
 /// State of a `vod-meta` server, representing a set of [`Playlist`]s for
 /// different audiences.
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deref, DerefMut, Deserialize, Serialize)]
 pub struct State(HashMap<PlaylistSlug, Playlist>);
 
 impl State {

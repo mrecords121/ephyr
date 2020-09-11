@@ -40,6 +40,13 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
         log::error!("Failed to initialize vod::meta::State: {}", e);
         cli::Failure
     })?;
+    state.refresh_playlists_positions().await.map_err(|e| {
+        log::error!(
+            "Failed to refresh vod::meta::State initial positions: {}",
+            e,
+        );
+        cli::Failure
+    })?;
 
     let cache = Arc::new(
         file::cache::Manager::try_new(opts.cache_dir).map_err(|e| {
@@ -52,6 +59,11 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
         state.clone(),
         cache.clone(),
         Duration::from_secs(10),
+    ));
+
+    tokio::spawn(refresh_initial_positions(
+        state.clone(),
+        Duration::from_secs(60),
     ));
 
     let auth_token_hash = AuthTokenHash(opts.auth_token_hash);
@@ -197,6 +209,40 @@ async fn refill_state_with_cache_files(
                         log::error!(
                             "Failed to refill vod::meta::State with \
                              vod::file::cache: {}",
+                            e,
+                        )
+                    })
+            }
+        })
+        .map(Ok)
+        .forward(sink::drain())
+        .await;
+}
+
+/// Runs job, which periodically (with the given `period`) refreshes
+/// [`state::Playlist::initial`] positions in the given `state`.
+async fn refresh_initial_positions(state: state::Manager, period: Duration) {
+    let _ = time::interval(period)
+        .then(move |_| {
+            log::debug!(
+                "Refreshing vod::meta::state::Playlist::initial positions",
+            );
+            let state = state.clone();
+            async move {
+                AssertUnwindSafe(state.refresh_playlists_positions())
+                    .catch_unwind()
+                    .await
+                    .map_err(|p| {
+                        log::error!(
+                            "Panicked while refreshing vod::meta::State \
+                             initial positions: {}",
+                            display_panic(&p),
+                        )
+                    })?
+                    .map_err(|e| {
+                        log::error!(
+                            "Failed to refresh vod::meta::State initial \
+                             positions: {}",
                             e,
                         )
                     })
