@@ -6,7 +6,9 @@ use std::{
     convert::TryInto as _, panic::AssertUnwindSafe, sync::Arc, time::Duration,
 };
 
-use actix_web::{error, middleware, web, App, FromRequest as _, HttpServer, get, put};
+use actix_web::{
+    error, get, middleware, put, web, App, FromRequest as _, HttpServer,
+};
 use actix_web_httpauth::extractors::bearer::{self, BearerAuth};
 use futures::{sink, FutureExt as _, StreamExt as _};
 use slog_scope as log;
@@ -84,6 +86,8 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
                 })
             }))
             .service(produce_meta)
+            .service(show_playlist)
+            .service(show_state)
             .service(renew_state)
     })
     .bind((opts.http_ip, opts.http_port))
@@ -118,6 +122,26 @@ async fn produce_meta(
             })?
             .schedule_nginx_vod_module_set(),
     ))
+}
+
+/// Displays the current whole `vod-meta` server [`State`].
+#[get("/")]
+async fn show_state(state: web::Data<state::Manager>) -> web::Json<State> {
+    web::Json(state.state().await)
+}
+
+/// Displays the requested `vod-meta` server [`state::Playlist`].
+#[get("/{playlist}")]
+async fn show_playlist(
+    state: web::Data<state::Manager>,
+    playlist: web::Path<String>,
+) -> Result<web::Json<state::Playlist>, error::Error> {
+    let slug = state::PlaylistSlug::new(&*playlist).ok_or_else(|| {
+        error::ErrorBadRequest(format!("Invalid playlist slug '{}'", playlist))
+    })?;
+    Ok(web::Json(state.playlist(&slug).await.ok_or_else(|| {
+        error::ErrorNotFound(format!("Unknown playlist '{}'", slug))
+    })?))
 }
 
 /// Renews the `vod-meta` server [`State`] with the new one provided in
