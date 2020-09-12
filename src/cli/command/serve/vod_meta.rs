@@ -6,7 +6,7 @@ use std::{
     convert::TryInto as _, panic::AssertUnwindSafe, sync::Arc, time::Duration,
 };
 
-use actix_web::{error, middleware, web, App, FromRequest as _, HttpServer};
+use actix_web::{error, middleware, web, App, FromRequest as _, HttpServer, get, put};
 use actix_web_httpauth::extractors::bearer::{self, BearerAuth};
 use futures::{sink, FutureExt as _, StreamExt as _};
 use slog_scope as log;
@@ -28,7 +28,7 @@ use crate::{
 ///
 /// If running has failed and could not be performed. The appropriate error
 /// is logged.
-#[actix_rt::main]
+#[actix_web::main]
 pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
     let request_max_size =
         opts.request_max_size.get_bytes().try_into().map_err(|e| {
@@ -83,11 +83,8 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
                     ))
                 })
             }))
-            .route(
-                "/{location}/{playlist}/{filename}",
-                web::get().to(produce_meta),
-            )
-            .route("/", web::put().to(renew_state))
+            .service(produce_meta)
+            .service(renew_state)
     })
     .bind((opts.http_ip, opts.http_port))
     .map_err(|e| {
@@ -104,6 +101,7 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
 /// which should be played, starting from now and on.
 ///
 /// [1]: https://github.com/kaltura/nginx-vod-module#mapping-response-format
+#[get("/{location}/{playlist}/{filename}")]
 async fn produce_meta(
     state: web::Data<state::Manager>,
     path: web::Path<(String, String, String)>,
@@ -132,6 +130,7 @@ async fn produce_meta(
 /// [`cli::VodMetaOpts::auth_token_hash`].
 ///
 /// [1]: https://tools.ietf.org/html/rfc6750#section-2.1
+#[put("/")]
 async fn renew_state(
     state: web::Data<state::Manager>,
     cache: web::Data<Arc<file::cache::Manager>>,

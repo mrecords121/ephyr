@@ -8,7 +8,6 @@ use serde::{Deserialize, Serialize};
 use smart_default::SmartDefault;
 use url::Url;
 use validator::{Validate, ValidationError, ValidationErrors};
-use validator_derive::Validate;
 
 use crate::cli;
 

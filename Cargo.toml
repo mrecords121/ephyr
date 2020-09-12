@@ -10,9 +10,8 @@ lto = "thin"
 codegen-units = 1
 
 [dependencies]
-actix-rt = "1.1"
-actix-web = "2.0"
-actix-web-httpauth = "0.4"
+actix-web = "3.0"
+actix-web-httpauth = "0.5"
 anyhow = "1.0"
 argon2 = { version = "0.8", package = "rust-argon2", default-features = false }
 backoff = { version = "0.2", features = ["tokio"] }
@@ -46,8 +45,7 @@ structopt = "0.3"
 tempfile = "3.1"
 tokio-util = { version = "0.3", features = ["compat"] }
 url = { version = "2.1", features = ["serde"] }
-validator = "0.10"
-validator_derive = "0.10"
+validator = { version = "0.11", features = ["derive"] }
 [dependencies.decimal]
     version = "1.4"
     package = "rust_decimal"
