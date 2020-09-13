@@ -150,6 +150,7 @@ impl Playlist {
     ///
     /// - If [`Playlist`] has empty title.
     /// - If all [`Clip`]s in [`Playlist`] don't fit well into 24 hours.
+    /// - If any weekday doesn't have at least one clip.
     /// - If some [`Clip`] fails to parse.
     pub async fn parse_request(
         slug: PlaylistSlug,
@@ -186,9 +187,20 @@ impl Playlist {
             )
             .await?;
 
+        if clips.len() != 7 {
+            return Err(anyhow!(
+                "Playlist '{}' should have all weekdays filled",
+                slug,
+            ));
+        }
         for (weekday, clips) in &clips {
             if clips.is_empty() {
-                continue;
+                return Err(anyhow!(
+                    "Day {} of playlist '{}' has no clips, but should have at \
+                     least one",
+                    weekday,
+                    req.title,
+                ));
             }
             let total_duration: Duration =
                 clips.iter().map(|c| c.view.to - c.view.from).sum();
@@ -990,6 +1002,72 @@ mod spec {
                       "title": "ПРАВДА ЖИЗНИ",
                       "from": "00:00:00",
                       "to": "1:00:00"
+                    }],
+                    "tue": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:30:00"
+                    }, {
+                      "url": "https://www.youtube.com/watch?v=Q69gFVmrCiI",
+                      "title": "ПРАВДА ЖИЗНИ",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "wed": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:30:00"
+                    }, {
+                      "url": "https://www.youtube.com/watch?v=Q69gFVmrCiI",
+                      "title": "ПРАВДА ЖИЗНИ",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "thu": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:30:00"
+                    }, {
+                      "url": "https://www.youtube.com/watch?v=Q69gFVmrCiI",
+                      "title": "ПРАВДА ЖИЗНИ",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "fri": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:30:00"
+                    }, {
+                      "url": "https://www.youtube.com/watch?v=Q69gFVmrCiI",
+                      "title": "ПРАВДА ЖИЗНИ",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "sat": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:30:00"
+                    }, {
+                      "url": "https://www.youtube.com/watch?v=Q69gFVmrCiI",
+                      "title": "ПРАВДА ЖИЗНИ",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "sun": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:30:00"
+                    }, {
+                      "url": "https://www.youtube.com/watch?v=Q69gFVmrCiI",
+                      "title": "ПРАВДА ЖИЗНИ",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
                     }]
                   }
                 }"#,
@@ -1004,7 +1082,7 @@ mod spec {
             assert_eq!(&pl.title, "Передачи с Игорем Михайловичем");
             assert_eq!(pl.lang, Language::from_639_1("ru").unwrap());
             assert_eq!(pl.tz, TimeZone::east(3 * 3600));
-            assert_eq!(pl.clips.len(), 1);
+            assert_eq!(pl.clips.len(), 7);
             assert!(pl.clips.contains_key(&Weekday::Mon), "incorrect weekday");
             assert_eq!(pl.clips.get(&Weekday::Mon).unwrap().len(), 2);
         }
@@ -1024,6 +1102,42 @@ mod spec {
                       "title": "Круг Жизни",
                       "from": "00:00:00",
                       "to": "0:00:00"
+                    }],
+                    "tue": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "wed": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "thu": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "fri": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "sat": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "sun": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
                     }]
                   }
                 }"#,
@@ -1033,8 +1147,44 @@ mod spec {
                   "tz": "+03:00",
                   "segment_duration": "10s",
                   "clips": {
+                    "mon": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
                     "tue": [{
                       "url": "https://vimeo.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "wed": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "thu": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "fri": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "sat": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:00:00"
+                    }],
+                    "sun": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
                       "title": "Круг Жизни",
                       "from": "00:00:00",
                       "to": "1:00:00"
@@ -1061,11 +1211,47 @@ mod spec {
                   "tz": "+03:00",
                   "segment_duration": "10s",
                   "clips": {
+                    "mon": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "tue": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "wed": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "thu": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "fri": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
                     "sat": [{
                       "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
                       "title": "Круг Жизни",
                       "from": "00:00:00",
                       "to": "0:32:57"
+                    }],
+                    "sun": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
                     }]
                   }
                 }"#,
@@ -1075,6 +1261,42 @@ mod spec {
                   "tz": "+03:00",
                   "segment_duration": "10s",
                   "clips": {
+                    "mon": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "tue": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "wed": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "thu": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "fri": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "sat": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
                     "sun": [{
                       "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
                       "title": "Круг Жизни",
@@ -1112,6 +1334,36 @@ mod spec {
                   "tz": "+03:00",
                   "segment_duration": "10s",
                   "clips": {
+                    "mon": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "tue": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "wed": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "thu": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "fri": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
                     "sat": [{
                       "url": "https://www.youtube.com/watch?v=R29rL-CIsbo",
                       "title": "Сознание и Личность",
@@ -1132,6 +1384,12 @@ mod spec {
                       "title": "Сознание и Личность",
                       "from": "00:00:00",
                       "to": "7:00:00"
+                    }],
+                    "sun": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
                     }]
                   }
                 }"#,
@@ -1221,6 +1479,42 @@ mod spec {
                       "title": "ПРАВДА ЖИЗНИ",
                       "from": "00:00:00",
                       "to": "2:00:00"
+                    }],
+                    "tue": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "wed": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "thu": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "fri": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "sat": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "sun": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
                     }]
                   }
                 }"#,
@@ -1235,6 +1529,109 @@ mod spec {
                     "allows more than 24 hours total duration in: {}",
                     json,
                 );
+            }
+        }
+
+        #[tokio::test]
+        async fn disallows_missing_weekdays() {
+            let slug = PlaylistSlug::new("life").unwrap();
+            for json in &[
+                r#"{
+                  "title": "Передачи с Игорем Михайловичем",
+                  "lang": "rus",
+                  "tz": "+03:00",
+                  "segment_duration": "10s",
+                  "clips": {
+                    "mon": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "tue": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "wed": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "thu": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "fri": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "sun": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }]
+                  }
+                }"#,
+                r#"{
+                  "title": "Передачи с Игорем Михайловичем",
+                  "lang": "rus",
+                  "tz": "+03:00",
+                  "segment_duration": "10s",
+                  "clips": {
+                    "mon": [],
+                    "tue": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "wed": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "thu": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "fri": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "sat": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }],
+                    "sun": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "0:10:00"
+                    }]
+                  }
+                }"#,
+            ] {
+                let req =
+                    serde_json::from_str::<api::vod::meta::Playlist>(&json)
+                        .expect("Failed to deserialize request");
+
+                let res = Playlist::parse_request(slug.clone(), req).await;
+                assert!(res.is_err(), "allows missing weekday in: {}", json);
             }
         }
     }
