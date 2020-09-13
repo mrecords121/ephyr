@@ -6,6 +6,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use chrono::Utc;
 use tokio::{fs, io::AsyncReadExt as _, sync::RwLock};
 
 use super::{Playlist, PlaylistSlug, State};
@@ -207,8 +208,9 @@ impl Manager {
     ) -> Result<(), anyhow::Error> {
         let mut state = self.state.write().await;
 
+        let now = Utc::now();
         for playlist in state.0.values_mut() {
-            let _ = playlist.schedule_nginx_vod_module_set(2);
+            let _ = playlist.schedule_nginx_vod_module_set(Some(now), 1);
         }
 
         self.persist_state(&state.0).await

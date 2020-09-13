@@ -275,7 +275,9 @@ impl Playlist {
     }
 
     /// Schedules the given [`Playlist`] to be played by [`nginx-vod-module`][1]
-    /// starting from now with at least `count` [`Clip`]s scheduled.
+    /// starting from `at` time with at least `count` [`Clip`]s scheduled.
+    ///
+    /// If `at` is [`None`] then now (current time) will be used.
     ///
     /// If `count` is invalid (zero or more than
     /// [`mapping::Set::MAX_DURATIONS_LEN`]) then it will be reset to the
@@ -283,8 +285,8 @@ impl Playlist {
     ///
     /// # Algorithm
     ///
-    /// Schedule is created starting from today and now until the `count`
-    /// limitation allows.
+    /// Schedule is created starting from the given `at` time and until the
+    /// `count` limitation allows.
     ///
     /// Each day is fully filled with clips without any gaps (looping the
     /// weekday's [`Clip`]s), if it has at least one [`Clip`].
@@ -301,6 +303,7 @@ impl Playlist {
     #[must_use]
     pub fn schedule_nginx_vod_module_set(
         &mut self,
+        at: Option<DateTime<Utc>>,
         mut count: usize,
     ) -> nginx::vod_module::mapping::Set {
         use nginx::vod_module::mapping;
@@ -340,7 +343,7 @@ impl Playlist {
         let segment_duration_secs =
             self.segment_duration.as_duration().as_secs();
 
-        let now = Utc::now().with_timezone(&self.tz);
+        let now = at.unwrap_or_else(Utc::now).with_timezone(&self.tz);
         let today = now.date().and_hms(0, 0, 0);
 
         let (mut clip_index, mut segment_index, mut start_time) =
