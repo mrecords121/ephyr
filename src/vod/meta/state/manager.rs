@@ -105,6 +105,9 @@ impl Manager {
     /// basic [optimistic concurrency][1] allowing to modify the current
     /// [`State`] without holding the inner lock the whole modifying time.
     ///
+    /// For already existing [`Playlist`]s all [`Playlist::initial`] positions
+    /// are preserved.
+    ///
     /// # Errors
     ///
     /// If the `new` [`State`] fails to be persisted.
@@ -112,7 +115,7 @@ impl Manager {
     /// [1]: https://en.wikipedia.org/wiki/Optimistic_concurrency_control
     pub async fn set_state(
         &self,
-        new: State,
+        mut new: State,
         ver: Option<u8>,
     ) -> Result<(), anyhow::Error> {
         let mut state = self.state.write().await;
@@ -123,6 +126,68 @@ impl Manager {
             }
         }
 
+        for playlist in new.values_mut() {
+            if let Some(old) = state.0.get(&playlist.slug) {
+                playlist.initial = old.initial;
+            }
+        }
+
+        self.persist_state(&new).await?;
+
+        state.0 = new;
+        state.1 = state.1.checked_add(1).unwrap_or_default();
+
+        Ok(())
+    }
+
+    /// Sets the given [`Playlist`] to the current [`State`].
+    ///
+    /// If there is no such [`Playlist`] in the current [`State`], then it will
+    /// be added "as is". Otherwise, the existing [`Playlist`] will be updated
+    /// preserving its [`Playlist::initial`] position.
+    ///
+    /// # Errors
+    ///
+    /// If updated [`State`] fails to be persisted.
+    pub async fn set_playlist(
+        &self,
+        mut playlist: Playlist,
+    ) -> Result<(), anyhow::Error> {
+        let mut state = self.state.write().await;
+
+        if let Some(old) = state.0.get(&playlist.slug) {
+            playlist.initial = old.initial;
+        }
+
+        let mut new = state.0.clone();
+        let _ = new.insert(playlist.slug.clone(), playlist);
+        self.persist_state(&new).await?;
+
+        state.0 = new;
+        state.1 = state.1.checked_add(1).unwrap_or_default();
+
+        Ok(())
+    }
+
+    /// Removes the given [`Playlist`] from the current [`State`].
+    ///
+    /// If there is no such [`Playlist`] in the current [`State`], then no-op.
+    ///
+    /// # Errors
+    ///
+    /// If updated [`State`] fails to be persisted.
+    pub async fn delete_playlist(
+        &self,
+        slug: &PlaylistSlug,
+    ) -> Result<(), anyhow::Error> {
+        if !self.state.read().await.0.contains_key(slug) {
+            return Ok(());
+        }
+
+        let mut state = self.state.write().await;
+
+        let mut new = state.0.clone();
+        let _ = new.remove(slug);
         self.persist_state(&new).await?;
 
         state.0 = new;

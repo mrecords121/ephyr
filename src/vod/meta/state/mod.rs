@@ -68,49 +68,6 @@ impl State {
                 .await?,
         ))
     }
-
-    /// Inspects all [`Src`]s of this [`State`] and fills them with information
-    /// about [VOD] files available in the given `cache`.
-    ///
-    /// # Errors
-    ///
-    /// If some [`Src`] is not supported to reside in `cache`.
-    ///
-    /// [VOD]: https://en.wikipedia.org/wiki/Video_on_demand
-    pub async fn fill_with_cache_files(
-        &mut self,
-        cache: &file::cache::Manager,
-    ) -> Result<(), anyhow::Error> {
-        for pl in self.0.values_mut() {
-            for clips in pl.clips.values_mut() {
-                for cl in clips.iter_mut() {
-                    for src in cl.sources.values_mut() {
-                        if src.url.local.is_some() {
-                            continue;
-                        }
-                        if let Some(path) = cache
-                            .get_cached_path(&src.url.upstream)
-                            .await
-                            .map_err(|e| {
-                                anyhow!(
-                                    "Failed to get cached file path for '{}' \
-                                     URL: {}",
-                                    src.url.upstream,
-                                    e,
-                                )
-                            })?
-                        {
-                            src.url.local = Some(Url::parse(&format!(
-                                "file:///{}",
-                                path.display(),
-                            ))?);
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
 }
 
 /// Playlist of [`Clip`]s to be played for some audience.
@@ -262,6 +219,47 @@ impl Playlist {
             initial: None,
             clips,
         })
+    }
+
+    /// Inspects all [`Src`]s of this [`Playlist`] and fills them with
+    /// information about [VOD] files available in the given `cache`.
+    ///
+    /// # Errors
+    ///
+    /// If some [`Src`] is not supported to reside in `cache`.
+    ///
+    /// [VOD]: https://en.wikipedia.org/wiki/Video_on_demand
+    pub async fn fill_with_cache_files(
+        &mut self,
+        cache: &file::cache::Manager,
+    ) -> Result<(), anyhow::Error> {
+        for clips in self.clips.values_mut() {
+            for cl in clips.iter_mut() {
+                for src in cl.sources.values_mut() {
+                    if src.url.local.is_some() {
+                        continue;
+                    }
+                    if let Some(path) = cache
+                        .get_cached_path(&src.url.upstream)
+                        .await
+                        .map_err(|e| {
+                            anyhow!(
+                                "Failed to get cached file path for '{}' \
+                                 URL: {}",
+                                src.url.upstream,
+                                e,
+                            )
+                        })?
+                    {
+                        src.url.local = Some(Url::parse(&format!(
+                            "file:///{}",
+                            path.display(),
+                        ))?);
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Schedules the given [`Playlist`] to be played by [`nginx-vod-module`][1]

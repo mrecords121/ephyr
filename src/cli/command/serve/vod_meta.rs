@@ -7,9 +7,13 @@ use std::{
 };
 
 use actix_web::{
-    error, get, middleware, put, web, App, FromRequest as _, HttpServer,
+    delete, dev::ServiceRequest, error, get, middleware, put, web, App,
+    FromRequest as _, HttpServer,
 };
-use actix_web_httpauth::extractors::bearer::{self, BearerAuth};
+use actix_web_httpauth::{
+    extractors::bearer::{self, BearerAuth},
+    middleware::HttpAuthentication,
+};
 use futures::{sink, FutureExt as _, StreamExt as _};
 use slog_scope as log;
 use tokio::time;
@@ -74,9 +78,12 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
         App::new()
             .data(state.clone())
             .data(cache.clone())
-            .data(auth_token_hash.clone())
-            .data(bearer::Config::default().realm("Restricted area"))
             .wrap(middleware::Logger::default())
+            .service(produce_meta)
+            .service(show_playlist)
+            .service(show_state)
+            .app_data(bearer::Config::default().realm("Restricted area"))
+            .app_data(auth_token_hash.clone())
             .app_data(web::Json::<vod::meta::Request>::configure(|cfg| {
                 cfg.limit(request_max_size).error_handler(|err, _| {
                     error::ErrorBadRequest(format!(
@@ -85,10 +92,9 @@ pub async fn run(opts: cli::VodMetaOpts) -> Result<(), cli::Failure> {
                     ))
                 })
             }))
-            .service(produce_meta)
-            .service(show_playlist)
-            .service(show_state)
             .service(renew_state)
+            .service(renew_playlist)
+            .service(delete_playlist)
     })
     .bind((opts.http_ip, opts.http_port))
     .map_err(|e| {
@@ -113,6 +119,7 @@ async fn produce_meta(
     let slug = state::PlaylistSlug::new(&path.1).ok_or_else(|| {
         error::ErrorBadRequest(format!("Invalid playlist slug '{}'", path.1))
     })?;
+
     Ok(web::Json(
         state
             .playlist(&slug)
@@ -134,14 +141,11 @@ async fn show_state(state: web::Data<state::Manager>) -> web::Json<State> {
 #[get("/{playlist}")]
 async fn show_playlist(
     state: web::Data<state::Manager>,
-    playlist: web::Path<String>,
+    slug: web::Path<state::PlaylistSlug>,
 ) -> Result<web::Json<state::Playlist>, error::Error> {
-    let slug = state::PlaylistSlug::new(&*playlist).ok_or_else(|| {
-        error::ErrorBadRequest(format!("Invalid playlist slug '{}'", playlist))
-    })?;
-    Ok(web::Json(state.playlist(&slug).await.ok_or_else(|| {
-        error::ErrorNotFound(format!("Unknown playlist '{}'", slug))
-    })?))
+    Ok(web::Json(state.playlist(&slug.0).await.ok_or_else(
+        || error::ErrorNotFound(format!("Unknown playlist '{}'", slug)),
+    )?))
 }
 
 /// Renews the `vod-meta` server [`State`] with the new one provided in
@@ -154,43 +158,92 @@ async fn show_playlist(
 /// [`cli::VodMetaOpts::auth_token_hash`].
 ///
 /// [1]: https://tools.ietf.org/html/rfc6750#section-2.1
-#[put("/")]
+#[put("/", wrap = "HttpAuthentication::bearer(verify_auth_token)")]
 async fn renew_state(
     state: web::Data<state::Manager>,
     cache: web::Data<Arc<file::cache::Manager>>,
     req: web::Json<vod::meta::Request>,
-    auth_token_hash: web::Data<AuthTokenHash>,
-    auth: BearerAuth,
 ) -> Result<&'static str, error::Error> {
-    web::block(move || {
-        argon2::verify_encoded(
-            &auth_token_hash.as_ref().0,
-            auth.token().as_bytes(),
-        )
-    })
-    .await
-    .map_err(error::ErrorInternalServerError)
-    .and_then(|ok| {
-        if ok {
-            Ok(())
-        } else {
-            Err(error::ErrorUnauthorized("Invalid Bearer token provided"))
-        }
-    })?;
-
     let mut new = State::parse_request(req.0)
         .await
         .map_err(error::ErrorBadRequest)?;
 
-    new.fill_with_cache_files(&cache)
-        .await
-        .map_err(error::ErrorInternalServerError)?;
+    for playlist in new.values_mut() {
+        playlist
+            .fill_with_cache_files(&cache)
+            .await
+            .map_err(error::ErrorInternalServerError)?
+    }
 
     state
         .set_state(new, None)
         .await
         .map_err(error::ErrorInternalServerError)?;
 
+    Ok("Ok")
+}
+
+/// Renews the single [`state::Playlist`] in `vod-meta` server [`State`] with
+/// the new one provided in [`vod::meta::Playlist`] request.
+///
+/// # Idempotent
+///
+/// If there is no such [`state::Playlist`], then it will be created. Otherwise,
+/// it will be updated.
+///
+/// # Authorization
+///
+/// __Mandatory.__ The [`vod::meta::Playlist`] request must be authorized with
+/// [Bearer HTTP token][1], which value is verified against
+/// [`cli::VodMetaOpts::auth_token_hash`].
+///
+/// [1]: https://tools.ietf.org/html/rfc6750#section-2.1
+#[put("/{playlist}", wrap = "HttpAuthentication::bearer(verify_auth_token)")]
+async fn renew_playlist(
+    state: web::Data<state::Manager>,
+    cache: web::Data<Arc<file::cache::Manager>>,
+    slug: web::Path<state::PlaylistSlug>,
+    req: web::Json<vod::meta::Playlist>,
+) -> Result<&'static str, error::Error> {
+    let mut playlist = state::Playlist::parse_request(slug.0, req.0)
+        .await
+        .map_err(error::ErrorBadRequest)?;
+
+    playlist
+        .fill_with_cache_files(&cache)
+        .await
+        .map_err(error::ErrorInternalServerError)?;
+
+    state
+        .set_playlist(playlist)
+        .await
+        .map_err(error::ErrorInternalServerError)?;
+
+    Ok("Ok")
+}
+
+/// Removes the single [`state::Playlist`] from `vod-meta` server [`State`]
+/// identified by its [`state::Playlist::slug`].
+///
+/// # Idempotent
+///
+/// If there is no such [`state::Playlist`] then no-op.
+///
+/// # Authorization
+///
+/// __Mandatory.__ The request must be authorized with [Bearer HTTP token][1],
+/// which value is verified against [`cli::VodMetaOpts::auth_token_hash`].
+///
+/// [1]: https://tools.ietf.org/html/rfc6750#section-2.1
+#[delete("/{playlist}", wrap = "HttpAuthentication::bearer(verify_auth_token)")]
+async fn delete_playlist(
+    state: web::Data<state::Manager>,
+    slug: web::Path<state::PlaylistSlug>,
+) -> Result<&'static str, error::Error> {
+    state
+        .delete_playlist(&slug.0)
+        .await
+        .map_err(error::ErrorInternalServerError)?;
     Ok("Ok")
 }
 
@@ -206,7 +259,9 @@ async fn refill_state_with_cache_files(
         cache: Arc<file::cache::Manager>,
     ) -> Result<(), anyhow::Error> {
         let (mut curr, ver) = state.state_and_version().await;
-        curr.fill_with_cache_files(&cache).await?;
+        for playlist in curr.values_mut() {
+            playlist.fill_with_cache_files(&cache).await?;
+        }
         state.set_state(curr, Some(ver)).await?;
         Ok(())
     }
@@ -280,3 +335,21 @@ async fn refresh_initial_positions(state: state::Manager, period: Duration) {
 /// [`actix_web`] handlers.
 #[derive(Clone, Debug)]
 struct AuthTokenHash(String);
+
+async fn verify_auth_token(
+    req: ServiceRequest,
+    auth: BearerAuth,
+) -> Result<ServiceRequest, error::Error> {
+    let token_hash = req.app_data::<AuthTokenHash>().unwrap().0.clone();
+
+    let is_ok = web::block(move || {
+        argon2::verify_encoded(&token_hash, auth.token().as_bytes())
+    })
+    .await
+    .map_err(error::ErrorInternalServerError)?;
+    if !is_ok {
+        return Err(error::ErrorUnauthorized("Invalid Bearer token provided"));
+    }
+
+    Ok(req)
+}
