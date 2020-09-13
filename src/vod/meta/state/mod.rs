@@ -283,6 +283,17 @@ impl Playlist {
     /// [`mapping::Set::MAX_DURATIONS_LEN`]) then it will be reset to the
     /// [`mapping::Set::MAX_DURATIONS_LEN`] value.
     ///
+    /// # Preconditions
+    ///
+    /// The [`Playlist`] is assumed to have at least one [`Clip`] in all
+    /// weekdays.
+    ///
+    /// [`Clip`]s duration is assumed to divide on
+    /// [`Playlist::segment_duration`] without remainder.
+    ///
+    /// Total [`Clip`]s duration in a single weekday is not bigger than 24
+    /// hours.
+    ///
     /// # Algorithm
     ///
     /// Schedule is created starting from the given `at` time and until the
@@ -368,11 +379,6 @@ impl Playlist {
                 // without affecting next day's playlist, we need to repeat the
                 // playlist manually, until the next day comes.
                 'day_loop: while time < next_day {
-                    // This preserves us from an infinite loop if there would be
-                    // no clips for consideration (so the `time` wouldn't
-                    // change).
-                    let mut is_at_least_one_clip_considered = false;
-
                     for clip in day_clips {
                         let clip_duration = clip.view.to - clip.view.from;
                         let next_time = time
@@ -394,12 +400,6 @@ impl Playlist {
                         let is_clip_returned =
                             (next_time + DateDuration::minutes(1)) > now;
 
-                        // "Considered" means that clip's duration is considered
-                        // for building the sequence timestamps. However, it
-                        // doesn't necessarily mean that clip is returned in
-                        // this sequence.
-                        let mut is_clip_considered = false;
-
                         for (size, src) in &clip.sources {
                             if let Some(seq) = sequences.get_mut(size) {
                                 if is_clip_returned {
@@ -419,15 +419,8 @@ impl Playlist {
                                         .into(),
                                     });
                                 }
-
-                                is_clip_considered = true;
                             }
                         }
-
-                        if !is_clip_considered {
-                            continue;
-                        }
-                        is_at_least_one_clip_considered = true;
 
                         if is_clip_returned {
                             set.clip_times
@@ -465,10 +458,6 @@ impl Playlist {
                         if time >= next_day {
                             break 'day_loop;
                         }
-                    }
-
-                    if !is_at_least_one_clip_considered {
-                        break;
                     }
                 }
             }
