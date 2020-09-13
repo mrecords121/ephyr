@@ -127,7 +127,7 @@ async fn produce_meta(
             .ok_or_else(|| {
                 error::ErrorNotFound(format!("Unknown playlist '{}'", slug))
             })?
-            .schedule_nginx_vod_module_set(),
+            .schedule_nginx_vod_module_set(5),
     ))
 }
 

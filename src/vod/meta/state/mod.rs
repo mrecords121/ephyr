@@ -275,13 +275,16 @@ impl Playlist {
     }
 
     /// Schedules the given [`Playlist`] to be played by [`nginx-vod-module`][1]
-    /// starting from now.
+    /// starting from now with at least `count` [`Clip`]s scheduled.
+    ///
+    /// If `count` is invalid (zero or more than
+    /// [`mapping::Set::MAX_DURATIONS_LEN`]) then it will be reset to the
+    /// [`mapping::Set::MAX_DURATIONS_LEN`] value.
     ///
     /// # Algorithm
     ///
-    /// Schedule is created starting from today and now until the
-    /// [`nginx::vod_module::mapping::Set::MAX_DURATIONS_LEN`] limitation
-    /// allows.
+    /// Schedule is created starting from today and now until the `count`
+    /// limitation allows.
     ///
     /// Each day is fully filled with clips without any gaps (looping the
     /// weekday's [`Clip`]s), if it has at least one [`Clip`].
@@ -298,6 +301,7 @@ impl Playlist {
     #[must_use]
     pub fn schedule_nginx_vod_module_set(
         &mut self,
+        mut count: usize,
     ) -> nginx::vod_module::mapping::Set {
         use nginx::vod_module::mapping;
 
@@ -308,6 +312,10 @@ impl Playlist {
             segment_duration: Some(self.segment_duration.as_duration().into()),
             ..mapping::Set::default()
         };
+
+        if count < 1 || count > mapping::Set::MAX_DURATIONS_LEN {
+            count = mapping::Set::MAX_DURATIONS_LEN;
+        }
 
         // Because all `mapping::Set::sequences` must have the same length, we
         // should define the minimal mutual intersection of all quality sizes
@@ -423,9 +431,7 @@ impl Playlist {
                                 .push(time.clone().with_timezone(&Utc).into());
 
                             set.durations.push(clip_duration.into());
-                            if set.durations.len()
-                                >= mapping::Set::MAX_DURATIONS_LEN
-                            {
+                            if set.durations.len() >= count {
                                 break 'whole_loop;
                             }
 

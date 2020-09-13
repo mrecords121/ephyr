@@ -208,7 +208,7 @@ impl Manager {
         let mut state = self.state.write().await;
 
         for playlist in state.0.values_mut() {
-            let _ = playlist.schedule_nginx_vod_module_set();
+            let _ = playlist.schedule_nginx_vod_module_set(2);
         }
 
         self.persist_state(&state.0).await
