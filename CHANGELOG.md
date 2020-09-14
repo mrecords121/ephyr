@@ -6,6 +6,36 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.3.3] · 2020-09-14
+[0.3.3]: /../../tree/v0.3.3
+
+[Diff](https://github.com/ALLATRA-IT/ephyr/compare/v0.3.2..v0.3.3)
+
+### Added
+
+- [VOD] meta info HTTP server:
+    - Endpoints:
+        - `GET /`: displays the whole current state of server; 
+        - `GET /{playlist}`: displays the current state of a single playlist;
+        - `PUT /{playlist}`: renews meta information of a singe playlist (authorized);
+        - `DELETE /{playlist}`: removes of a single playlist (authorized);
+        - `PUT /`:
+            - Optional `segment_duration` parameter of playlist.
+    - Background:
+        - Renewing playlists initial positions every minute.
+### Fixed
+
+- [VOD] meta info HTTP server:
+    - Endpoints:
+        - `GET /{proto}/{playlist}/{file}`:
+            - Inappropriate meta information for [`kaltura/nginx-vod-module`] resulting in broken playback on client.
+        - `PUT /`:
+            - Accepting clip durations non-aligned with segment duration;
+            - Accepting days without clips.
+
+
+
+
 ## [0.3.2] · 2020-08-27
 [0.3.2]: /../../tree/v0.3.2
 
@@ -58,7 +88,7 @@ All user visible changes to this project will be documented in this file. This p
     - `ephyr serve vod-meta` sub-command to run [VOD] meta info HTTP server.
 - [VOD] meta info HTTP server:
     - Endpoints:
-        - `GET /<proto>/<playlist>/<file>`: prepares meta information for [`kaltura/nginx-vod-module`];
+        - `GET /{proto}/{playlist}/{file}`: prepares meta information for [`kaltura/nginx-vod-module`];
         - `PUT /`: renews meta information (authorized).
     - Background:
         - Downloading [VOD] files to `--cache-dir`;
