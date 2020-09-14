@@ -115,7 +115,16 @@ pub struct Source {
 /// [1]: https://en.wikipedia.org/wiki/Display_resolution
 /// [2]: https://support.google.com/youtube/answer/6375112
 #[derive(
-    Clone, Copy, Debug, Deserialize_repr, Eq, Hash, PartialEq, Serialize_repr,
+    Clone,
+    Copy,
+    Debug,
+    Deserialize_repr,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize_repr,
 )]
 #[repr(u16)]
 pub enum Resolution {

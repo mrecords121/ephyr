@@ -19,7 +19,7 @@ use url::Url;
 ///
 /// [1]: https://tinyurl.com/ng-vod#set-top-level-object-in-the-mapping-json
 /// [2]: https://github.com/kaltura/nginx-vod-module#mapping-response-format
-#[derive(Clone, Debug, Deserialize, Serialize, SmartDefault)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, SmartDefault)]
 #[serde(rename_all = "camelCase")]
 pub struct Set {
     /// String that identifies this [`Set`]. It can be retrieved by
@@ -133,7 +133,7 @@ pub enum PlaylistType {
 /// [Sequence][1] of [`Clip`]s that should be played one after the other.
 ///
 /// [1]: https://github.com/kaltura/nginx-vod-module#sequence
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Sequence {
     /// String that identifies this [`Sequence`]. It can be retrieved by
     /// `$vod_sequence_id`.
@@ -168,7 +168,7 @@ pub struct Sequence {
 /// zero or more filters on a set of [`SourceClip`]s.
 ///
 /// [1]: https://github.com/kaltura/nginx-vod-module#clip-abstract
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Clip {
     /// Type of this [`Clip`].
     #[serde(flatten)]
@@ -178,7 +178,7 @@ pub struct Clip {
 /// Supported [clip types][1].
 ///
 /// [1]: https://github.com/kaltura/nginx-vod-module#clip-abstract
-#[derive(Clone, Debug, Deserialize, From, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, From, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ClipType {
     /// [Source clip][1] type.
@@ -191,7 +191,7 @@ pub enum ClipType {
 ///
 /// [MP4]: https://en.wikipedia.org/wiki/MPEG-4_Part_14
 /// [1]: https://github.com/kaltura/nginx-vod-module#source-clip
-#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SourceClip {
     /// Path of the MP4 file, where it should be read from.
     ///

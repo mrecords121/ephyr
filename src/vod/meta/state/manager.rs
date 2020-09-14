@@ -111,13 +111,16 @@ impl Manager {
     ///
     /// # Errors
     ///
-    /// If the `new` [`State`] fails to be persisted.
+    /// - If the `new` [`State`] fails to be persisted.
+    /// - If some [`Playlist`]'s playback of the existing [`State`] will be
+    ///   broken (can be suppressed with `force` argument set as `true`).
     ///
     /// [1]: https://en.wikipedia.org/wiki/Optimistic_concurrency_control
     pub async fn set_state(
         &self,
         mut new: State,
         ver: Option<u8>,
+        force: bool,
     ) -> Result<(), anyhow::Error> {
         let mut state = self.state.write().await;
 
@@ -128,9 +131,7 @@ impl Manager {
         }
 
         for playlist in new.values_mut() {
-            if let Some(old) = state.0.get(&playlist.slug) {
-                playlist.initial = old.initial;
-            }
+            Self::preserve_playlist_playback(playlist, &state.0, force)?;
         }
 
         self.persist_state(&new).await?;
@@ -149,16 +150,17 @@ impl Manager {
     ///
     /// # Errors
     ///
-    /// If updated [`State`] fails to be persisted.
+    /// - If updated [`State`] fails to be persisted.
+    /// - If the current [`Playlist`]'s playback will be broken (can be
+    ///   suppressed with `force` argument set as `true`).
     pub async fn set_playlist(
         &self,
         mut playlist: Playlist,
+        force: bool,
     ) -> Result<(), anyhow::Error> {
         let mut state = self.state.write().await;
 
-        if let Some(old) = state.0.get(&playlist.slug) {
-            playlist.initial = old.initial;
-        }
+        Self::preserve_playlist_playback(&mut playlist, &state.0, force)?;
 
         let mut new = state.0.clone();
         let _ = new.insert(playlist.slug.clone(), playlist);
@@ -235,5 +237,40 @@ impl Manager {
                 e,
             )
         })
+    }
+
+    /// Preserves the [`Playlist::initial`] position for the given `playlist`
+    /// from the given `old` [`State`] in case it contains such [`Playlist`].
+    ///
+    /// # Errors
+    ///
+    /// If the current playback of the given `playlist` doesn't much the one in
+    /// the `old` [`State`].
+    ///
+    /// If `force` is `true` then resets the [`Playlist::initial`] position
+    /// assuming that breaking playback is okay and never errors.
+    fn preserve_playlist_playback(
+        playlist: &mut Playlist,
+        old: &State,
+        force: bool,
+    ) -> Result<(), anyhow::Error> {
+        if let Some(old) = old.get(&playlist.slug) {
+            playlist.initial = old.initial;
+
+            let now = Utc::now();
+            if playlist.schedule_nginx_vod_module_set(Some(now), 2)
+                != old.clone().schedule_nginx_vod_module_set(Some(now), 2)
+            {
+                if force {
+                    playlist.initial = None;
+                } else {
+                    return Err(anyhow!(
+                        "Updating playlist '{}' breaks its playback",
+                        playlist.title,
+                    ));
+                }
+            }
+        }
+        Ok(())
     }
 }

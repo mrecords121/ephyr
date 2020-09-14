@@ -15,6 +15,7 @@ use actix_web_httpauth::{
     middleware::HttpAuthentication,
 };
 use futures::{sink, FutureExt as _, StreamExt as _};
+use serde::Deserialize;
 use slog_scope as log;
 use tokio::time;
 
@@ -163,6 +164,7 @@ async fn renew_state(
     state: web::Data<state::Manager>,
     cache: web::Data<Arc<file::cache::Manager>>,
     req: web::Json<vod::meta::Request>,
+    mode: web::Query<Mode>,
 ) -> Result<&'static str, error::Error> {
     let mut new = State::parse_request(req.0)
         .await
@@ -176,7 +178,7 @@ async fn renew_state(
     }
 
     state
-        .set_state(new, None)
+        .set_state(new, None, mode.0.force)
         .await
         .map_err(error::ErrorInternalServerError)?;
 
@@ -204,6 +206,7 @@ async fn renew_playlist(
     cache: web::Data<Arc<file::cache::Manager>>,
     slug: web::Path<state::PlaylistSlug>,
     req: web::Json<vod::meta::Playlist>,
+    mode: web::Query<Mode>,
 ) -> Result<&'static str, error::Error> {
     let mut playlist = state::Playlist::parse_request(slug.0, req.0)
         .await
@@ -215,9 +218,9 @@ async fn renew_playlist(
         .map_err(error::ErrorInternalServerError)?;
 
     state
-        .set_playlist(playlist)
+        .set_playlist(playlist, mode.0.force)
         .await
-        .map_err(error::ErrorInternalServerError)?;
+        .map_err(error::ErrorConflict)?;
 
     Ok("Ok")
 }
@@ -243,7 +246,7 @@ async fn delete_playlist(
     state
         .delete_playlist(&slug.0)
         .await
-        .map_err(error::ErrorInternalServerError)?;
+        .map_err(error::ErrorConflict)?;
     Ok("Ok")
 }
 
@@ -262,7 +265,7 @@ async fn refill_state_with_cache_files(
         for playlist in curr.values_mut() {
             playlist.fill_with_cache_files(&cache).await?;
         }
-        state.set_state(curr, Some(ver)).await?;
+        state.set_state(curr, Some(ver), false).await?;
         Ok(())
     }
 
@@ -352,4 +355,13 @@ async fn verify_auth_token(
     }
 
     Ok(req)
+}
+
+/// Parameters configuring the mode for applying new [`State`].
+#[derive(Clone, Copy, Debug, Deserialize)]
+struct Mode {
+    /// Indicator whether [`state::Playlist`]s should be updated regardless
+    /// its broken playbacks.
+    #[serde(default)]
+    force: bool,
 }

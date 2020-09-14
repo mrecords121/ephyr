@@ -15,7 +15,7 @@ pub mod manager;
 
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     time::Duration,
 };
 
@@ -338,7 +338,8 @@ impl Playlist {
         if sizes.is_empty() {
             return set;
         }
-        let mut sequences: HashMap<_, _> = sizes
+        // Preserving the same order matters here, that's why we use `BTreeMap`.
+        let mut sequences: BTreeMap<_, _> = sizes
             .iter()
             .map(|&size| {
                 let sequence = mapping::Sequence {
@@ -391,18 +392,28 @@ impl Playlist {
                         // nginx-vod-module's `mapping::Set::MAX_DURATIONS_LEN`
                         // limitation.
                         //
-                        // A drift in 1 minute is required to omit "clip is
+                        // A drift in 5 seconds is required to omit "clip is
                         // absent" errors when its playing segment is requested
                         // slightly after the current clip changes (due to the
                         // fact that HTTP requests from client are not an
                         // immediate thing). This way the metadata for all
                         // requested segments remains valid at any time.
-                        let is_clip_returned =
-                            (next_time + DateDuration::minutes(1)) > now;
+                        if (next_time + DateDuration::seconds(5)) > now {
+                            if set.initial_clip_index.is_none() {
+                                set.initial_clip_index = Some(clip_index);
+                                set.initial_segment_index = Some(segment_index);
 
-                        for (size, src) in &clip.sources {
-                            if let Some(seq) = sequences.get_mut(size) {
-                                if is_clip_returned {
+                                // Update the playlist's initial position to the
+                                // most recent one.
+                                self.initial = Some(PlaylistInitialPosition {
+                                    clip_index,
+                                    segment_index,
+                                    at: time.with_timezone(&Utc),
+                                });
+                            }
+
+                            for (size, seq) in &mut sequences {
+                                if let Some(src) = clip.sources.get(&size) {
                                     let path =
                                         mapping::SourceClip::get_url_path(
                                             src.url
@@ -420,28 +431,13 @@ impl Playlist {
                                     });
                                 }
                             }
-                        }
 
-                        if is_clip_returned {
                             set.clip_times
                                 .push(time.clone().with_timezone(&Utc).into());
 
                             set.durations.push(clip_duration.into());
                             if set.durations.len() >= count {
                                 break 'whole_loop;
-                            }
-
-                            if set.initial_clip_index.is_none() {
-                                set.initial_clip_index = Some(clip_index);
-                                set.initial_segment_index = Some(segment_index);
-
-                                // Update the playlist's initial position to the
-                                // most recent one.
-                                self.initial = Some(PlaylistInitialPosition {
-                                    clip_index,
-                                    segment_index,
-                                    at: time.with_timezone(&Utc),
-                                });
                             }
                         }
 
@@ -1630,6 +1626,117 @@ mod spec {
 
                 let res = Playlist::parse_request(slug.clone(), req).await;
                 assert!(res.is_err(), "allows missing weekday in: {}", json);
+            }
+        }
+
+        mod schedule {
+            use chrono::TimeZone as _;
+
+            use super::*;
+
+            #[tokio::test]
+            async fn considers_drift_for_delayed_requests() {
+                let slug = PlaylistSlug::new("life").unwrap();
+                let req = serde_json::from_str::<api::vod::meta::Playlist>(
+                    r#"{
+                      "title": "Life",
+                      "lang": "eng",
+                      "tz": "+02:00",
+                      "clips": {
+                        "mon": [{
+                          "from": "00:00:00",
+                          "to": "00:02:00",
+                          "title": "Life circle",
+                          "url": "https://www.youtube.com/watch?v=0wAtNWA93hM"
+                        }, {
+                          "from": "00:00:00",
+                          "to": "00:01:00",
+                          "title": "Truth of Life",
+                          "url": "https://www.youtube.com/watch?v=Q69gFVmrCiI"
+                        }],
+                        "tue": [{
+                          "from": "00:00:00",
+                          "to": "00:01:00",
+                          "title": "Life circle",
+                          "url": "https://www.youtube.com/watch?v=0wAtNWA93hM"
+                        }],
+                        "wed": [{
+                          "from": "00:00:00",
+                          "to": "00:01:00",
+                          "title": "Life circle",
+                          "url": "https://www.youtube.com/watch?v=0wAtNWA93hM"
+                        }],
+                        "thu": [{
+                          "from": "00:00:00",
+                          "to": "00:01:00",
+                          "title": "Life circle",
+                          "url": "https://www.youtube.com/watch?v=0wAtNWA93hM"
+                        }],
+                        "fri": [{
+                          "from": "00:00:00",
+                          "to": "00:01:00",
+                          "title": "Life circle",
+                          "url": "https://www.youtube.com/watch?v=0wAtNWA93hM"
+                        }],
+                        "sat": [{
+                          "from": "00:00:00",
+                          "to": "00:01:00",
+                          "title": "Life circle",
+                          "url": "https://www.youtube.com/watch?v=0wAtNWA93hM"
+                        }],
+                        "sun": [{
+                          "from": "00:00:00",
+                          "to": "00:01:00",
+                          "title": "Life circle",
+                          "url": "https://www.youtube.com/watch?v=0wAtNWA93hM"
+                        }]
+                      }
+                    }"#,
+                )
+                .expect("Failed to deserialize request");
+
+                let mut pl = Playlist::parse_request(slug.clone(), req)
+                    .await
+                    .expect("Failed to parse playlist");
+
+                // Prefill initial position.
+                let at = Utc.ymd(2020, 9, 12).and_hms(22, 0, 0);
+                let _ = pl.schedule_nginx_vod_module_set(Some(at), 1);
+
+                assert_eq!(
+                    pl.initial,
+                    Some(PlaylistInitialPosition {
+                        clip_index: 0,
+                        segment_index: 0,
+                        at,
+                    }),
+                );
+
+                let at = Utc.ymd(2020, 9, 13).and_hms(22, 0, 4);
+                let schedule = pl.schedule_nginx_vod_module_set(Some(at), 3);
+
+                assert_eq!(schedule.durations.len(), 3);
+                assert_eq!(schedule.clip_times.len(), 3);
+                assert_eq!(schedule.sequences.len(), 5);
+                for seq in &schedule.sequences {
+                    assert_eq!(seq.clips.len(), 3);
+                }
+
+                assert_eq!(schedule.initial_clip_index, Some(1439));
+                assert_eq!(schedule.initial_segment_index, Some(8634));
+
+                assert_eq!(
+                    *schedule.clip_times.get(0).unwrap(),
+                    Utc.ymd(2020, 9, 13).and_hms(21, 59, 0).into(),
+                );
+                assert_eq!(
+                    *schedule.clip_times.get(1).unwrap(),
+                    Utc.ymd(2020, 9, 13).and_hms(22, 0, 0).into(),
+                );
+                assert_eq!(
+                    *schedule.clip_times.get(2).unwrap(),
+                    Utc.ymd(2020, 9, 13).and_hms(22, 2, 0).into(),
+                );
             }
         }
     }
