@@ -392,13 +392,13 @@ impl Playlist {
                         // nginx-vod-module's `mapping::Set::MAX_DURATIONS_LEN`
                         // limitation.
                         //
-                        // A drift in 5 seconds is required to omit "clip is
+                        // A drift in 1 minute is required to omit "clip is
                         // absent" errors when its playing segment is requested
                         // slightly after the current clip changes (due to the
                         // fact that HTTP requests from client are not an
                         // immediate thing). This way the metadata for all
                         // requested segments remains valid at any time.
-                        if (next_time + DateDuration::seconds(5)) > now {
+                        if (next_time + DateDuration::minutes(1)) > now {
                             if set.initial_clip_index.is_none() {
                                 set.initial_clip_index = Some(clip_index);
                                 set.initial_segment_index = Some(segment_index);
