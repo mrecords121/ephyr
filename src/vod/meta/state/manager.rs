@@ -255,14 +255,16 @@ impl Manager {
         force: bool,
     ) -> Result<(), anyhow::Error> {
         if let Some(old) = old.get(&playlist.slug) {
+            let new_initial = playlist.initial;
+
             playlist.initial = old.initial;
 
             let now = Utc::now();
-            if playlist.schedule_nginx_vod_module_set(Some(now), 2)
-                != old.clone().schedule_nginx_vod_module_set(Some(now), 2)
+            if playlist.schedule_nginx_vod_module_set(Some(now), 3)
+                != old.clone().schedule_nginx_vod_module_set(Some(now), 3)
             {
                 if force {
-                    playlist.initial = None;
+                    playlist.initial = new_initial;
                 } else {
                     return Err(anyhow!(
                         "Updating playlist '{}' breaks its playback",

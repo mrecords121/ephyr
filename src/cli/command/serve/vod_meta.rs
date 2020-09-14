@@ -265,7 +265,7 @@ async fn refill_state_with_cache_files(
         for playlist in curr.values_mut() {
             playlist.fill_with_cache_files(&cache).await?;
         }
-        state.set_state(curr, Some(ver), false).await?;
+        state.set_state(curr, Some(ver), true).await?;
         Ok(())
     }
 
