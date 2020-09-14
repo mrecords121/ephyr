@@ -6,6 +6,23 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.3.4] · 2020-09-15
+[0.3.4]: /../../tree/v0.3.4
+
+[Diff](https://github.com/ALLATRA-IT/ephyr/compare/v0.3.3..v0.3.4)
+
+### Fixed
+
+- [VOD] meta info HTTP server:
+    - Endpoints:
+        - `GET /{proto}/{playlist}/{file}`:
+            - Increase delay drift to 1 minute.
+    - Background:
+        - Broken playlist refilling with cached videos due to playback protection. 
+
+
+
+
 ## [0.3.3] · 2020-09-14
 [0.3.3]: /../../tree/v0.3.3
 
