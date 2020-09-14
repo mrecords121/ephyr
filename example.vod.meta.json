@@ -1,217 +1,426 @@
 {
-  "cnn-live": {
-    "slug": "cnn-live",
-    "title": "CNN Live",
-    "lang": "eng",
-    "tz": "+01:00",
+  "divan-tv": {
+    "slug": "divan-tv",
+    "title": "Divan TV",
+    "lang": "ukr",
+    "tz": "+03:00",
+    "segment_duration": "10s",
+    "initial": null,
     "clips": {
-      "mon": [{
-        "youtube_id": "xUol2En95x0",
-        "title": "В поисках себя",
-        "view": {
-          "from": "00:00:00",
-          "to": "02:00:00"
-        },
-        "sources": {
-          "360": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/2Q/Jd/7558/xUol2En95x0_360p.mp4",
-              "local": null
-            },
-            "type": "video/mp4",
-            "size": 360
+      "Thu": [
+        {
+          "youtube_id": "0wAtNWA93hM",
+          "title": "Круг Жизни",
+          "view": {
+            "from": "00:00:00",
+            "to": "00:01:00"
           },
-          "720": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/2Q/Jd/7558/xUol2En95x0_720p.mp4",
-              "local": null
+          "sources": {
+            "1080": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_1080p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_1080p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 1080
             },
-            "type": "video/mp4",
-            "size": 720
+            "240": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_240p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_240p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 240
+            },
+            "480": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_480p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_480p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 480
+            },
+            "360": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_360p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_360p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 360
+            },
+            "720": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_720p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_720p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 720
+            }
           }
         }
-      }, {
-        "youtube_id": "Q69gFVmrCiI",
-        "title": "ПРАВДА ЖИЗНИ",
-        "view": {
-          "from": "01:00:00",
-          "to": "02:00:00"
-        },
-        "sources": {
-          "360": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
-              "local": null
-            },
-            "type": "video/mp4",
-            "size": 360
+      ],
+      "Mon": [
+        {
+          "youtube_id": "0wAtNWA93hM",
+          "title": "Круг Жизни",
+          "view": {
+            "from": "00:00:00",
+            "to": "00:02:00"
           },
-          "720": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
-              "local": null
+          "sources": {
+            "720": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_720p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_720p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 720
             },
-            "type": "video/mp4",
-            "size": 720
+            "240": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_240p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_240p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 240
+            },
+            "360": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_360p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_360p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 360
+            },
+            "1080": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_1080p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_1080p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 1080
+            },
+            "480": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_480p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_480p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 480
+            }
+          }
+        },
+        {
+          "youtube_id": "Q69gFVmrCiI",
+          "title": "ПРАВДА ЖИЗНИ",
+          "view": {
+            "from": "00:00:00",
+            "to": "00:01:00"
+          },
+          "sources": {
+            "360": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
+                "local": "file:///mj/W7/5939/Q69gFVmrCiI_360p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 360
+            },
+            "720": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
+                "local": "file:///mj/W7/5939/Q69gFVmrCiI_720p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 720
+            },
+            "1080": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_1080p.mp4",
+                "local": "file:///mj/W7/5939/Q69gFVmrCiI_1080p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 1080
+            },
+            "480": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_480p.mp4",
+                "local": "file:///mj/W7/5939/Q69gFVmrCiI_480p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 480
+            },
+            "240": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_240p.mp4",
+                "local": "file:///mj/W7/5939/Q69gFVmrCiI_240p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 240
+            }
           }
         }
-      }],
-      "tue": [{
-        "youtube_id": "Q69gFVmrCiI",
-        "title": "ПРАВДА ЖИЗНИ",
-        "view": {
-          "from": "00:00:00",
-          "to": "01:00:00"
-        },
-        "sources": {
-          "360": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
-              "local": null
-            },
-            "type": "video/mp4",
-            "size": 360
+      ],
+      "Sat": [
+        {
+          "youtube_id": "0wAtNWA93hM",
+          "title": "Круг Жизни",
+          "view": {
+            "from": "00:00:00",
+            "to": "00:01:00"
           },
-          "720": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
-              "local": null
+          "sources": {
+            "240": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_240p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_240p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 240
             },
-            "type": "video/mp4",
-            "size": 720
+            "1080": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_1080p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_1080p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 1080
+            },
+            "360": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_360p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_360p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 360
+            },
+            "480": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_480p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_480p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 480
+            },
+            "720": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_720p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_720p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 720
+            }
           }
         }
-      }],
-      "wed": [{
-        "youtube_id": "Q69gFVmrCiI",
-        "title": "ПРАВДА ЖИЗНИ",
-        "view": {
-          "from": "00:00:00",
-          "to": "01:00:00"
-        },
-        "sources": {
-          "360": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
-              "local": null
-            },
-            "type": "video/mp4",
-            "size": 360
+      ],
+      "Wed": [
+        {
+          "youtube_id": "0wAtNWA93hM",
+          "title": "Круг Жизни",
+          "view": {
+            "from": "00:00:00",
+            "to": "00:01:00"
           },
-          "720": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
-              "local": null
+          "sources": {
+            "240": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_240p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_240p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 240
             },
-            "type": "video/mp4",
-            "size": 720
+            "360": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_360p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_360p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 360
+            },
+            "720": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_720p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_720p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 720
+            },
+            "1080": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_1080p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_1080p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 1080
+            },
+            "480": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_480p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_480p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 480
+            }
           }
         }
-      }],
-      "thu": [{
-        "youtube_id": "Q69gFVmrCiI",
-        "title": "ПРАВДА ЖИЗНИ",
-        "view": {
-          "from": "00:00:00",
-          "to": "01:00:00"
-        },
-        "sources": {
-          "360": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
-              "local": null
-            },
-            "type": "video/mp4",
-            "size": 360
+      ],
+      "Fri": [
+        {
+          "youtube_id": "0wAtNWA93hM",
+          "title": "Круг Жизни",
+          "view": {
+            "from": "00:00:00",
+            "to": "00:01:00"
           },
-          "720": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
-              "local": null
+          "sources": {
+            "720": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_720p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_720p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 720
             },
-            "type": "video/mp4",
-            "size": 720
+            "480": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_480p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_480p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 480
+            },
+            "240": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_240p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_240p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 240
+            },
+            "1080": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_1080p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_1080p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 1080
+            },
+            "360": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_360p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_360p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 360
+            }
           }
         }
-      }],
-      "fri": [{
-        "youtube_id": "Q69gFVmrCiI",
-        "title": "ПРАВДА ЖИЗНИ",
-        "view": {
-          "from": "00:00:00",
-          "to": "01:00:00"
-        },
-        "sources": {
-          "360": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
-              "local": null
-            },
-            "type": "video/mp4",
-            "size": 360
+      ],
+      "Tue": [
+        {
+          "youtube_id": "0wAtNWA93hM",
+          "title": "Круг Жизни",
+          "view": {
+            "from": "00:00:00",
+            "to": "00:01:00"
           },
-          "720": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
-              "local": null
+          "sources": {
+            "360": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_360p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_360p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 360
             },
-            "type": "video/mp4",
-            "size": 720
+            "720": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_720p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_720p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 720
+            },
+            "480": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_480p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_480p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 480
+            },
+            "240": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_240p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_240p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 240
+            },
+            "1080": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_1080p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_1080p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 1080
+            }
           }
         }
-      }],
-      "sat": [{
-        "youtube_id": "Q69gFVmrCiI",
-        "title": "ПРАВДА ЖИЗНИ",
-        "view": {
-          "from": "00:00:00",
-          "to": "01:00:00"
-        },
-        "sources": {
-          "360": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
-              "local": null
-            },
-            "type": "video/mp4",
-            "size": 360
+      ],
+      "Sun": [
+        {
+          "youtube_id": "0wAtNWA93hM",
+          "title": "Круг Жизни",
+          "view": {
+            "from": "00:00:00",
+            "to": "00:01:00"
           },
-          "720": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
-              "local": null
+          "sources": {
+            "720": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_720p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_720p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 720
             },
-            "type": "video/mp4",
-            "size": 720
+            "1080": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_1080p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_1080p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 1080
+            },
+            "480": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_480p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_480p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 480
+            },
+            "240": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_240p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_240p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 240
+            },
+            "360": {
+              "url": {
+                "upstream": "https://api.allatra.video/storage/videos/0A/w4/8679/0wAtNWA93hM_360p.mp4",
+                "local": "file:///0A/w4/8679/0wAtNWA93hM_360p.mp4"
+              },
+              "type": "video/mp4",
+              "size": 360
+            }
           }
         }
-      }],
-      "sun": [{
-        "youtube_id": "Q69gFVmrCiI",
-        "title": "ПРАВДА ЖИЗНИ",
-        "view": {
-          "from": "00:00:00",
-          "to": "01:00:00"
-        },
-        "sources": {
-          "360": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_360p.mp4",
-              "local": null
-            },
-            "type": "video/mp4",
-            "size": 360
-          },
-          "720": {
-            "url": {
-              "upstream": "https://api.allatra.video/storage/videos/mj/W7/5939/Q69gFVmrCiI_720p.mp4",
-              "local": null
-            },
-            "type": "video/mp4",
-            "size": 720
-          }
-        }
-      }]
+      ]
     }
   }
 }
