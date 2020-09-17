@@ -1,6 +1,9 @@
 //! Definitions of API provided by `vod-meta` server of this application.
 
-use std::{collections::HashMap, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use chrono::{FixedOffset as TimeZone, Weekday};
 use isolang::Language;
@@ -9,7 +12,7 @@ use url::Url;
 
 use crate::util::serde::{timelike, timezone};
 
-pub use crate::vod::meta::state::{PlaylistSlug, SegmentDuration};
+pub use crate::vod::meta::state::{PlaylistSlug, Resolution, SegmentDuration};
 
 /// Set of [`Playlist`]s to be provided by `vod-meta` server.
 pub type Request = HashMap<PlaylistSlug, Playlist>;
@@ -40,6 +43,14 @@ pub struct Playlist {
     /// for this [`Playlist`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub segment_duration: Option<SegmentDuration>,
+
+    /// Set of [`Clip`]'s [`Resolution`]s that should be provided by this
+    /// [`Playlist`].
+    ///
+    /// If not specified or empty then all available [`Clip`]'s [`Resolution`]s
+    /// will be used.
+    #[serde(default, skip_serializing_if = "HashSet::is_empty")]
+    pub resolutions: HashSet<Resolution>,
 
     /// [`Clips`] which form this [`Playlist`], distributed by [`Weekday`]s.
     ///
@@ -91,6 +102,7 @@ mod spec {
               "lang": "rus",
               "tz": "+03:00",
               "segment_duration": "6s",
+              "resolutions": [720, 360],
               "clips": {
                 "mon": [{
                   "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
@@ -159,6 +171,20 @@ mod spec {
                   "tz": "+03:00",
                   "clips": {
                     "fin": [{
+                      "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
+                      "title": "Круг Жизни",
+                      "from": "00:00:00",
+                      "to": "1:51:26"
+                    }]
+                  }
+                }"#,
+                r#"{
+                  "title": "Передачи с Игорем Михайловичем",
+                  "lang": "rus",
+                  "tz": "+03:00",
+                  "resolutions": [34],
+                  "clips": {
+                    "mon": [{
                       "url": "https://www.youtube.com/watch?v=0wAtNWA93hM",
                       "title": "Круг Жизни",
                       "from": "00:00:00",

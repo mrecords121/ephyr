@@ -99,6 +99,13 @@ pub struct Playlist {
     #[serde(default)]
     pub segment_duration: SegmentDuration,
 
+    /// Set of [`Clip`]'s [`Resolution`]s provided by this [`Playlist`].
+    ///
+    /// If empty then all available [`Clip`]'s [`Resolution`]s will be used,
+    /// considering the [`Playlist::mutual_resolutions`] limitation.
+    #[serde(default)]
+    pub resolutions: HashSet<Resolution>,
+
     /// Initial position of this [`Playlist`] to start building
     /// [`nginx::vod_module::mapping`] schedule from.
     ///
@@ -130,12 +137,12 @@ impl Playlist {
     /// [`Playlist`]'s [`Clip`]s returning a set of mutual resolutions (such
     /// ones that all [`Clip`]s have them).
     #[must_use]
-    pub fn mutual_src_sizes(&self) -> HashSet<Resolution> {
+    pub fn mutual_resolutions(&self) -> HashSet<Resolution> {
         let mut mutual: Option<HashSet<Resolution>> = None;
         for clips in self.clips.values() {
             for clip in clips {
                 if let Some(m) = &mut mutual {
-                    m.retain(|size| clip.sources.contains_key(size))
+                    m.retain(|r| clip.sources.contains_key(r))
                 } else {
                     mutual = Some(clip.sources.keys().copied().collect())
                 }
@@ -169,12 +176,13 @@ impl Playlist {
         }
 
         let segment_duration = req.segment_duration.unwrap_or_default();
+        let resolutions = &req.resolutions;
         let clips =
             stream::iter(req.clips.into_iter().flat_map(|(day, clips)| {
                 clips.into_iter().map(move |c| (day, c))
             }))
             .map(|(day, req)| {
-                Clip::parse_request(req, segment_duration)
+                Clip::parse_request(req, segment_duration, resolutions)
                     .map_ok(move |c| (day, c))
             })
             .buffered(CONCURRENT_REQUESTS)
@@ -228,6 +236,7 @@ impl Playlist {
             lang: req.lang,
             tz: req.tz,
             segment_duration,
+            resolutions: req.resolutions,
             initial: None,
             clips,
         })
@@ -331,24 +340,28 @@ impl Playlist {
             count = mapping::Set::MAX_DURATIONS_LEN;
         }
 
-        // Because all `mapping::Set::sequences` must have the same length, we
-        // should define the minimal mutual intersection of all quality sizes
-        // and use only them to form a `mapping::Set`.
-        let sizes = self.mutual_src_sizes();
-        if sizes.is_empty() {
+        let resolutions = if self.resolutions.is_empty() {
+            // Because all `mapping::Set::sequences` must have the same length,
+            // we should define the minimal mutual intersection of all
+            // resolutions and use only them to form a `mapping::Set`.
+            self.mutual_resolutions()
+        } else {
+            self.resolutions.clone()
+        };
+        if resolutions.is_empty() {
             return set;
         }
         // Preserving the same order matters here, that's why we use `BTreeMap`.
-        let mut sequences: BTreeMap<_, _> = sizes
+        let mut sequences: BTreeMap<_, _> = resolutions
             .iter()
-            .map(|&size| {
+            .map(|&r| {
                 let sequence = mapping::Sequence {
-                    id: Some(format!("{}p", size as u16)),
+                    id: Some(format!("{}p", r as u16)),
                     language: Some(self.lang),
-                    label: Some(format!("{}p", size as u16)),
+                    label: Some(format!("{}p", r as u16)),
                     ..mapping::Sequence::default()
                 };
-                (size, sequence)
+                (r, sequence)
             })
             .collect();
 
@@ -569,6 +582,7 @@ impl Clip {
     pub async fn parse_request(
         req: api::vod::meta::Clip,
         segment_duration: SegmentDuration,
+        resolutions: &HashSet<Resolution>,
     ) -> Result<Self, anyhow::Error> {
         if req.title.is_empty() {
             return Err(anyhow!(
@@ -640,6 +654,32 @@ impl Clip {
             ));
         }
 
+        let sources: HashMap<_, _> = resp
+            .sources
+            .into_iter()
+            .map(|source| {
+                let src = Src {
+                    url: SrcUrl {
+                        upstream: source.src,
+                        local: None,
+                    },
+                    mime_type: source.r#type,
+                    size: source.size,
+                };
+                (source.size, src)
+            })
+            .collect();
+
+        for r in resolutions {
+            if !sources.contains_key(r) {
+                return Err(anyhow!(
+                    "Clip '{}' has no {}p resolution required by playlist",
+                    req.title,
+                    *r as u16,
+                ));
+            }
+        }
+
         Ok(Self {
             youtube_id,
             title: req.title,
@@ -647,21 +687,7 @@ impl Clip {
                 from: req.from,
                 to: req.to,
             },
-            sources: resp
-                .sources
-                .into_iter()
-                .map(|source| {
-                    let src = Src {
-                        url: SrcUrl {
-                            upstream: source.src,
-                            local: None,
-                        },
-                        mime_type: source.r#type,
-                        size: source.size,
-                    };
-                    (source.size, src)
-                })
-                .collect(),
+            sources,
         })
     }
 
@@ -880,8 +906,12 @@ mod spec {
             )
             .expect("Failed to deserialize request");
 
-            let res =
-                Clip::parse_request(req, SegmentDuration::default()).await;
+            let res = Clip::parse_request(
+                req,
+                SegmentDuration::default(),
+                &HashSet::default(),
+            )
+            .await;
             assert!(res.is_ok(), "failed to parse: {}", res.unwrap_err());
 
             let clip = res.unwrap();
@@ -923,8 +953,12 @@ mod spec {
                 let req = serde_json::from_str::<api::vod::meta::Clip>(&json)
                     .expect("Failed to deserialize request");
 
-                let res =
-                    Clip::parse_request(req, SegmentDuration::default()).await;
+                let res = Clip::parse_request(
+                    req,
+                    SegmentDuration::default(),
+                    &HashSet::default(),
+                )
+                .await;
                 assert!(res.is_err(), "allows non-YouTube URL in: {}", json);
             }
         }
@@ -966,8 +1000,12 @@ mod spec {
                 let req = serde_json::from_str::<api::vod::meta::Clip>(&json)
                     .expect("Failed to deserialize request");
 
-                let res =
-                    Clip::parse_request(req, SegmentDuration::default()).await;
+                let res = Clip::parse_request(
+                    req,
+                    SegmentDuration::default(),
+                    &HashSet::default(),
+                )
+                .await;
                 assert!(res.is_err(), "allows invalid duration in: {}", json);
             }
         }
