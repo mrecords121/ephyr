@@ -6,6 +6,21 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.3.5] · 2020-09-17
+[0.3.5]: /../../tree/v0.3.5
+
+[Diff](https://github.com/ALLATRA-IT/ephyr/compare/v0.3.4..v0.3.5)
+
+### Added
+
+- [VOD] meta info HTTP server:
+    - Endpoints:
+        - `PUT /`, `PUT /{playlist}`:
+            - Optional `resolution` parameter of playlist.
+
+
+
+
 ## [0.3.4] · 2020-09-15
 [0.3.4]: /../../tree/v0.3.4
 

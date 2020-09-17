@@ -71,6 +71,7 @@ Requirements:
 
 Parameters:
 - `segment_duration` is optional (defaults to `10s`);
+- `resolutions` is optional (defaults to empty);
 - anything other is mandatory.
 
 ```json
@@ -80,6 +81,7 @@ Parameters:
     "lang": "eng",
     "tz": "+02:00",
     "segment_duration": "10s",
+    "resolutions": [360, 720],
     "clips": {
       "mon": [
         {"from": "00:00:00", "to": "00:02:00", "title": "Life circle", "url": "https://www.youtube.com/watch?v=0wAtNWA93hM"},
@@ -119,6 +121,7 @@ Requirements:
 
 Parameters:
 - `segment_duration` is optional (defaults to `10s`);
+- `resolutions` is optional (defaults to empty);
 - anything other is mandatory.
 
 ```json
@@ -127,6 +130,7 @@ Parameters:
   "lang": "eng",
   "tz": "+02:00",
   "segment_duration": "10s",
+  "resolutions": [360, 720],
   "clips": {
     "mon": [
       {"from": "00:00:00", "to": "00:02:00", "title": "Life circle", "url": "https://www.youtube.com/watch?v=0wAtNWA93hM"},
