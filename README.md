@@ -52,7 +52,7 @@ Returns the current state of a single playlist persisted in this [VOD] meta serv
 
 </details>
 
-<details><summary>PUT /[?force=true] (authorized)</summary>
+<details><summary>PUT /[?force=true][&dry_run=true] (authorized)</summary>
 
 Renews the whole state of this [VOD] meta server.
 
@@ -102,7 +102,7 @@ Parameters:
 
 </details>
 
-<details><summary>PUT /{playlist}[?force=true] (authorized)</summary>
+<details><summary>PUT /{playlist}[?force=true][&dry_run=true] (authorized)</summary>
 
 Renews a single playlist in the current state of this [VOD] meta server.
 

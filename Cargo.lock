@@ -973,7 +973,7 @@ dependencies = [
 
 [[package]]
 name = "ephyr"
-version = "0.3.5"
+version = "0.3.6"
 dependencies = [
  "actix-web",
  "actix-web-httpauth",
