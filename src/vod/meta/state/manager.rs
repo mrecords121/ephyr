@@ -109,6 +109,9 @@ impl Manager {
     /// For already existing [`Playlist`]s all [`Playlist::initial`] positions
     /// are preserved.
     ///
+    /// If `dry_run` is specified, then `new` state won't be persisted and
+    /// applied, but verified only.
+    ///
     /// # Errors
     ///
     /// - If the `new` [`State`] fails to be persisted.
@@ -121,6 +124,7 @@ impl Manager {
         mut new: State,
         ver: Option<u8>,
         force: bool,
+        dry_run: bool,
     ) -> Result<(), anyhow::Error> {
         let mut state = self.state.write().await;
 
@@ -132,6 +136,10 @@ impl Manager {
 
         for playlist in new.values_mut() {
             Self::preserve_playlist_playback(playlist, &state.0, force)?;
+        }
+
+        if dry_run {
+            return Ok(());
         }
 
         self.persist_state(&new).await?;
@@ -148,6 +156,9 @@ impl Manager {
     /// be added "as is". Otherwise, the existing [`Playlist`] will be updated
     /// preserving its [`Playlist::initial`] position.
     ///
+    /// If `dry_run` is specified, then the given [`Playlist`] won't be
+    /// persisted and applied, but verified only.
+    ///
     /// # Errors
     ///
     /// - If updated [`State`] fails to be persisted.
@@ -157,10 +168,15 @@ impl Manager {
         &self,
         mut playlist: Playlist,
         force: bool,
+        dry_run: bool,
     ) -> Result<(), anyhow::Error> {
         let mut state = self.state.write().await;
 
         Self::preserve_playlist_playback(&mut playlist, &state.0, force)?;
+
+        if dry_run {
+            return Ok(());
+        }
 
         let mut new = state.0.clone();
         let _ = new.insert(playlist.slug.clone(), playlist);

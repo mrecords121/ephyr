@@ -178,7 +178,7 @@ async fn renew_state(
     }
 
     state
-        .set_state(new, None, mode.0.force)
+        .set_state(new, None, mode.0.force, mode.0.dry_run)
         .await
         .map_err(error::ErrorInternalServerError)?;
 
@@ -218,7 +218,7 @@ async fn renew_playlist(
         .map_err(error::ErrorInternalServerError)?;
 
     state
-        .set_playlist(playlist, mode.0.force)
+        .set_playlist(playlist, mode.0.force, mode.0.dry_run)
         .await
         .map_err(error::ErrorConflict)?;
 
@@ -265,7 +265,7 @@ async fn refill_state_with_cache_files(
         for playlist in curr.values_mut() {
             playlist.fill_with_cache_files(&cache).await?;
         }
-        state.set_state(curr, Some(ver), true).await?;
+        state.set_state(curr, Some(ver), true, false).await?;
         Ok(())
     }
 
@@ -364,4 +364,9 @@ struct Mode {
     /// its broken playbacks.
     #[serde(default)]
     force: bool,
+
+    /// Indicator whether [`state::Playlist`]s should be checked and verified
+    /// without applying any real changes to existing [`State`].
+    #[serde(default)]
+    dry_run: bool,
 }
