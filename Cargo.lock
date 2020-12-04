@@ -872,9 +872,9 @@ dependencies = [
 
 [[package]]
 name = "derive_more"
-version = "0.99.10"
+version = "0.99.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dcfabdab475c16a93d669dddfc393027803e347d09663f524447f642fbb84ba"
+checksum = "41cb0e6161ad61ed084a36ba71fbba9e3ac5aee3606fb607fe08da6acbcf3d8c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -972,49 +972,99 @@ dependencies = [
 ]
 
 [[package]]
-name = "ephyr"
-version = "0.3.6"
+name = "ephyr-api-allatra-video"
+version = "0.1.0"
 dependencies = [
- "actix-web",
- "actix-web-httpauth",
- "anyhow",
- "backoff",
- "byte-unit",
- "byteorder",
- "chrono",
- "config",
  "derive_more",
- "futures",
- "hex",
- "humantime",
- "humantime-serde",
- "isolang",
+ "ephyr-serde",
  "mime",
  "mime_serde_shim",
- "once_cell",
- "rand 0.7.3",
- "regex",
  "reqwest",
- "rust-argon2",
- "rust_decimal",
  "serde",
- "serde_json",
- "serde_millis",
  "serde_repr",
+ "tokio",
+ "url",
+]
+
+[[package]]
+name = "ephyr-log"
+version = "0.1.0"
+dependencies = [
  "slog",
  "slog-async",
  "slog-scope",
  "slog-stdlog",
  "slog-term",
+]
+
+[[package]]
+name = "ephyr-mixer"
+version = "0.3.6"
+dependencies = [
+ "anyhow",
+ "backoff",
+ "byteorder",
+ "config",
+ "derive_more",
+ "ephyr-log",
+ "futures",
+ "hex",
+ "humantime",
+ "humantime-serde",
+ "once_cell",
+ "rand 0.7.3",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "smart-default",
+ "structopt",
+ "tokio",
+ "tsclientlib",
+ "tsproto-packets",
+ "url",
+ "validator",
+]
+
+[[package]]
+name = "ephyr-serde"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ephyr-vod-meta-server"
+version = "0.3.6"
+dependencies = [
+ "actix-web",
+ "actix-web-httpauth",
+ "anyhow",
+ "byte-unit",
+ "chrono",
+ "derive_more",
+ "ephyr-api-allatra-video",
+ "ephyr-log",
+ "ephyr-serde",
+ "futures",
+ "humantime-serde",
+ "isolang",
+ "mime",
+ "mime_serde_shim",
+ "once_cell",
+ "regex",
+ "reqwest",
+ "rust-argon2",
+ "serde",
+ "serde_json",
+ "serde_millis",
  "smart-default",
  "structopt",
  "tempfile",
  "tokio",
  "tokio-util",
- "tsclientlib",
- "tsproto-packets",
  "url",
- "validator",
 ]
 
 [[package]]
@@ -2420,18 +2470,18 @@ checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
 name = "serde"
-version = "1.0.116"
+version = "1.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96fe57af81d28386a513cbc6858332abc6117cfdb5999647c6444b8f43a370a5"
+checksum = "b88fa983de7720629c9387e9f517353ed404164b1e482c970a90c1a4aaf7dc1a"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.116"
+version = "1.0.117"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f630a6370fd8e457873b4bd2ffdae75408bc291ba72be773772a4c2a065d9ae8"
+checksum = "cbd1ae72adb44aab48f325a02444a5fc079349a8d804c1fc922aed3f7454c74e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2766,7 +2816,8 @@ dependencies = [
 [[package]]
 name = "t4rust-derive"
 version = "0.2.0"
-source = "git+https://github.com/ReSpeak/t4rust.git#7a6eeef42904824bfe9220d196d4e23b067ac655"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05da4fefb247b3b208fe1a406c547e1be83b70bc438299f681997254a50f608e"
 dependencies = [
  "nom",
  "proc-macro2",
@@ -2777,8 +2828,7 @@ dependencies = [
 [[package]]
 name = "t4rust-derive"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05da4fefb247b3b208fe1a406c547e1be83b70bc438299f681997254a50f608e"
+source = "git+https://github.com/ReSpeak/t4rust.git#7a6eeef42904824bfe9220d196d4e23b067ac655"
 dependencies = [
  "nom",
  "proc-macro2",

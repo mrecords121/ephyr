@@ -1,63 +1,6 @@
-[package]
-name = "ephyr"
-version = "0.3.6"
-edition = "2018"
-authors = ["Kai Ren <tyranron@gmail.com>"]
-publish = false
+[workspace]
+members = ["common/api/*", "common/log", "common/serde", "components/*"]
 
 [profile.release]
 lto = "thin"
 codegen-units = 1
-
-[dependencies]
-actix-web = "3.0"
-actix-web-httpauth = "0.5"
-anyhow = "1.0"
-argon2 = { version = "0.8", package = "rust-argon2", default-features = false }
-backoff = { version = "0.2", features = ["tokio"] }
-byte-unit = { version = "4.0", features = ["serde"] }
-byteorder = "1.3"
-chrono = { version = "0.4", features = ["serde"] }
-config = { version = "0.10", default-features = false, features = ["json"] }
-derive_more = "0.99.5"
-futures = "0.3"
-hex = "0.4"
-humantime = "2.0"
-isolang = { version = "1.0", features = ["serde_serialize"] }
-mime = "0.3"
-mime_serde_shim = "0.2"
-once_cell = { version = "1.4", features = ["parking_lot"] }
-rand = "0.7"
-regex = "1.3"
-reqwest = { version = "0.10", features = ["json", "stream"] }
-serde = "1.0"
-serde_json = "1.0"
-serde_humantime = { version = "1.0", package = "humantime-serde" }
-serde_millis = "0.1"
-serde_repr = "0.1"
-slog = "2.5"
-slog-async = "2.5"
-slog-scope = "4.3"
-slog-stdlog = "4.0"
-slog-term = "2.5"
-smart-default = "0.6"
-structopt = "0.3"
-tempfile = "3.1"
-tokio-util = { version = "0.3", features = ["compat"] }
-url = { version = "2.1", features = ["serde"] }
-validator = { version = "0.11", features = ["derive"] }
-[dependencies.decimal]
-    version = "1.4"
-    package = "rust_decimal"
-    features = ["serde-float"]
-[dependencies.tokio]
-    version = "0.2"
-    features = [
-        "fs", "io-util", "process", "rt-core", "signal", "stream", "sync",
-    ]
-[dependencies.tsclientlib]
-    git = "https://github.com/ALLATRA-IT/tsclientlib"
-    rev = "0ac2ef2e1135626b186c1664bad90814c54f793a" # branch = "master"
-[dependencies.tsproto-packets]
-    git = "https://github.com/ALLATRA-IT/tsclientlib"
-    rev = "0ac2ef2e1135626b186c1664bad90814c54f793a" # branch = "master"

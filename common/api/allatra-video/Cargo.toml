@@ -1,0 +1,26 @@
+[package]
+name = "ephyr-api-allatra-video"
+version = "0.1.0"
+edition = "2018"
+authors = ["Kai Ren <tyranron@gmail.com>"]
+publish = false
+
+[dependencies]
+ephyr-serde = { version = "0.1", path = "../../serde", features = ["seconds"] }
+mime = "0.3"
+mime_serde_shim = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_repr = "0.1"
+url = { version = "2.1", features = ["serde"] }
+[dependencies.derive_more]
+    version = "0.99.11"
+    features = ["display", "error", "from"]
+    default-features = false
+[dependencies.reqwest]
+    version = "0.10"
+    features = ["default-tls", "json"]
+    default-features = false
+
+
+[dev-dependencies]
+tokio = { version = "0.2", features = ["macros"] }

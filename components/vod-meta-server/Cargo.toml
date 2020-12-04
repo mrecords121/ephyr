@@ -1,0 +1,48 @@
+[package]
+name = "ephyr-vod-meta-server"
+version = "0.3.6"
+edition = "2018"
+authors = ["Kai Ren <tyranron@gmail.com>"]
+publish = false
+
+[dependencies]
+actix-web = "3.0"
+actix-web-httpauth = "0.5"
+anyhow = "1.0"
+argon2 = { version = "0.8", package = "rust-argon2", default-features = false }
+byte-unit = { version = "4.0", features = ["serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+ephyr-log = { version = "0.1", path = "../../common/log" }
+futures = "0.3"
+isolang = { version = "1.0", features = ["serde_serialize"] }
+mime = "0.3"
+mime_serde_shim = "0.2"
+once_cell = { version = "1.4", features = ["parking_lot"] }
+regex = "1.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_humantime = { version = "1.0", package = "humantime-serde" }
+serde_millis = "0.1"
+smart-default = "0.6"
+structopt = "0.3"
+tempfile = "3.1"
+tokio-util = { version = "0.3", features = ["compat"] }
+url = { version = "2.1", features = ["serde"] }
+[dependencies.derive_more]
+    version = "0.99.11"
+    features = ["from", "into"]
+    default-features = false
+[dependencies.ephyr-api-allatra-video]
+    version = "0.1"
+    path = "../../common/api/allatra-video"
+[dependencies.ephyr-serde]
+    version = "0.1"
+    features = ["timelike", "timezone"]
+    path = "../../common/serde"
+[dependencies.reqwest]
+    version = "0.10"
+    features = ["default-tls", "stream"]
+    default-features = false
+[dependencies.tokio]
+    version = "0.2"
+    features = ["fs", "rt-core", "sync"]
