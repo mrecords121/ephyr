@@ -189,14 +189,19 @@ docker.down:
 # Build project Docker image.
 #
 # Usage:
-#	make docker.image [tag=($(IMAGE_TAG)|<tag>)]
+#	make docker.image [comp=(restreamer|mixer|vod-meta-server)]
+#	                  [tag=($(IMAGE_TAG)|<tag>)]
 #	                  [no-cache=(no|yes)]
+
+docker-image-comp = $(if $(call eq,$(comp),),restreamer,$(comp))
+docker-image-tag = $(if $(call eq,$(tag),),$(IMAGE_TAG),$(tag))
 
 docker.image:
 	docker build --network=host --force-rm \
 		$(if $(call eq,$(no-cache),yes),\
 			--no-cache --pull,) \
-		-t $(IMAGE_NAME):$(if $(call eq,$(tag),),$(IMAGE_TAG),$(tag)) ./
+		--file=components/$(docker-image-comp)/Dockerfile \
+		-t $(IMAGE_NAME):$(docker-image-comp)-$(docker-image-tag) ./
 
 
 # Run project in Docker Compose development environment.

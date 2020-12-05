@@ -1,4 +1,5 @@
 *
 
 !Cargo.*
-!src/
+!common/
+!components/
