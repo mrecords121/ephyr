@@ -5,6 +5,7 @@ use futures::future;
 use crate::{
     cli::{Failure, Opts},
     State,
+    srs,
 };
 
 /// Runs all application's HTTP servers.
@@ -15,10 +16,17 @@ use crate::{
 /// The actual error is witten to logs.
 #[actix_web::main]
 pub async fn run(cfg: Opts) -> Result<(), Failure> {
-    let state = State::new();
-    future::try_join(self::client::run(&cfg, state), future::ok(()))
-        .await
-        .map(|_| ())
+    let res = {
+        let state = State::new();
+
+        let _srs = srs::Server::new(cfg.srs_path.as_path());
+
+        future::try_join(self::client::run(&cfg, state), future::ok(()))
+            .await
+            .map(|_| ())
+    };
+    crate::await_async_drops().await;
+    res
 }
 
 /// Client HTTP server responding to client requests.

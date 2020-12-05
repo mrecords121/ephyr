@@ -68,6 +68,18 @@ pub struct Opts {
     )]
     pub state_path: PathBuf,
 
+    /// Path to [SRS] installation directory.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[structopt(
+        long,
+        env = "EPHYR_RESTREAMER_SRS_PATH",
+        default_value = "/usr/local/srs",
+        help = "Path to SRS dir",
+        help = "Path to SRS installation directory"
+    )]
+    pub srs_path: PathBuf,
+
     /// Verbosity level of the server logs.
     #[structopt(
         short,
