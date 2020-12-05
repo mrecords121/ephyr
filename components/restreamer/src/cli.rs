@@ -1,0 +1,131 @@
+//! CLI (command line interface).
+
+use std::{fmt, net::IpAddr, path::PathBuf, str::FromStr as _};
+
+use anyhow::anyhow;
+use ephyr_log::slog;
+use structopt::StructOpt;
+
+/// CLI (command line interface) of the re-streamer server.
+#[derive(Clone, Debug, StructOpt)]
+#[structopt(about = "RTMP re-streamer server")]
+pub struct Opts {
+    /// Debug mode of the server.
+    #[structopt(short, long, help = "Enables debug mode")]
+    pub debug: bool,
+
+    /// IP address for the server to listen client HTTP requests on.
+    #[structopt(
+        long,
+        env = "EPHYR_RESTREAMER_CLIENT_HTTP_IP",
+        default_value = "0.0.0.0",
+        help = "IP to listen client HTTP on",
+        long_help = "IP address for the server to listen client HTTP requests \
+                     on"
+    )]
+    pub client_http_ip: IpAddr,
+
+    /// Port for the server to listen client HTTP requests on.
+    #[structopt(
+        long,
+        env = "EPHYR_RESTREAMER_CLIENT_HTTP_PORT",
+        default_value = "80",
+        help = "Port to listen client HTTP on",
+        long_help = "Port for the server to listen client HTTP requests on"
+    )]
+    pub client_http_port: u16,
+
+    /// IP address for the server to listen RTMP callback HTTP requests on.
+    #[structopt(
+        long,
+        env = "EPHYR_RESTREAMER_CALLBACK_HTTP_IP",
+        default_value = "127.0.0.1",
+        help = "IP to listen callback HTTP on",
+        long_help = "IP address for the server to listen RTMP callback HTTP \
+                     requests on"
+    )]
+    pub callback_http_ip: IpAddr,
+
+    /// Port for the server to listen RTMP callback HTTP requests on.
+    #[structopt(
+        long,
+        env = "EPHYR_RESTREAMER_CALLBACK_HTTP_PORT",
+        default_value = "8081",
+        help = "Port to listen callback HTTP on",
+        long_help = "Port for the server to listen RTMP callback HTTP requests \
+                     on"
+    )]
+    pub callback_http_port: u16,
+
+    /// Path to a file to persist the server's state in.
+    #[structopt(
+        short,
+        long,
+        env = "EPHYR_RESTREAMER_STATE_PATH",
+        default_value = "state.json",
+        help = "Path to a file to persist state in",
+        long_help = "Path to a file to persist the server's state in"
+    )]
+    pub state_path: PathBuf,
+
+    /// Verbosity level of the server logs.
+    #[structopt(
+        short,
+        long,
+        parse(try_from_str = Self::parse_log_level),
+        help = "Logs verbosity level: \
+                OFF | CRIT | ERRO | WARN | INFO | DEBG | TRCE"
+    )]
+    pub verbose: Option<slog::Level>,
+}
+
+impl Opts {
+    /// Parses CLI [`Opts`] from command line arguments.
+    ///
+    /// Prints the error message and quits the program in case of failure.
+    #[inline]
+    #[must_use]
+    pub fn from_args() -> Self {
+        <Self as StructOpt>::from_args()
+    }
+
+    /// Parses [`slog::Level`] from the given string.
+    ///
+    /// This function is required, because [`slog::Level`]'s [`FromStr`]
+    /// implementation returns `()`, which is not [`Display`] as [`StructOpt`]
+    /// requires.
+    ///
+    /// # Errors
+    ///
+    /// If [`slog::Level`] failed to parse from the string.
+    ///
+    /// [`Display`]: std::fmt::Display
+    /// [`FromStr`]: std::str::FromStr
+    pub fn parse_log_level(lvl: &str) -> Result<slog::Level, anyhow::Error> {
+        #[allow(clippy::map_err_ignore)]
+        slog::Level::from_str(lvl).map_err(|_| {
+            anyhow!(
+                "'{}' is invalid verbosity level, allowed levels are: \
+                 OFF | CRIT | ERRO | WARN | INFO | DEBG | TRCE",
+                lvl,
+            )
+        })
+    }
+}
+
+/// Error type indicating non-zero process exit code.
+pub struct Failure;
+
+impl fmt::Debug for Failure {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "")
+    }
+}
+
+impl From<()> for Failure {
+    #[inline]
+    fn from(_: ()) -> Self {
+        Self
+    }
+}
