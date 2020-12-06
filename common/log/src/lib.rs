@@ -23,14 +23,14 @@
 pub use slog::{self, Drain};
 pub use slog_scope::{self as log, logger};
 
-/// Initializes global logger with the given verbosity `level` ([`Error`] by
+/// Initializes global logger with the given verbosity `level` ([`Info`] by
 /// default, if [`None`]), returning its guard that should be held as long as
 /// program runs.
 ///
-/// [`Error`]: slog::Level::Error
+/// [`Info`]: slog::Level::Info
 pub fn init(level: Option<slog::Level>) -> slog_scope::GlobalLoggerGuard {
     let guard = slog_scope::set_global_logger(main_logger(
-        level.unwrap_or(slog::Level::Error),
+        level.unwrap_or(slog::Level::Info),
     ));
     slog_stdlog::init().unwrap();
     guard

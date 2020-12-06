@@ -80,6 +80,19 @@ pub struct Opts {
     )]
     pub srs_path: PathBuf,
 
+    /// Path to [FFmpeg] binary.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
+    #[structopt(
+        short,
+        long,
+        env = "FFMPEG_PATH",
+        default_value = "/usr/local/bin/ffmpeg",
+        help = "Path to FFmpeg binary",
+        long_help = "Path to FFmpeg binary"
+    )]
+    pub ffmpeg_path: PathBuf,
+
     /// Verbosity level of the server logs.
     #[structopt(
         short,

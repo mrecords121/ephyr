@@ -1,11 +1,12 @@
 //! HTTP servers.
 
+use ephyr_log::log;
 use futures::future;
+use tokio::fs;
 
 use crate::{
     cli::{Failure, Opts},
-    State,
-    srs,
+    srs, State,
 };
 
 /// Runs all application's HTTP servers.
@@ -17,9 +18,39 @@ use crate::{
 #[actix_web::main]
 pub async fn run(cfg: Opts) -> Result<(), Failure> {
     let res = {
-        let state = State::new();
+        let ffmpeg_path =
+            fs::canonicalize(&cfg.ffmpeg_path).await.map_err(|e| {
+                log::error!("Failed to resolve FFmpeg binary path: {}", e)
+            })?;
 
-        let _srs = srs::Server::new(cfg.srs_path.as_path());
+        let state = State::try_new(&cfg.state_path).await.map_err(|e| {
+            log::error!("Failed to initialize server state: {}", e)
+        })?;
+
+        let callback_http_port = cfg.callback_http_port;
+        let srs = srs::Server::try_new(
+            &cfg.srs_path,
+            &srs::Config {
+                callback_port: callback_http_port,
+                restreams: state.get_cloned(),
+                ffmpeg_path: ffmpeg_path.to_string_lossy().into_owned(),
+            },
+        )
+        .await
+        .map_err(|e| log::error!("Failed to initialize SRS server: {}", e))?;
+        state.on_change("refresh_srs_conf", move |restreams| {
+            let srs = srs.clone();
+            let ffmpeg_path = ffmpeg_path.to_string_lossy().into_owned();
+            async move {
+                srs.refresh(&srs::Config {
+                    callback_port: callback_http_port,
+                    restreams,
+                    ffmpeg_path,
+                })
+                .await
+                .map_err(|e| log::error!("Failed to refresh SRS config: {}", e))
+            }
+        });
 
         future::try_join(self::client::run(&cfg, state), future::ok(()))
             .await

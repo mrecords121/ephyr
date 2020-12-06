@@ -1,47 +1,96 @@
+use std::{future::Future, panic::AssertUnwindSafe, path::Path};
+
+use anyhow::anyhow;
 use derive_more::{Deref, From};
-use futures_signals::signal::Mutable;
+use ephyr_log::log;
+use futures::{
+    future::TryFutureExt as _,
+    sink,
+    stream::{StreamExt as _, TryStreamExt as _},
+};
+use futures_signals::signal::{Mutable, SignalExt as _};
 use juniper::{GraphQLEnum, GraphQLObject, GraphQLUnion};
+use serde::{Deserialize, Serialize};
+use smart_default::SmartDefault;
+use tokio::{fs, io::AsyncReadExt as _};
 use url::Url;
+
+use crate::display_panic;
 
 #[derive(Clone, Debug, Deref)]
 pub struct State(Mutable<Vec<Restream>>);
 
 impl State {
-    pub fn new() -> Self {
-        Self(Mutable::new(vec![
-            Restream {
-                enabled: false,
-                input: Input::Push(PushInput {
-                    name: "en".to_string(),
-                    status: Status::Offline,
-                }),
-                outputs: vec![
-                    Output {
-                        dst: Url::parse("rtmp://126.3.6.2:1935/app/svgdv")
-                            .unwrap(),
-                        status: Status::Offline,
-                        enabled: true,
-                    },
-                    Output {
-                        dst: Url::parse("rtmp://facecast.io/en/svgdv").unwrap(),
-                        status: Status::Initializing,
-                        enabled: false,
-                    },
-                ],
-            },
-            Restream {
-                enabled: true,
-                input: Input::Pull(PullInput {
-                    src: Url::parse("rtmp://youtube.yt/app/XXXXXX").unwrap(),
-                    status: Status::Online,
-                }),
-                outputs: vec![Output {
-                    dst: Url::parse("rtmp://126.3.6.2:1935/app/svgdv").unwrap(),
-                    status: Status::Online,
-                    enabled: true,
-                }],
-            },
-        ]))
+    pub async fn try_new<P: AsRef<Path>>(
+        file: P,
+    ) -> Result<Self, anyhow::Error> {
+        let file = file.as_ref();
+
+        let mut contents = vec![];
+        let _ = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .read(true)
+            .open(&file)
+            .await
+            .map_err(|e| {
+                anyhow!("Failed to open '{}' file: {}", file.display(), e)
+            })?
+            .read_to_end(&mut contents)
+            .await
+            .map_err(|e| {
+                anyhow!("Failed to read '{}' file: {}", file.display(), e)
+            })?;
+
+        let state = Self(Mutable::new(if contents.is_empty() {
+            vec![]
+        } else {
+            serde_json::from_slice(&contents).map_err(|e| {
+                anyhow!(
+                    "Failed to deserialize state from '{}' file: {}",
+                    file.display(),
+                    e,
+                )
+            })?
+        }));
+
+        let file = file.to_owned();
+        state.on_change("persist_state", move |restreams| {
+            fs::write(
+                file.clone(),
+                serde_json::to_vec(&restreams)
+                    .expect("Failed to serialize server state"),
+            )
+            .map_err(|e| log::error!("Failed to persist server state: {}", e))
+        });
+
+        Ok(state)
+    }
+
+    pub fn on_change<F, Fut>(&self, name: &'static str, hook: F)
+    where
+        F: FnMut(Vec<Restream>) -> Fut + Send + 'static,
+        Fut: Future + Send + 'static,
+    {
+        let _ = tokio::spawn(
+            AssertUnwindSafe(
+                self.0
+                    .signal_cloned()
+                    .dedupe_cloned()
+                    .to_stream()
+                    .then(hook),
+            )
+            .catch_unwind()
+            .map_err(move |p| {
+                log::crit!(
+                    "Panicked executing `{}` hook of state: {}",
+                    name,
+                    display_panic(&p),
+                )
+            })
+            .map(|_| Ok(()))
+            .forward(sink::drain()),
+        );
     }
 
     #[must_use]
@@ -212,14 +261,17 @@ impl State {
     }
 }
 
-#[derive(Clone, Debug, Eq, GraphQLObject, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
 pub struct Restream {
     pub input: Input,
     pub outputs: Vec<Output>,
     pub enabled: bool,
 }
 
-#[derive(Clone, Debug, Eq, From, GraphQLUnion, PartialEq)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, From, GraphQLUnion, PartialEq, Serialize,
+)]
+#[serde(rename_all = "lowercase")]
 pub enum Input {
     Push(PushInput),
     Pull(PullInput),
@@ -250,11 +302,32 @@ impl Input {
             _ => false,
         }
     }
+
+    #[inline]
+    #[must_use]
+    pub fn hash(&self) -> u64 {
+        use xxhash::xxh3::xxh3_64;
+        match self {
+            Self::Pull(i) => xxh3_64(i.src.as_ref().as_bytes()),
+            Self::Push(i) => xxh3_64(i.name.as_bytes()),
+        }
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn url(&self) -> Option<&Url> {
+        if let Self::Pull(i) = self {
+            Some(&i.src)
+        } else {
+            None
+        }
+    }
 }
 
-#[derive(Clone, Debug, Eq, GraphQLObject, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
 pub struct PullInput {
     pub src: Url,
+    #[serde(skip)]
     pub status: Status,
 }
 
@@ -266,9 +339,10 @@ impl PullInput {
     }
 }
 
-#[derive(Clone, Debug, Eq, GraphQLObject, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
 pub struct PushInput {
     pub name: String,
+    #[serde(skip)]
     pub status: Status,
 }
 
@@ -280,10 +354,11 @@ impl PushInput {
     }
 }
 
-#[derive(Clone, Debug, Eq, GraphQLObject, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
 pub struct Output {
     pub dst: Url,
     pub enabled: bool,
+    #[serde(skip)]
     pub status: Status,
 }
 
@@ -295,8 +370,9 @@ impl Output {
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, GraphQLEnum, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, GraphQLEnum, PartialEq, SmartDefault)]
 pub enum Status {
+    #[default]
     Offline,
     Initializing,
     Online,

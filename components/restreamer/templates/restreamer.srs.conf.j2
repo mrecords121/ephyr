@@ -1,0 +1,40 @@
+daemon                    off;
+inotify_auto_reload       on;
+auto_reload_for_docker    on;
+
+srs_log_tank    console;
+srs_log_level   trace;
+
+listen             1935;
+max_connections    1000;
+
+#http_api {
+#  enabled    on;
+#  listen     127.0.0.1:8082;
+#}
+
+vhost __defaultVhost__ {
+  http_hooks {
+    enabled       on;
+    on_connect    http://127.0.0.1:{{ callback_port }};
+  }
+}
+
+{% for r in restreams %}
+{%- if r.input.is_pull() -%}
+#vhost pull_{{ r.input.hash() }} {
+#  ingest pull_{{ r.input.hash() }} {
+#    enabled    on;
+#    input {
+#      type    stream;
+#      url     {{ r.input.url().unwrap() }};
+#    }
+#  }
+#  ffmpeg    {{ ffmpeg_path }};
+#  engine {
+#    enabled    off;
+#    output     rtmp://127.0.0.1:[port]/pull/{{ r.input.hash() }};
+#  }
+#}
+{%- endif -%}
+{% endfor %}

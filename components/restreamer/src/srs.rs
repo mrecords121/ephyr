@@ -1,40 +1,36 @@
 use std::{
-    convert::TryInto as _,
     panic::AssertUnwindSafe,
-    path::Path,
+    path::{Path, PathBuf},
     process::Stdio,
-    sync::{Arc, Mutex},
 };
 
+use anyhow::anyhow;
+use askama::Template;
 use ephyr_log::log;
 use futures::future::{self, FutureExt as _, TryFutureExt as _};
-use nix::{
-    sys::signal::{self, Signal},
-    unistd::Pid,
-};
-use tokio::{process::Command, task::JoinHandle};
+use tokio::{fs, process::Command};
 
-use crate::{display_panic, register_async_drop};
+use crate::{display_panic, register_async_drop, state};
 
 #[derive(Clone, Debug)]
 pub struct Server {
-    process: Arc<ServerProcess>,
-    id: Arc<Mutex<Option<u32>>>,
-}
-
-#[derive(Debug)]
-struct ServerProcess {
-    abort_handle: future::AbortHandle,
-    spawn_handle: Option<JoinHandle<Result<(), future::Aborted>>>,
+    conf_path: PathBuf,
+    process: ServerProcess,
 }
 
 impl Server {
     #[must_use]
-    pub fn new(workdir: &Path) -> Self {
+    pub async fn try_new<P: AsRef<Path>>(
+        workdir: P,
+        cfg: &Config,
+    ) -> Result<Self, anyhow::Error> {
+        let workdir = workdir.as_ref();
         let mut bin_path = workdir.to_path_buf();
         bin_path.push("objs/srs");
+
         let mut conf_path = workdir.to_path_buf();
         conf_path.push("conf/srs.conf");
+
         let mut cmd = Command::new(bin_path);
         let _ = cmd
             .stdin(Stdio::null())
@@ -42,23 +38,16 @@ impl Server {
             .stderr(Stdio::inherit())
             .kill_on_drop(true)
             .current_dir(workdir)
-            .arg("-s")
-            .arg(conf_path);
+            .arg("-c")
+            .arg(&conf_path);
 
-        let id = Arc::new(Mutex::new(None));
-
-        let process_id = id.clone();
-        let (process, abort_handle) = future::abortable(async move {
+        let (spawner, abort_handle) = future::abortable(async move {
             loop {
                 let cmd = &mut cmd;
-                let process_id = &process_id;
                 let _ = AssertUnwindSafe(async move {
                     let process = cmd.spawn().map_err(|e| {
                         log::crit!("Cannot start SRS server: {}", e)
                     })?;
-                    {
-                        *process_id.lock().unwrap() = Some(process.id());
-                    }
                     let out =
                         process.wait_with_output().await.map_err(|e| {
                             log::crit!("Failed to observe SRS server: {}", e)
@@ -69,13 +58,11 @@ impl Server {
                     );
                     Ok(())
                 })
-                .unwrap_or_else(|_: ()| {
-                    *process_id.lock().unwrap() = None;
-                })
+                .unwrap_or_else(|_: ()| ())
                 .catch_unwind()
                 .await
                 .map_err(|p| {
-                    log::error!(
+                    log::crit!(
                         "Panicked while spawning/observing SRS server: {}",
                         display_panic(&p),
                     );
@@ -83,30 +70,48 @@ impl Server {
             }
         });
 
-        Self {
-            process: Arc::new(ServerProcess {
-                abort_handle,
-                spawn_handle: Some(tokio::spawn(process)),
-            }),
-            id,
-        }
+        let srv = Self {
+            conf_path,
+            process: ServerProcess { abort_handle },
+        };
+
+        // Pre-create SRS conf file.
+        srv.refresh(cfg).await?;
+
+        // Start SRS server as a child process.
+        register_async_drop(tokio::spawn(spawner));
+
+        Ok(srv)
     }
 
-    pub fn reload(&self) -> nix::Result<()> {
-        if let Some(process_id) = { *self.id.lock().unwrap() } {
-            signal::kill(
-                Pid::from_raw(process_id.try_into().unwrap()),
-                Signal::SIGHUP,
-            )
-        } else {
-            Ok(())
-        }
+    pub async fn refresh(&self, cfg: &Config) -> anyhow::Result<()> {
+        // SRS server reloads automatically on its conf file changes.
+        fs::write(
+            &self.conf_path,
+            cfg.render().map_err(|e| {
+                anyhow!("Failed to render SRS config from template: {}", e)
+            })?,
+        )
+        .await
+        .map_err(|e| anyhow!("Failed to write SRS config file: {}", e))
     }
+}
+
+#[derive(Clone, Debug)]
+struct ServerProcess {
+    abort_handle: future::AbortHandle,
 }
 
 impl Drop for ServerProcess {
     fn drop(&mut self) {
-        register_async_drop(self.spawn_handle.take().unwrap());
         self.abort_handle.abort();
     }
+}
+
+#[derive(Clone, Debug, Template)]
+#[template(path = "restreamer.srs.conf.j2", escape = "none")]
+pub struct Config {
+    pub callback_port: u16,
+    pub ffmpeg_path: String,
+    pub restreams: Vec<state::Restream>,
 }

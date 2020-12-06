@@ -59,6 +59,7 @@ RUN cargo build -p ephyr-restreamer --lib --release
 RUN rm -rf ./target/release/.fingerprint/ephyr-*
 COPY common/log/src/ ./common/log/src/
 COPY components/restreamer/src/ ./components/restreamer/src/
+COPY components/restreamer/templates/ ./components/restreamer/templates/
 RUN cargo build -p ephyr-restreamer --bin ephyr-restreamer --release
 
 
