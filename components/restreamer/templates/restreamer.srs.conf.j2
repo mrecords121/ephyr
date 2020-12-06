@@ -27,7 +27,7 @@ vhost __defaultVhost__ {
 #    enabled    on;
 #    input {
 #      type    stream;
-#      url     {{ r.input.url().unwrap() }};
+#      url     {{ r.input.url() }};
 #    }
 #  }
 #  ffmpeg    {{ ffmpeg_path }};

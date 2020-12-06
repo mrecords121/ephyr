@@ -24,6 +24,7 @@
 
 pub mod api;
 pub mod cli;
+pub mod ffmpeg;
 pub mod server;
 pub mod srs;
 pub mod state;
@@ -32,6 +33,7 @@ use std::{
     any::Any,
     collections::HashMap,
     future::Future,
+    mem,
     sync::{Arc, Mutex},
 };
 
@@ -53,13 +55,13 @@ pub fn run() -> Result<(), cli::Failure> {
 
     // This guard should be held till the end of the program for the logger
     // to present in global context.
-    let _log_guard = ephyr_log::init(cfg.verbose.or_else(|| {
+    mem::forget(ephyr_log::init(cfg.verbose.or_else(|| {
         if cfg.debug {
             Some(slog::Level::Debug)
         } else {
             None
         }
-    }));
+    })));
 
     server::run(cfg)
 }

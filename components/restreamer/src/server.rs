@@ -6,7 +6,7 @@ use tokio::fs;
 
 use crate::{
     cli::{Failure, Opts},
-    srs, State,
+    ffmpeg, srs, State,
 };
 
 /// Runs all application's HTTP servers.
@@ -28,19 +28,20 @@ pub async fn run(cfg: Opts) -> Result<(), Failure> {
         })?;
 
         let callback_http_port = cfg.callback_http_port;
+        let ffmpeg_path_str = ffmpeg_path.to_string_lossy().into_owned();
         let srs = srs::Server::try_new(
             &cfg.srs_path,
             &srs::Config {
                 callback_port: callback_http_port,
                 restreams: state.get_cloned(),
-                ffmpeg_path: ffmpeg_path.to_string_lossy().into_owned(),
+                ffmpeg_path: ffmpeg_path_str.clone(),
             },
         )
         .await
         .map_err(|e| log::error!("Failed to initialize SRS server: {}", e))?;
         state.on_change("refresh_srs_conf", move |restreams| {
             let srs = srs.clone();
-            let ffmpeg_path = ffmpeg_path.to_string_lossy().into_owned();
+            let ffmpeg_path = ffmpeg_path_str.clone();
             async move {
                 srs.refresh(&srs::Config {
                     callback_port: callback_http_port,
@@ -50,6 +51,12 @@ pub async fn run(cfg: Opts) -> Result<(), Failure> {
                 .await
                 .map_err(|e| log::error!("Failed to refresh SRS config: {}", e))
             }
+        });
+
+        let mut restreamers =
+            ffmpeg::RestreamersPool::new(ffmpeg_path, state.clone());
+        state.on_change("spawn_restreamers", move |restreams| {
+            future::ready(restreamers.apply(restreams))
         });
 
         future::try_join(self::client::run(&cfg, state), future::ok(()))

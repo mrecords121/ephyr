@@ -1,4 +1,4 @@
-use std::{future::Future, panic::AssertUnwindSafe, path::Path};
+use std::{borrow::Cow, future::Future, panic::AssertUnwindSafe, path::Path};
 
 use anyhow::anyhow;
 use derive_more::{Deref, From};
@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use smart_default::SmartDefault;
 use tokio::{fs, io::AsyncReadExt as _};
 use url::Url;
+use xxhash::xxh3::xxh3_64;
 
 use crate::display_panic;
 
@@ -286,6 +287,15 @@ impl Input {
 
     #[inline]
     #[must_use]
+    pub fn status(&self) -> Status {
+        match self {
+            Self::Pull(i) => i.status,
+            Self::Push(i) => i.status,
+        }
+    }
+
+    #[inline]
+    #[must_use]
     pub fn has_id(&self, id: &str) -> bool {
         match self {
             Self::Pull(i) => i.src.as_str() == id,
@@ -306,7 +316,6 @@ impl Input {
     #[inline]
     #[must_use]
     pub fn hash(&self) -> u64 {
-        use xxhash::xxh3::xxh3_64;
         match self {
             Self::Pull(i) => xxh3_64(i.src.as_ref().as_bytes()),
             Self::Push(i) => xxh3_64(i.name.as_bytes()),
@@ -315,11 +324,17 @@ impl Input {
 
     #[inline]
     #[must_use]
-    pub fn url(&self) -> Option<&Url> {
+    pub fn url(&self) -> Cow<'_, Url> {
         if let Self::Pull(i) = self {
-            Some(&i.src)
+            Cow::Borrowed(&i.src)
         } else {
-            None
+            Cow::Owned(
+                Url::parse(&format!(
+                    "rtmp://127.0.0.1:1935/pull/{}",
+                    self.hash(),
+                ))
+                .unwrap(),
+            )
         }
     }
 }
@@ -367,6 +382,12 @@ impl Output {
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
         &self.dst == &other.dst
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn hash(&self) -> u64 {
+        xxh3_64(self.dst.as_ref().as_bytes())
     }
 }
 
