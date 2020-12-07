@@ -8,33 +8,35 @@ srs_log_level   trace;
 listen             1935;
 max_connections    1000;
 
-#http_api {
-#  enabled    on;
-#  listen     127.0.0.1:8082;
-#}
+http_api {
+  enabled    on;
+  listen     127.0.0.1:8082;
+}
 
 vhost __defaultVhost__ {
   http_hooks {
-    enabled       on;
-    on_connect    http://127.0.0.1:{{ callback_port }};
+    enabled         on;
+    on_connect      http://127.0.0.1:{{ callback_port }};
+    on_publish      http://127.0.0.1:{{ callback_port }};
+    on_unpublish    http://127.0.0.1:{{ callback_port }};
   }
 }
 
 {% for r in restreams %}
 {%- if r.input.is_pull() -%}
-#vhost pull_{{ r.input.hash() }} {
-#  ingest pull_{{ r.input.hash() }} {
-#    enabled    on;
-#    input {
-#      type    stream;
-#      url     {{ r.input.url() }};
-#    }
-#  }
-#  ffmpeg    {{ ffmpeg_path }};
-#  engine {
-#    enabled    off;
-#    output     rtmp://127.0.0.1:[port]/pull/{{ r.input.hash() }};
-#  }
-#}
+vhost pull_{{ r.input.hash() }} {
+  ingest pull_{{ r.input.hash() }} {
+    enabled    on;
+    input {
+      type    stream;
+      url     {{ r.input.upstream_url().unwrap() }};
+    }
+  }
+  ffmpeg    {{ ffmpeg_path }};
+  engine {
+    enabled    off;
+    output     rtmp://127.0.0.1:[port]/pull_{{ r.input.hash() }}/in;
+  }
+}
 {%- endif -%}
 {% endfor %}

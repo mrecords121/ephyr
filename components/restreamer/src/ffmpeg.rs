@@ -53,7 +53,7 @@ impl RestreamersPool {
                     key,
                     self.pool.remove(&key).unwrap_or_else(|| {
                         Restreamer::new(&self.ffmpeg_path)
-                            .src_url(r.input.url().as_ref())
+                            .src_url(&r.input.srs_url())
                             .dst_url(&o.dst)
                             .run(key, self.state.clone())
                     }),

@@ -27,7 +27,6 @@ pub async fn run(cfg: Opts) -> Result<(), Failure> {
             log::error!("Failed to initialize server state: {}", e)
         })?;
 
-        /*
         let callback_http_port = cfg.callback_http_port;
         let ffmpeg_path_str = ffmpeg_path.to_string_lossy().into_owned();
         let srs = srs::Server::try_new(
@@ -52,7 +51,7 @@ pub async fn run(cfg: Opts) -> Result<(), Failure> {
                 .await
                 .map_err(|e| log::error!("Failed to refresh SRS config: {}", e))
             }
-        });*/
+        });
 
         let mut restreamers =
             ffmpeg::RestreamersPool::new(ffmpeg_path, state.clone());
@@ -60,9 +59,12 @@ pub async fn run(cfg: Opts) -> Result<(), Failure> {
             future::ready(restreamers.apply(restreams))
         });
 
-        future::try_join(self::client::run(&cfg, state), future::ok(()))
-            .await
-            .map(|_| ())
+        future::try_join(
+            self::client::run(&cfg, state.clone()),
+            self::callback::run(&cfg, state),
+        )
+        .await
+        .map(|_| ())
     };
     crate::await_async_drops().await;
     res
@@ -174,5 +176,93 @@ pub mod client {
         HttpResponse::Ok()
             .content_type("text/html; charset=utf-8")
             .body(html)
+    }
+}
+
+/// Callback HTTP server responding to [SRS] HTTP callbacks.
+///
+/// [SRS]: https://github.com/ossrs/srs
+pub mod callback {
+    use actix_web::{error, middleware, post, web, App, Error, HttpServer};
+    use ephyr_log::log;
+
+    use crate::{
+        api,
+        cli::{Failure, Opts},
+        state::{State, Status},
+    };
+
+    pub async fn run(cfg: &Opts, state: State) -> Result<(), Failure> {
+        Ok(HttpServer::new(move || {
+            App::new()
+                .app_data(state.clone())
+                .wrap(middleware::Logger::default())
+                .service(callback)
+        })
+        .bind((cfg.callback_http_ip, cfg.callback_http_port))
+        .map_err(|e| log::error!("Failed to bind callback HTTP server: {}", e))?
+        .run()
+        .await
+        .map_err(|e| {
+            log::error!("Failed to run callback HTTP server: {}", e)
+        })?)
+    }
+
+    #[post("/")]
+    async fn callback(
+        req: web::Json<api::srs::callback::Request>,
+        state: web::Data<State>,
+    ) -> Result<&'static str, Error> {
+        use api::srs::callback::Action;
+        match req.action {
+            Action::OnConnect => on_connect(&req, &*state)?,
+            Action::OnPublish => on_publish(&req, &*state)?,
+            Action::OnUnpublish => on_unpublish(&req, &*state)?,
+        }
+        Ok("0")
+    }
+
+    fn on_connect(
+        req: &api::srs::callback::Request,
+        state: &State,
+    ) -> Result<(), Error> {
+        let restreams = state.get_cloned();
+        let restream = restreams
+            .iter()
+            .find(|r| r.enabled && r.input.uses_srs_app(&req.app))
+            .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
+
+        if restream.input.is_pull() && !req.ip.is_loopback() {
+            return Err(error::ErrorForbidden("`app` is allowed only locally"));
+        }
+        Ok(())
+    }
+
+    fn on_publish(
+        req: &api::srs::callback::Request,
+        state: &State,
+    ) -> Result<(), Error> {
+        let mut restreams = state.lock_mut();
+        let restream = restreams
+            .iter_mut()
+            .find(|r| r.enabled && r.input.uses_srs_app(&req.app))
+            .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
+
+        restream.input.set_status(Status::Online);
+        Ok(())
+    }
+
+    fn on_unpublish(
+        req: &api::srs::callback::Request,
+        state: &State,
+    ) -> Result<(), Error> {
+        let mut restreams = state.lock_mut();
+        let restream = restreams
+            .iter_mut()
+            .find(|r| r.enabled && r.input.uses_srs_app(&req.app))
+            .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
+
+        restream.input.set_status(Status::Offline);
+        Ok(())
     }
 }

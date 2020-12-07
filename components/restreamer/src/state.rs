@@ -1,4 +1,4 @@
-use std::{borrow::Cow, future::Future, panic::AssertUnwindSafe, path::Path};
+use std::{future::Future, panic::AssertUnwindSafe, path::Path};
 
 use anyhow::anyhow;
 use derive_more::{Deref, From};
@@ -295,6 +295,14 @@ impl Input {
     }
 
     #[inline]
+    pub fn set_status(&mut self, new: Status) {
+        match self {
+            Self::Pull(i) => i.status = new,
+            Self::Push(i) => i.status = new,
+        }
+    }
+
+    #[inline]
     #[must_use]
     pub fn has_id(&self, id: &str) -> bool {
         match self {
@@ -324,17 +332,33 @@ impl Input {
 
     #[inline]
     #[must_use]
-    pub fn url(&self) -> Cow<'_, Url> {
+    pub fn upstream_url(&self) -> Option<&Url> {
         if let Self::Pull(i) = self {
-            Cow::Borrowed(&i.src)
+            Some(&i.src)
         } else {
-            Cow::Owned(
-                Url::parse(&format!(
-                    "rtmp://127.0.0.1:1935/pull/{}",
-                    self.hash(),
-                ))
-                .unwrap(),
-            )
+            None
+        }
+    }
+
+    #[must_use]
+    pub fn srs_url(&self) -> Url {
+        Url::parse(&match self {
+            Self::Pull(_) => {
+                format!("rtmp://127.0.0.1:1935/pull_{}/in", self.hash())
+            }
+            Self::Push(i) => format!("rtmp://127.0.0.1:1935/{}/in", i.name),
+        })
+        .unwrap()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn uses_srs_app(&self, app: &str) -> bool {
+        match self {
+            Self::Pull(_) => {
+                app.starts_with("pull_") && app[5..].parse() == Ok(self.hash())
+            }
+            Self::Push(i) => app == &i.name,
         }
     }
 }
