@@ -48,7 +48,7 @@
         <i class="fas fa-plus"></i>&nbsp;<span>Add source</span>
       </button>
       <AddInputModal bind:show={openInputAddModal}
-                     public_address="{$info.data.info.publicAddress}"/>
+                     public_host="{$info.data.info.publicHost}"/>
       <AddOutputModal bind:show={openOutputAddModal}
                       bind:input_id={idForOutPutModal}/>
     {:else if $info.error}
@@ -65,7 +65,7 @@
       <div class="uk-alert uk-alert-warning loading">Loading...</div>
     {:else if $state.data && $info.data}
       {#each $state.data.state.restreams as restream, i}
-        <Restream public_address="{$info.data.info.publicAddress}"
+        <Restream public_host="{$info.data.info.publicHost}"
                   value="{restream}"
                   id="{i}"
                   on:open_output_modal={(e) => {

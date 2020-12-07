@@ -1,5 +1,7 @@
 //! HTTP servers.
 
+use std::net::IpAddr;
+
 use ephyr_log::log;
 use futures::future;
 use tokio::fs;
@@ -16,8 +18,19 @@ use crate::{
 /// If some [`HttpServer`] cannot run due to already used port, etc.
 /// The actual error is witten to logs.
 #[actix_web::main]
-pub async fn run(cfg: Opts) -> Result<(), Failure> {
+pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
     let res = {
+        if cfg.public_host.is_none() {
+            cfg.public_host = Some(
+                detect_public_ip()
+                    .await
+                    .ok_or_else(|| {
+                        log::error!("Cannot detect server's public IP address")
+                    })?
+                    .to_string(),
+            );
+        }
+
         let ffmpeg_path =
             fs::canonicalize(&cfg.ffmpeg_path).await.map_err(|e| {
                 log::error!("Failed to resolve FFmpeg binary path: {}", e)
@@ -121,9 +134,12 @@ pub mod client {
     pub async fn run(cfg: &Opts, state: State) -> Result<(), Failure> {
         let in_debug_mode = cfg.debug;
 
+        let stored_cfg = cfg.clone();
+
         Ok(HttpServer::new(move || {
             let public_dir_files = public_dir::generate();
             let mut app = App::new()
+                .app_data(stored_cfg.clone())
                 .app_data(state.clone())
                 .data(api::graphql::client::schema())
                 .wrap(middleware::Logger::default())
@@ -265,4 +281,17 @@ pub mod callback {
         restream.input.set_status(Status::Offline);
         Ok(())
     }
+}
+
+pub async fn detect_public_ip() -> Option<IpAddr> {
+    use public_ip::{dns, http, BoxToResolver, ToResolver as _};
+
+    public_ip::resolve_address(
+        vec![
+            BoxToResolver::new(dns::OPENDNS_RESOLVER),
+            BoxToResolver::new(http::HTTP_IPIFY_ORG_RESOLVER),
+        ]
+        .to_resolver(),
+    )
+    .await
 }

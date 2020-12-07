@@ -8,9 +8,9 @@
 
 use std::{fs, path::PathBuf, str::FromStr};
 
-use ephyr_restreamer::api;
 use anyhow::anyhow;
 use derive_more::Display;
+use ephyr_restreamer::api;
 use structopt::StructOpt;
 
 /// Introspects GraphQL schema and exports it into `*.graphql.schema.json` file.

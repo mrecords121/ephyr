@@ -93,6 +93,18 @@ pub struct Opts {
     )]
     pub ffmpeg_path: PathBuf,
 
+    /// Host to access the re-streamer server in public networks.
+    ///
+    /// If [`None`], then it will be auto-detected.
+    #[structopt(
+        long,
+        env = "EPHYR_RESTREAMER_PUBLIC_HOST",
+        help = "Public host to access the server",
+        long_help = "Host to access the server in public networks \
+                     (auto-detects by default)"
+    )]
+    pub public_host: Option<String>,
+
     /// Verbosity level of the server logs.
     #[structopt(
         short,

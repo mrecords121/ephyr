@@ -22,7 +22,7 @@
   const dispatch = createEventDispatcher();
 
   export let id;
-  export let public_address;
+  export let public_host = "localhost";
   export let value;
 
   let isPull = value.input.__typename === 'PullInput';
@@ -113,7 +113,7 @@
     {#if isPull}
       { value.input.src }
     {:else}
-      rtmp://{public_address}/{ value.input.name }/in
+      rtmp://{public_host}/{ value.input.name }/in
     {/if}
   </span>
 

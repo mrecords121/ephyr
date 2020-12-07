@@ -35,9 +35,9 @@ pub struct QueriesRoot;
 
 #[graphql_object(name = "Queries", context = Context)]
 impl QueriesRoot {
-    fn info() -> Info {
+    fn info(context: &Context) -> Info {
         Info {
-            public_address: "my.server.dev".to_owned(),
+            public_host: context.config().public_host.clone().unwrap(),
         }
     }
 
@@ -177,7 +177,7 @@ impl SubscriptionsRoot {
 
 #[derive(Clone, Debug, GraphQLObject)]
 pub struct Info {
-    pub public_address: String,
+    pub public_host: String,
 }
 
 #[derive(Clone, Debug, Eq, GraphQLObject, PartialEq)]

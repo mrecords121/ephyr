@@ -40,6 +40,12 @@ impl Context {
 
     #[inline]
     #[must_use]
+    pub fn config(&self) -> &crate::cli::Opts {
+        self.app_data::<crate::cli::Opts>().unwrap()
+    }
+
+    #[inline]
+    #[must_use]
     pub fn state(&self) -> &crate::State {
         self.app_data::<crate::State>().unwrap()
     }

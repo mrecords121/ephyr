@@ -8,7 +8,7 @@
   const addPullInputMutation = mutation(AddPullInput);
   const addPushInputMutation = mutation(AddPushInput);
 
-  export let public_address = "localhost";
+  export let public_host = "localhost";
 
   let is_pull = false;
 
@@ -70,9 +70,9 @@
     </fieldset>
 
     <fieldset class="push-form">
-      <label>rtmp://{public_address}/<input class="uk-input" type="text"
-                                            placeholder="<stream-name>"
-                                            bind:value={push_key}>/in</label>
+      <label>rtmp://{public_host}/<input class="uk-input" type="text"
+                                         placeholder="<stream-name>"
+                                         bind:value={push_key}>/in</label>
       <div class="uk-alert">
         Server will await RTMP stream to be published onto this address
       </div>
