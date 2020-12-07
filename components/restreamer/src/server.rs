@@ -27,6 +27,7 @@ pub async fn run(cfg: Opts) -> Result<(), Failure> {
             log::error!("Failed to initialize server state: {}", e)
         })?;
 
+        /*
         let callback_http_port = cfg.callback_http_port;
         let ffmpeg_path_str = ffmpeg_path.to_string_lossy().into_owned();
         let srs = srs::Server::try_new(
@@ -51,7 +52,7 @@ pub async fn run(cfg: Opts) -> Result<(), Failure> {
                 .await
                 .map_err(|e| log::error!("Failed to refresh SRS config: {}", e))
             }
-        });
+        });*/
 
         let mut restreamers =
             ffmpeg::RestreamersPool::new(ffmpeg_path, state.clone());
@@ -75,6 +76,7 @@ pub mod client {
         get, middleware, route, web, App, Error, HttpRequest, HttpResponse,
         HttpServer,
     };
+    use actix_web_static_files::ResourceFiles;
     use ephyr_log::log;
     use juniper::http::playground::playground_source;
     use juniper_actix::{
@@ -87,6 +89,15 @@ pub mod client {
         cli::{Failure, Opts},
         State,
     };
+
+    pub mod public_dir {
+        #![allow(unused_results)]
+        #![doc(hidden)]
+
+        use std::collections::HashMap;
+
+        include!(concat!(env!("OUT_DIR"), "/generated.rs"));
+    }
 
     /// Runs client HTTP server.
     ///
@@ -109,6 +120,7 @@ pub mod client {
         let in_debug_mode = cfg.debug;
 
         Ok(HttpServer::new(move || {
+            let public_dir_files = public_dir::generate();
             let mut app = App::new()
                 .app_data(state.clone())
                 .data(api::graphql::client::schema())
@@ -117,7 +129,7 @@ pub mod client {
             if in_debug_mode {
                 app = app.service(playground);
             }
-            app
+            app.service(ResourceFiles::new("/", public_dir_files))
         })
         .bind((cfg.client_http_ip, cfg.client_http_port))
         .map_err(|e| log::error!("Failed to bind client HTTP server: {}", e))?
@@ -131,7 +143,7 @@ pub mod client {
     /// # Errors
     ///
     /// If GraphQL operation execution errors or fails.
-    #[route("/", method = "GET", method = "POST")]
+    #[route("/api", method = "GET", method = "POST")]
     async fn graphql(
         req: HttpRequest,
         payload: web::Payload,
@@ -151,13 +163,13 @@ pub mod client {
     /// [`api::graphql::client`].
     ///
     /// [1]: https://github.com/graphql/graphql-playground
-    #[get("/playground")]
+    #[get("/api/playground")]
     async fn playground() -> HttpResponse {
         // Constructs API URL relatively to the current HTTP request's scheme
         // and authority.
         let html = playground_source("__API_URL__", None).replace(
             "'__API_URL__'",
-            r"document.URL.replace(/\/playground$/, '/')",
+            r"document.URL.replace(/\/playground$/, '')",
         );
         HttpResponse::Ok()
             .content_type("text/html; charset=utf-8")

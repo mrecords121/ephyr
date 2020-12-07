@@ -1,0 +1,11 @@
+[*.{js,styl,svelte}]
+indent_style = space
+indent_size = 2
+
+[*.graphql]
+indent_style = space
+indent_size = 4
+
+[*.html]
+indent_style = space
+indent_size = 4

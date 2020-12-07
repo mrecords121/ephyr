@@ -35,6 +35,12 @@ pub struct QueriesRoot;
 
 #[graphql_object(name = "Queries", context = Context)]
 impl QueriesRoot {
+    fn info() -> Info {
+        Info {
+            public_address: "my.server.dev".to_owned(),
+        }
+    }
+
     fn state(context: &Context) -> Restreams {
         Restreams {
             restreams: context.state().get_cloned(),
@@ -73,7 +79,7 @@ impl MutationsRoot {
     ) -> Result<bool, graphql::Error> {
         static NAME_REGEX: Lazy<Regex> =
             Lazy::new(|| Regex::new("^[a-z0-9_-]{1,20}$").unwrap());
-        if NAME_REGEX.is_match(&name) {
+        if !NAME_REGEX.is_match(&name) {
             return Err(graphql::Error::new("INVALID_INPUT_NAME")
                 .status(StatusCode::BAD_REQUEST)
                 .message("Provided `name` is invalid: not [a-z0-9_-]{1,20}"));
@@ -88,6 +94,14 @@ impl MutationsRoot {
 
     fn remove_input(id: String, context: &Context) -> bool {
         context.state().remove_input(&id)
+    }
+
+    fn enable_input(id: String, context: &Context) -> Option<bool> {
+        context.state().enable_input(&id)
+    }
+
+    fn disable_input(id: String, context: &Context) -> Option<bool> {
+        context.state().disable_input(&id)
     }
 
     fn add_output(
@@ -159,6 +173,11 @@ impl SubscriptionsRoot {
             .to_stream()
             .boxed()
     }
+}
+
+#[derive(Clone, Debug, GraphQLObject)]
+pub struct Info {
+    pub public_address: String,
 }
 
 #[derive(Clone, Debug, Eq, GraphQLObject, PartialEq)]

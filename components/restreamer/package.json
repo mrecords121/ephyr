@@ -1,0 +1,36 @@
+{
+  "name": "ephyr-restreamer",
+  "version": "0.1.0-dev",
+  "private": true,
+  "scripts": {
+    "build": "webpack",
+    "build:dev": "webpack",
+    "build:prod": "cross-env NODE_ENV=production webpack",
+    "dev": "webpack-dev-server --content-base public"
+  },
+  "dependencies": {
+    "@apollo/client": "~3.2.9",
+    "graphql": "^15.4",
+    "subscriptions-transport-ws": "^0.9",
+    "svelte-apollo": "^0.4",
+    "uikit": "^3.5",
+    "uikit-icons": "^0.5"
+  },
+  "devDependencies": {
+    "copy-webpack-plugin": "^6.3",
+    "cross-env": "^5.2",
+    "css-loader": "^2.1",
+    "graphql-tag": "^2.11",
+    "mini-css-extract-plugin": "^0.6",
+    "minify-html-webpack-plugin": "^1.1",
+    "style-loader": "^0.23",
+    "stylus": "^0.54",
+    "stylus-loader": "^4.3",
+    "svelte": "^3.0",
+    "svelte-loader": "^2.13",
+    "svelte-preprocess": "^4.6",
+    "webpack": "^4.30",
+    "webpack-cli": "^3.3",
+    "webpack-dev-server": "^3.3"
+  }
+}

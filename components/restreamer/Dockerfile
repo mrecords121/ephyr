@@ -23,17 +23,21 @@ RUN curl -sLO https://static.rust-lang.org/rustup/dist/x86_64-unknown-linux-gnu/
  && rustc --version
 
 
+# Install Node.js and Yarn.
+RUN (curl -s https://install-node.now.sh/15 | bash -s -- --yes) \
+ && npm install -g yarn
+
+
 # Install build dependencies.
 RUN yum --enablerepo=extras install -y epel-release \
  && yum --enablerepo=epel install -y automake gcc libtool make \
                                      openssl-devel
 
 
-# Build Ephyr.
-WORKDIR /tmp/ephyr/
-
 # First, build all the dependencies to cache them in a separate Docker layer and
 # avoid recompilation each time project sources are changed.
+WORKDIR /tmp/ephyr/
+
 COPY common/api/allatra-video/Cargo.toml ./common/api/allatra-video/
 COPY common/log/Cargo.toml ./common/log/
 COPY common/serde/Cargo.toml ./common/serde/
@@ -41,6 +45,7 @@ COPY components/mixer/Cargo.toml ./components/mixer/
 COPY components/restreamer/Cargo.toml ./components/restreamer/
 COPY components/vod-meta-server/Cargo.toml ./components/vod-meta-server/
 COPY Cargo.toml Cargo.lock ./
+
 RUN mkdir -p common/api/allatra-video/src/ \
  && touch common/api/allatra-video/src/lib.rs \
  && mkdir -p common/log/src/ \
@@ -50,16 +55,33 @@ RUN mkdir -p common/api/allatra-video/src/ \
  && mkdir -p components/mixer/src/ \
  && touch components/mixer/src/lib.rs \
  && mkdir -p components/restreamer/src/ \
- && touch components/restreamer/src/lib.rs \
+ && touch components/restreamer/src/lib.rs components/restreamer/src/main.rs \
  && mkdir -p components/vod-meta-server/src/ \
  && touch components/vod-meta-server/src/lib.rs
+
 RUN cargo build -p ephyr-restreamer --lib --release
 
-# Now, build the project itself.
+
+# Then, prepare Yarn dependencies to cache them in a separate Docker layer and
+# avoid recompilation each time project sources are changed.
+WORKDIR /tmp/ephyr/components/restreamer/
+
+COPY components/restreamer/.yarnrc \
+     components/restreamer/package.json \
+     components/restreamer/yarn.lock \
+     ./
+
+RUN yarn install --pure-lockfile
+
+
+# Finally, build the whole project.
+WORKDIR /tmp/ephyr/
+
 RUN rm -rf ./target/release/.fingerprint/ephyr-*
-COPY common/log/src/ ./common/log/src/
-COPY components/restreamer/src/ ./components/restreamer/src/
-COPY components/restreamer/templates/ ./components/restreamer/templates/
+
+COPY common/log/ ./common/log/
+COPY components/restreamer/ ./components/restreamer/
+
 RUN cargo build -p ephyr-restreamer --bin ephyr-restreamer --release
 
 
@@ -76,7 +98,7 @@ FROM ossrs/srs:3 AS build-srs
 
 
 #
-# Stage 'runtime' creates final Docker image to use in runtime.
+# Stage 'dist' creates final Docker image to use in runtime.
 #
 
 # https://github.com/jrottenberg/ffmpeg/blob/master/docker-images/4.3/centos7/Dockerfile

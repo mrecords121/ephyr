@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "ephyr-restreamer-client": {
+      "schemaPath": "./components/restreamer/client.graphql.schema.json",
+      "extensions": {
+        "endpoints": {
+          "dev": "http://127.0.0.1/admin/"
+        }
+      }
+    }
+  }
+}

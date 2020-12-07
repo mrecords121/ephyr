@@ -3,3 +3,8 @@
 !Cargo.*
 !common/
 !components/
+
+components/restreamer/public/
+components/restreamer/*.graphql.schema.json
+components/restreamer/node_modules/
+components/restreamer/yarn-error.log

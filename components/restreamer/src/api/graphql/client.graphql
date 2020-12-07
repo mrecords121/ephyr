@@ -1,0 +1,66 @@
+query Info {
+    info {
+        publicAddress
+    }
+}
+
+subscription State {
+    state {
+        restreams {
+            input {
+                ...on PushInput {
+                    name
+                    status
+                }
+                ...on PullInput {
+                    src
+                    status
+                }
+            }
+            outputs{
+                dst
+                enabled
+                status
+            }
+            enabled
+        }
+    }
+}
+
+
+mutation AddPullInput($url: Url!) {
+    addPullInput(src: $url)
+}
+
+mutation AddPushInput($key: String!) {
+    addPushInput(name: $key)
+}
+
+mutation RemoveInput($id: String!) {
+    removeInput(id: $id)
+}
+
+mutation EnableInput($id: String!) {
+    enableInput(id: $id)
+}
+
+mutation DisableInput($id: String!) {
+    disableInput(id: $id)
+}
+
+
+mutation AddOutput($id: String!, $url: Url!) {
+    addOutput(inputId: $id, dst: $url)
+}
+
+mutation RemoveOutput($id: String!, $url: Url!) {
+    removeOutput(inputId: $id, dst: $url)
+}
+
+mutation EnableOutput($id: String!, $url: Url!) {
+    enableOutput(inputId: $id, dst: $url)
+}
+
+mutation DisableOutput($id: String!, $url: Url!) {
+    disableOutput(inputId: $id, dst: $url)
+}
