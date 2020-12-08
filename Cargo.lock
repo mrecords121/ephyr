@@ -1210,6 +1210,7 @@ dependencies = [
  "public-ip",
  "rand 0.7.3",
  "regex",
+ "reqwest",
  "send_wrapper",
  "serde",
  "serde_json",

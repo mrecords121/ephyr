@@ -2,6 +2,7 @@ use std::{
     panic::AssertUnwindSafe,
     path::{Path, PathBuf},
     process::Stdio,
+    sync::Arc,
 };
 
 use anyhow::anyhow;
@@ -10,12 +11,12 @@ use ephyr_log::log;
 use futures::future::{self, FutureExt as _, TryFutureExt as _};
 use tokio::{fs, process::Command};
 
-use crate::{display_panic, register_async_drop, state};
+use crate::{api, display_panic, state};
 
 #[derive(Clone, Debug)]
 pub struct Server {
     conf_path: PathBuf,
-    process: ServerProcess,
+    process: Arc<ServerProcess>,
 }
 
 impl Server {
@@ -72,14 +73,14 @@ impl Server {
 
         let srv = Self {
             conf_path,
-            process: ServerProcess { abort_handle },
+            process: Arc::new(ServerProcess { abort_handle }),
         };
 
         // Pre-create SRS conf file.
         srv.refresh(cfg).await?;
 
         // Start SRS server as a child process.
-        register_async_drop(tokio::spawn(spawner));
+        let _ = tokio::spawn(spawner);
 
         Ok(srv)
     }
@@ -94,6 +95,27 @@ impl Server {
         )
         .await
         .map_err(|e| anyhow!("Failed to write SRS config file: {}", e))
+    }
+
+    pub async fn kickoff_unnecessary_publishers(
+        restreams: Vec<state::Restream>,
+    ) {
+        let _ = future::join_all(restreams.iter().filter_map(|r| {
+            if r.enabled || r.srs_publisher_id.is_none() {
+                return None;
+            }
+            let client_id = r.srs_publisher_id.unwrap();
+            Some(api::srs::Client::kickoff_client(client_id).map_err(
+                move |e| {
+                    log::warn!(
+                        "Failed to kickoff client {} from SRS: {}",
+                        client_id,
+                        e,
+                    )
+                },
+            ))
+        }))
+        .await;
     }
 }
 

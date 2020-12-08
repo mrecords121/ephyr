@@ -114,6 +114,7 @@ impl State {
             .into(),
             outputs: vec![],
             enabled: true,
+            srs_publisher_id: None,
         });
         true
     }
@@ -138,6 +139,7 @@ impl State {
             .into(),
             outputs: vec![],
             enabled: true,
+            srs_publisher_id: None,
         });
         true
     }
@@ -267,6 +269,9 @@ pub struct Restream {
     pub input: Input,
     pub outputs: Vec<Output>,
     pub enabled: bool,
+    #[graphql(skip)]
+    #[serde(skip)]
+    pub srs_publisher_id: Option<u32>,
 }
 
 #[derive(

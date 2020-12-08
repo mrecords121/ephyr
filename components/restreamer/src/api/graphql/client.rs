@@ -79,6 +79,11 @@ impl MutationsRoot {
     ) -> Result<bool, graphql::Error> {
         static NAME_REGEX: Lazy<Regex> =
             Lazy::new(|| Regex::new("^[a-z0-9_-]{1,20}$").unwrap());
+        if name.starts_with("pull_") {
+            return Err(graphql::Error::new("INVALID_INPUT_NAME")
+                .status(StatusCode::BAD_REQUEST)
+                .message("Provided `name` is invalid: starts with 'pull_'"));
+        }
         if !NAME_REGEX.is_match(&name) {
             return Err(graphql::Error::new("INVALID_INPUT_NAME")
                 .status(StatusCode::BAD_REQUEST)

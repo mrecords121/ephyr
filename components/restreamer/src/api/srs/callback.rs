@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Request {
     pub action: Action,
-    pub client_id: u64,
+    pub client_id: u32,
     pub ip: IpAddr,
     pub app: String,
 }

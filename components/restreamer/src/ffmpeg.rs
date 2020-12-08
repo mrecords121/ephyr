@@ -11,7 +11,7 @@ use tokio::process::Command;
 use url::Url;
 
 use crate::{
-    display_panic, register_async_drop,
+    display_panic,
     state::{Restream, State, Status},
 };
 
@@ -138,9 +138,9 @@ impl Restreamer {
         });
 
         // Start FFmpeg re-streamer as a child process.
-        register_async_drop(tokio::spawn(spawner.map(move |_| {
+        let _ = tokio::spawn(spawner.map(move |_| {
             Self::set_status(Status::Offline, key, &state_for_abort)
-        })));
+        }));
 
         RestreamerProcess { abort_handle }
     }

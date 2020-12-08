@@ -103,13 +103,14 @@
           checked={value.enabled}
           on:change={toggleInput}/>
   <span>
-    <i class="fas"
-       class:fa-arrow-down={isPull}
-       class:fa-arrow-right={!isPull}
-       class:uk-alert-danger={value.input.status === 'OFFLINE'}
-       class:uk-alert-warning={value.input.status === 'INITIALIZING'}
-       class:uk-alert-success={value.input.status === 'OFFLINE'}
-       title="{ isPull ? 'Pulls' : 'Accepts'} RTMP stream"></i>
+    <span class:uk-alert-danger={value.input.status === 'OFFLINE'}
+          class:uk-alert-warning={value.input.status === 'INITIALIZING'}
+          class:uk-alert-success={value.input.status === 'ONLINE'}>
+      <i class="fas"
+         class:fa-arrow-down={isPull}
+         class:fa-arrow-right={!isPull}
+         title="{ isPull ? 'Pulls' : 'Accepts'} RTMP stream"></i>
+    </span>
     {#if isPull}
       { value.input.src }
     {:else}
@@ -119,7 +120,7 @@
 
   {#if value.outputs}
     <div class="uk-grid uk-grid-small" uk-grid>
-      {#each value.outputs as output, i}
+      {#each value.outputs as output, i (output) }
         <div class="uk-card uk-card-default uk-card-body uk-margin-left">
           <button type="button" class="uk-close" uk-close
                   on:click={removeOutput(i)}></button>
@@ -127,15 +128,13 @@
           <Toggle id="output-toggle-{i}" size="8px"
                   checked={output.enabled}
                   on:change={toggleOutput(i)}/>
-
-          <i class="fa-dot-circle"
-             class:uk-alert-danger={['OFFLINE'].includes(output.status)}
-             class:uk-alert-warning={['INITIALIZING'].includes(output.status)}
-             class:uk-alert-success={['ONLINE'].includes(output.status)}
-             class:far={['OFFLINE'].includes(output.status)}
-             class:fas={['INITIALIZING', 'ONLINE'].includes(output.status)}
-             class:fa-dot-circle={['OFFLINE', 'INITIALIZING'].includes(output.status)}
-             class:fa-circle={['ONLINE'].includes(output.status)}></i>
+          {#if output.status === 'ONLINE'}
+            <i class="fas fa-circle uk-alert-success"></i>
+          {:else if output.status === 'INITIALIZING'}
+            <i class="fas fa-dot-circle uk-alert-warning"></i>
+          {:else}
+            <i class="far fa-dot-circle uk-alert-danger"></i>
+          {/if}
           <span>{output.dst}</span>
         </div>
       {/each}
@@ -164,7 +163,8 @@
       font-size: 14px
       cursor: help
     .fa-circle, .fa-dot-circle
-      font-size: 12px
+      font-size: 10px
+      margin-top: -1px
 
     .uk-grid
       margin-top: 10px
