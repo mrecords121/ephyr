@@ -5,6 +5,7 @@
 !components/
 
 components/restreamer/deploy/
+components/restreamer/docs/
 components/restreamer/public/
 components/restreamer/*.graphql.schema.json
 components/restreamer/node_modules/
