@@ -174,6 +174,8 @@ impl Restreamer {
                         display_panic(&p),
                     );
                 });
+
+                time::delay_for(Duration::from_secs(2)).await;
             }
         });
 
