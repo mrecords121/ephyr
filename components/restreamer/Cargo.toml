@@ -42,7 +42,7 @@ xxhash = { version = "0.8", package = "xxhash-rust", features = ["xxh3"] }
     rev = "f3170c7adf4405cc119d2129f78a591fe2fcd32b" # branch = "master"
 [dependencies.tokio]
     version = "0.2"
-    features = ["fs", "io-util", "process", "rt-core"]
+    features = ["fs", "io-util", "process", "rt-core", "time"]
 
 [build-dependencies]
 anyhow = "1.0"

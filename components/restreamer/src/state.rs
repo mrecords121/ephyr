@@ -345,6 +345,12 @@ impl Input {
         }
     }
 
+    #[inline]
+    #[must_use]
+    pub fn upstream_url_hash(&self) -> Option<u64> {
+        self.upstream_url().map(|u| xxh3_64(u.as_ref().as_bytes()))
+    }
+
     #[must_use]
     pub fn srs_url(&self) -> Url {
         Url::parse(&match self {
@@ -354,6 +360,12 @@ impl Input {
             Self::Push(i) => format!("rtmp://127.0.0.1:1935/{}/in", i.name),
         })
         .unwrap()
+    }
+
+    #[inline]
+    #[must_use]
+    pub fn srs_url_hash(&self) -> u64 {
+        xxh3_64(self.srs_url().as_ref().as_bytes())
     }
 
     #[inline]

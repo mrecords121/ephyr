@@ -134,6 +134,4 @@ impl Drop for ServerProcess {
 #[template(path = "restreamer.srs.conf.j2", escape = "none")]
 pub struct Config {
     pub callback_port: u16,
-    pub ffmpeg_path: String,
-    pub restreams: Vec<state::Restream>,
 }

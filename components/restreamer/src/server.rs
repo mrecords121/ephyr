@@ -39,31 +39,14 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
         .await
         .map_err(|e| log::error!("Failed to initialize server state: {}", e))?;
 
-    let callback_http_port = cfg.callback_http_port;
-    let ffmpeg_path_str = ffmpeg_path.to_string_lossy().into_owned();
-    let srs = srs::Server::try_new(
+    let _srs = srs::Server::try_new(
         &cfg.srs_path,
         &srs::Config {
-            callback_port: callback_http_port,
-            restreams: state.get_cloned(),
-            ffmpeg_path: ffmpeg_path_str.clone(),
+            callback_port: cfg.callback_http_port,
         },
     )
     .await
     .map_err(|e| log::error!("Failed to initialize SRS server: {}", e))?;
-    state.on_change("refresh_srs_conf", move |restreams| {
-        let srs = srs.clone();
-        let ffmpeg_path = ffmpeg_path_str.clone();
-        async move {
-            srs.refresh(&srs::Config {
-                callback_port: callback_http_port,
-                restreams,
-                ffmpeg_path,
-            })
-            .await
-            .map_err(|e| log::error!("Failed to refresh SRS config: {}", e))
-        }
-    });
     state.on_change("kickoff_publishers", move |restreams| {
         srs::Server::kickoff_unnecessary_publishers(restreams)
     });
@@ -242,14 +225,10 @@ pub mod callback {
         state: &State,
     ) -> Result<(), Error> {
         let restreams = state.get_cloned();
-        let restream = restreams
+        let _ = restreams
             .iter()
             .find(|r| r.enabled && r.input.uses_srs_app(&req.app))
             .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
-
-        if restream.input.is_pull() && !req.ip.is_loopback() {
-            return Err(error::ErrorForbidden("`app` is allowed only locally"));
-        }
         Ok(())
     }
 
@@ -262,6 +241,10 @@ pub mod callback {
             .iter_mut()
             .find(|r| r.enabled && r.input.uses_srs_app(&req.app))
             .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
+
+        if restream.input.is_pull() && !req.ip.is_loopback() {
+            return Err(error::ErrorForbidden("`app` is allowed only locally"));
+        }
 
         restream.srs_publisher_id = Some(req.client_id);
         restream.input.set_status(Status::Online);

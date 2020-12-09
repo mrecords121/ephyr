@@ -21,22 +21,3 @@ vhost __defaultVhost__ {
     on_unpublish    http://127.0.0.1:{{ callback_port }}/;
   }
 }
-
-{% for r in restreams %}
-{%- if r.input.is_pull() -%}
-vhost pull_{{ r.input.hash() }} {
-  ingest pull_{{ r.input.hash() }} {
-    enabled    on;
-    input {
-      type    stream;
-      url     {{ r.input.upstream_url().unwrap() }};
-    }
-  }
-  ffmpeg    {{ ffmpeg_path }};
-  engine {
-    enabled    off;
-    output     rtmp://127.0.0.1:[port]/pull_{{ r.input.hash() }}/in;
-  }
-}
-{%- endif -%}
-{% endfor %}

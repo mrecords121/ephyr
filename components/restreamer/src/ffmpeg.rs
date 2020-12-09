@@ -3,11 +3,12 @@ use std::{
     panic::AssertUnwindSafe,
     path::{Path, PathBuf},
     process::Stdio,
+    time::Duration,
 };
 
 use ephyr_log::log;
 use futures::future::{self, FutureExt as _, TryFutureExt as _};
-use tokio::process::Command;
+use tokio::{process::Command, time};
 use url::Url;
 
 use crate::{
@@ -18,7 +19,7 @@ use crate::{
 #[derive(Clone, Debug)]
 pub struct RestreamersPool {
     ffmpeg_path: PathBuf,
-    pool: HashMap<(u64, u64), RestreamerProcess>,
+    pool: HashMap<(u64, u64), DroppableAbortHandle>,
     state: State,
 }
 
@@ -41,23 +42,49 @@ impl RestreamersPool {
         let mut new = HashMap::with_capacity(self.pool.len());
 
         for r in &restreams {
-            if !r.enabled || r.input.status() != Status::Online {
+            if !r.enabled {
                 continue;
             }
+
+            if r.input.is_pull() {
+                let key = (
+                    r.input.upstream_url_hash().unwrap(),
+                    r.input.srs_url_hash(),
+                );
+                let val = self
+                    .pool
+                    .remove(&key)
+                    .or_else(|| new.remove(&key))
+                    .unwrap_or_else(|| {
+                        Restreamer::new(&self.ffmpeg_path)
+                            .src_url(r.input.upstream_url().unwrap())
+                            .dst_url(&r.input.srs_url())
+                            .run(key, self.state.clone())
+                    });
+                let _ = new.insert(key, val);
+            }
+
+            if r.input.status() != Status::Online {
+                continue;
+            }
+
             for o in &r.outputs {
                 if !o.enabled {
                     continue;
                 }
-                let key = (r.input.hash(), o.hash());
-                let _ = new.insert(
-                    key,
-                    self.pool.remove(&key).unwrap_or_else(|| {
+
+                let key = (r.input.srs_url_hash(), o.hash());
+                let val = self
+                    .pool
+                    .remove(&key)
+                    .or_else(|| new.remove(&key))
+                    .unwrap_or_else(|| {
                         Restreamer::new(&self.ffmpeg_path)
                             .src_url(&r.input.srs_url())
                             .dst_url(&o.dst)
                             .run(key, self.state.clone())
-                    }),
-                );
+                    });
+                let _ = new.insert(key, val);
             }
         }
 
@@ -97,17 +124,29 @@ impl Restreamer {
     }
 
     #[must_use]
-    pub fn run(self, key: (u64, u64), state: State) -> RestreamerProcess {
+    pub fn run(self, key: (u64, u64), state: State) -> DroppableAbortHandle {
         let (mut cmd, state_for_abort) = (self.cmd, state.clone());
         let (spawner, abort_handle) = future::abortable(async move {
             loop {
                 let (cmd, state) = (&mut cmd, &state);
                 let _ = AssertUnwindSafe(async move {
                     Self::set_status(Status::Initializing, key, state);
+
+                    let state = state.clone();
+                    let (to_online, abort) = future::abortable(async move {
+                        time::delay_for(Duration::from_secs(5)).await;
+                        Self::set_status(Status::Online, key, &state);
+                    });
+                    let _abort = DroppableAbortHandle {
+                        abort_handle: abort,
+                    };
+
                     let process = cmd.spawn().map_err(|e| {
                         log::crit!("Cannot start FFmpeg re-streamer: {}", e)
                     })?;
-                    Self::set_status(Status::Online, key, state);
+
+                    let _ = tokio::spawn(to_online);
+
                     let out =
                         process.wait_with_output().await.map_err(|e| {
                             log::crit!(
@@ -115,6 +154,7 @@ impl Restreamer {
                                 e,
                             )
                         })?;
+
                     log::error!(
                         "FFmpeg re-streamer stopped with exit code: {}\n{}",
                         out.status,
@@ -142,28 +182,37 @@ impl Restreamer {
             Self::set_status(Status::Offline, key, &state_for_abort)
         }));
 
-        RestreamerProcess { abort_handle }
+        DroppableAbortHandle { abort_handle }
     }
 
     fn set_status(status: Status, key: (u64, u64), state: &State) {
-        if let Some(r) = state
-            .lock_mut()
-            .iter_mut()
-            .find(|r| r.input.hash() == key.0)
-        {
-            if let Some(o) = r.outputs.iter_mut().find(|o| o.hash() == key.1) {
-                o.status = status;
+        for r in state.lock_mut().iter_mut() {
+            if status != Status::Online
+                && r.input.is_pull()
+                && r.input.upstream_url_hash().unwrap() == key.0
+                && r.input.srs_url_hash() == key.1
+            {
+                r.input.set_status(status);
+            }
+
+            if r.input.srs_url_hash() != key.0 {
+                continue;
+            }
+            for o in &mut r.outputs {
+                if o.hash() == key.1 {
+                    o.status = status;
+                }
             }
         }
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct RestreamerProcess {
+pub struct DroppableAbortHandle {
     abort_handle: future::AbortHandle,
 }
 
-impl Drop for RestreamerProcess {
+impl Drop for DroppableAbortHandle {
     fn drop(&mut self) {
         self.abort_handle.abort();
     }

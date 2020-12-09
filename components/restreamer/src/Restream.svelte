@@ -1,6 +1,7 @@
 <svelte:options immutable={true}/>
 
 <script lang="js">
+  import slugify from 'slugify';
   import { createEventDispatcher } from 'svelte';
   import { mutation } from 'svelte-apollo';
 
@@ -56,14 +57,15 @@
     });
   }
 
-  function toggleOutput(index) {
+  function toggleOutput(url) {
     let vars = {variables: {
         id: isPull ? value.input.src : value.input.name,
-        url: value.outputs[index].dst,
+        url: url,
       }};
     return async () => {
+      let output = value.outputs.find(o => o.dst === url);
       try {
-        if (value.outputs[index].enabled) {
+        if (output && output.enabled) {
           await disableOutputMutation(vars);
         } else {
           await enableOutputMutation(vars);
@@ -74,10 +76,10 @@
     }
   }
 
-  function removeOutput(index) {
+  function removeOutput(url) {
     let vars = {variables: {
         id: isPull ? value.input.src : value.input.name,
-        url: value.outputs[index].dst,
+        url: url,
       }};
     return async () => {
       try {
@@ -120,14 +122,14 @@
 
   {#if value.outputs}
     <div class="uk-grid uk-grid-small" uk-grid>
-      {#each value.outputs as output, i (output) }
+      {#each value.outputs as output (output) }
         <div class="uk-card uk-card-default uk-card-body uk-margin-left">
           <button type="button" class="uk-close" uk-close
-                  on:click={removeOutput(i)}></button>
+                  on:click={removeOutput(output.dst)}></button>
 
-          <Toggle id="output-toggle-{i}" size="8px"
+          <Toggle id="output-toggle-{slugify(output.dst)}" size="8px"
                   checked={output.enabled}
-                  on:change={toggleOutput(i)}/>
+                  on:change={toggleOutput(output.dst)}/>
           {#if output.status === 'ONLINE'}
             <i class="fas fa-circle uk-alert-success"></i>
           {:else if output.status === 'INITIALIZING'}
