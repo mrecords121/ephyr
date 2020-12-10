@@ -101,6 +101,10 @@
     <i class="fas fa-plus"></i>&nbsp;<span>Add output</span>
   </button>
 
+  {#if value.outputs.length > 0}
+    <span class="count">{value.outputs.length}</span>
+  {/if}
+
   <Toggle id="input-toggle-{id}"
           checked={value.enabled}
           on:change={toggleInput}/>
@@ -113,11 +117,13 @@
          class:fa-arrow-right={!isPull}
          title="{ isPull ? 'Pulls' : 'Accepts'} RTMP stream"></i>
     </span>
-    {#if isPull}
-      { value.input.src }
-    {:else}
-      rtmp://{public_host}/{ value.input.name }/in
-    {/if}
+    <span>
+      {#if isPull}
+        { value.input.src }
+      {:else}
+        rtmp://{public_host}/{ value.input.name }/in
+      {/if}
+    </span>
   </span>
 
   {#if value.outputs}
@@ -159,7 +165,12 @@
       float: right
       font-size: 0.7rem
       margin-top: -2px
-      margin-right: 40px
+      margin-right: 30px
+
+    .count
+      float: right
+      text-align: right
+      margin-right: 30px
 
     .fa-arrow-down, .fa-arrow-right
       font-size: 14px
