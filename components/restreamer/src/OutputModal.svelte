@@ -1,18 +1,18 @@
 <script lang="js">
+  import { onDestroy } from 'svelte';
   import { mutation } from 'svelte-apollo';
 
   import { AddOutput } from './api/graphql/client.graphql';
 
   import { outputModal as value } from './stores.js';
 
-  import { showError } from './util';
-  import {onDestroy} from "svelte";
+  import { sanitize, showError } from './util';
 
   const addOutputMutation = mutation(AddOutput);
 
   let submitable = false;
   const unsubscribe = value.subscribe(v => {
-    submitable = v.value.trim() !== "";
+    submitable = v.value !== "";
   });
   onDestroy(() => unsubscribe());
 
@@ -25,7 +25,7 @@
   async function submit() {
     if (!submitable) return;
     const v = value.get();
-    const vars = {variables: {input_id: v.input_id, url: v.value.trim()}};
+    const vars = {variables: {input_id: v.input_id, url: sanitize(v.value)}};
     try {
       await addOutputMutation(vars);
       value.close();

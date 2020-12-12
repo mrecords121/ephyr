@@ -1,5 +1,7 @@
 import { writable, get } from 'svelte/store';
 
+import { sanitize } from "./util";
+
 function newInputModal() {
   const { subscribe, set, update } = writable({
     edit_id: null,
@@ -12,7 +14,11 @@ function newInputModal() {
 
   return {
     subscribe,
-    set,
+    set: v => {
+      v.pull_url = sanitize(v.pull_url);
+      v.push_key = sanitize(v.push_key);
+      return set(v);
+    },
     get: () => get({subscribe}),
     openAdd: () => update(v => {
       v.visible = true;
@@ -23,19 +29,11 @@ function newInputModal() {
       v.prev = val;
       v.is_pull = is_pull;
       if (v.is_pull) {
-        v.pull_url = val;
+        v.pull_url = sanitize(val);
       } else {
-        v.push_key = val;
+        v.push_key = sanitize(val);
       }
       v.visible = true;
-      return v;
-    }),
-    setPullUrl: url => update(v => {
-      v.pull_url = url;
-      return v;
-    }),
-    setPushKey: key => update(v => {
-      v.push_key = key;
       return v;
     }),
     switchPull: () => update(v => {
@@ -66,7 +64,10 @@ function newOutputModal() {
 
   return {
     subscribe,
-    set,
+    set: v => {
+      v.value = sanitize(v.value);
+      return set(v);
+    },
     get: () => get({subscribe}),
     open: id => update(v => {
       v.input_id = id;

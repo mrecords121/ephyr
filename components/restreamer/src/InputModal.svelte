@@ -5,7 +5,7 @@
 
   import { AddPullInput, AddPushInput } from './api/graphql/client.graphql';
 
-  import { showError } from './util';
+  import { sanitize, showError } from './util';
 
   import { inputModal as value } from './stores.js';
 
@@ -16,7 +16,7 @@
 
   let submitable = false;
   const unsubscribe = value.subscribe(v => {
-    const val = v.is_pull ? v.pull_url.trim() : v.push_key.trim();
+    const val = v.is_pull ? v.pull_url : v.push_key;
     submitable = (val !== "") && (val !== v.prev);
   });
   onDestroy(() => unsubscribe());
@@ -33,10 +33,10 @@
     let p = {variables: v.edit_id ? {replace_id: v.edit_id} : {}};
     try {
       if (v.is_pull) {
-        p.variables.url = v.pull_url.trim();
+        p.variables.url = sanitize(v.pull_url);
         await addPullInputMutation(p);
       } else {
-        p.variables.key = v.push_key.trim();
+        p.variables.key = sanitize(v.push_key);
         await addPushInputMutation(p);
       }
       value.close();
