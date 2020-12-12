@@ -47,9 +47,6 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
     )
     .await
     .map_err(|e| log::error!("Failed to initialize SRS server: {}", e))?;
-    state.on_change("kickoff_publishers", move |restreams| {
-        srs::Server::kickoff_unnecessary_publishers(restreams)
-    });
 
     let mut restreamers =
         ffmpeg::RestreamersPool::new(ffmpeg_path, state.clone());
@@ -246,7 +243,11 @@ pub mod callback {
             return Err(error::ErrorForbidden("`app` is allowed only locally"));
         }
 
-        restream.srs_publisher_id = Some(req.client_id);
+        if restream.srs_publisher_id.as_ref().map(|id| **id)
+            != Some(req.client_id)
+        {
+            restream.srs_publisher_id = Some(req.client_id.into());
+        }
         restream.input.set_status(Status::Online);
         Ok(())
     }

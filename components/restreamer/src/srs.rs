@@ -1,4 +1,5 @@
 use std::{
+    ops::Deref,
     panic::AssertUnwindSafe,
     path::{Path, PathBuf},
     process::Stdio,
@@ -11,7 +12,7 @@ use ephyr_log::log;
 use futures::future::{self, FutureExt as _, TryFutureExt as _};
 use tokio::{fs, process::Command};
 
-use crate::{api, display_panic, state};
+use crate::{api, display_panic};
 
 #[derive(Clone, Debug)]
 pub struct Server {
@@ -96,27 +97,6 @@ impl Server {
         .await
         .map_err(|e| anyhow!("Failed to write SRS config file: {}", e))
     }
-
-    pub async fn kickoff_unnecessary_publishers(
-        restreams: Vec<state::Restream>,
-    ) {
-        let _ = future::join_all(restreams.iter().filter_map(|r| {
-            if r.enabled || r.srs_publisher_id.is_none() {
-                return None;
-            }
-            let client_id = r.srs_publisher_id.unwrap();
-            Some(api::srs::Client::kickoff_client(client_id).map_err(
-                move |e| {
-                    log::warn!(
-                        "Failed to kickoff client {} from SRS: {}",
-                        client_id,
-                        e,
-                    )
-                },
-            ))
-        }))
-        .await;
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -127,6 +107,41 @@ struct ServerProcess {
 impl Drop for ServerProcess {
     fn drop(&mut self) {
         self.abort_handle.abort();
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ClientId(Arc<u32>);
+
+impl From<u32> for ClientId {
+    #[inline]
+    fn from(id: u32) -> Self {
+        Self(Arc::new(id))
+    }
+}
+
+impl Deref for ClientId {
+    type Target = u32;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+impl Drop for ClientId {
+    fn drop(&mut self) {
+        if let Some(&mut client_id) = Arc::get_mut(&mut self.0) {
+            let _ = tokio::spawn(
+                api::srs::Client::kickoff_client(client_id).map_err(move |e| {
+                    log::warn!(
+                        "Failed to kickoff client {} from SRS: {}",
+                        client_id,
+                        e,
+                    )
+                }),
+            );
+        }
     }
 }
 

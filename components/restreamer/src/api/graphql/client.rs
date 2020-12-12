@@ -69,7 +69,7 @@ impl MutationsRoot {
                 .status(StatusCode::BAD_REQUEST)
                 .message("Provided `src` is invalid: non-RTMP scheme"));
         }
-        match context.state().add_new_pull_input(src, replace_id) {
+        match context.state().add_pull_input(src, replace_id) {
             None => Ok(None),
             Some(true) => Ok(Some(true)),
             Some(false) => Err(graphql::Error::new("DUPLICATE_SRC_RTMP_URL")
@@ -95,7 +95,7 @@ impl MutationsRoot {
                 .status(StatusCode::BAD_REQUEST)
                 .message("Provided `name` is invalid: not [a-z0-9_-]{1,20}"));
         }
-        match context.state().add_new_push_input(name, replace_id) {
+        match context.state().add_push_input(name, replace_id) {
             None => Ok(None),
             Some(true) => Ok(Some(true)),
             Some(false) => Err(graphql::Error::new("DUPLICATE_INPUT_NAME")

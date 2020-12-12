@@ -17,7 +17,7 @@ use url::Url;
 use uuid::Uuid;
 use xxhash::xxh3::xxh3_64;
 
-use crate::display_panic;
+use crate::{display_panic, srs};
 
 #[derive(Clone, Debug, Deref)]
 pub struct State(Mutable<Vec<Restream>>);
@@ -96,7 +96,7 @@ impl State {
     }
 
     #[must_use]
-    pub fn add_new_pull_input(
+    pub fn add_pull_input(
         &self,
         src: Url,
         replace_id: Option<InputId>,
@@ -111,27 +111,18 @@ impl State {
             }
         }
 
-        let input = Input::Pull(PullInput {
-            src,
-            status: Status::Offline,
-        });
-
-        if let Some(id) = replace_id {
-            restreams.iter_mut().find(|r| r.id == id)?.input = input;
-        } else {
-            restreams.push(Restream {
-                id: InputId::new(),
-                input,
-                outputs: vec![],
-                enabled: true,
-                srs_publisher_id: None,
-            });
-        }
-        Some(true)
+        Self::add_input_to(
+            &mut *restreams,
+            Input::Pull(PullInput {
+                src,
+                status: Status::Offline,
+            }),
+            replace_id,
+        )
     }
 
     #[must_use]
-    pub fn add_new_push_input(
+    pub fn add_push_input(
         &self,
         name: String,
         replace_id: Option<InputId>,
@@ -146,13 +137,30 @@ impl State {
             }
         }
 
-        let input = Input::Push(PushInput {
-            name,
-            status: Status::Offline,
-        });
+        Self::add_input_to(
+            &mut *restreams,
+            Input::Push(PushInput {
+                name,
+                status: Status::Offline,
+            }),
+            replace_id,
+        )
+    }
 
+    fn add_input_to(
+        restreams: &mut Vec<Restream>,
+        input: Input,
+        replace_id: Option<InputId>,
+    ) -> Option<bool> {
         if let Some(id) = replace_id {
-            restreams.iter_mut().find(|r| r.id == id)?.input = input;
+            let r = restreams.iter_mut().find(|r| r.id == id)?;
+            if !r.input.is(&input) {
+                r.input = input;
+                r.srs_publisher_id = None;
+                for o in &mut r.outputs {
+                    o.status = Status::Offline;
+                }
+            }
         } else {
             restreams.push(Restream {
                 id: InputId::new(),
@@ -290,7 +298,7 @@ pub struct Restream {
     pub enabled: bool,
     #[graphql(skip)]
     #[serde(skip)]
-    pub srs_publisher_id: Option<u32>,
+    pub srs_publisher_id: Option<srs::ClientId>,
 }
 
 #[derive(

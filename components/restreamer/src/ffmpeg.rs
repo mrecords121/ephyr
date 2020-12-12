@@ -39,7 +39,7 @@ impl RestreamersPool {
             return;
         }
 
-        let mut new = HashMap::with_capacity(self.pool.len());
+        let mut new = HashMap::with_capacity(self.pool.len() + 1);
 
         for r in &restreams {
             if !r.enabled {
