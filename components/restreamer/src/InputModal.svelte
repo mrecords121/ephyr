@@ -1,44 +1,45 @@
 <script lang="js">
+  import { onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import { mutation } from 'svelte-apollo';
 
   import { AddPullInput, AddPushInput } from './api/graphql/client.graphql';
 
   import { showError } from './util';
 
+  import { inputModal as value } from './stores.js';
+
   const addPullInputMutation = mutation(AddPullInput);
   const addPushInputMutation = mutation(AddPushInput);
 
   export let public_host = "localhost";
 
-  let is_pull = false;
-
-  let pull_url = "";
-  let push_key = "";
-
-  export let show = false;
-  $: if (!show) {
-    pull_url = "";
-    push_key = "";
-  }
-
-  $: submitable = (is_pull && pull_url.trim() !== "") ||
-                  (!is_pull && push_key.trim() !== "");
+  let submitable = false;
+  const unsubscribe = value.subscribe(v => {
+    const val = v.is_pull ? v.pull_url.trim() : v.push_key.trim();
+    submitable = (val !== "") && (val !== v.prev);
+  });
+  onDestroy(() => unsubscribe());
 
   function onAreaClick(event) {
     if (event.target.classList.contains('uk-modal')) {
-      show = false;
+      value.close();
     }
   }
 
   async function submit() {
     if (!submitable) return;
+    const v = get(value);
+    let p = {variables: v.edit_id ? {replace_id: v.edit_id} : {}};
     try {
-      if (is_pull) {
-        await addPullInputMutation({variables: {url: pull_url.trim()}});
+      if (v.is_pull) {
+        p.variables.url = v.pull_url.trim();
+        await addPullInputMutation(p);
       } else {
-        await addPushInputMutation({variables: {key: push_key.trim()}});
+        p.variables.key = v.push_key.trim();
+        await addPushInputMutation(p);
       }
-      show = false;
+      value.close();
     } catch (e) {
       showError(e.message);
     }
@@ -46,23 +47,25 @@
 </script>
 
 <template>
-<div class="uk-modal" class:uk-open="{show}" on:click={onAreaClick}>
-  <div class="uk-modal-dialog uk-modal-body" class:is-pull={is_pull}>
-    <h2 class="uk-modal-title">Add new input source for re-streaming</h2>
+<div class="uk-modal" class:uk-open={$value.visible} on:click={onAreaClick}>
+  <div class="uk-modal-dialog uk-modal-body" class:is-pull={$value.is_pull}>
+    <h2 class="uk-modal-title">
+      {#if $value.edit_id}Edit{:else}Add new{/if} input source for re-streaming
+    </h2>
     <button class="uk-modal-close-outside" uk-close
-            type="button" on:click={() => show = false}></button>
+            type="button" on:click={() => value.close()}></button>
 
-    <ul uk-tab>
-      <li class="uk-active">
-        <a href="/" on:click={() => is_pull = false}>Push</a>
+    <ul class="uk-tab">
+      <li class:uk-active={!$value.is_pull}>
+        <a href="/" on:click|preventDefault={() => value.switchPush()}>Push</a>
       </li>
-      <li>
-        <a href="/" on:click={() => is_pull = true}>Pull</a>
+      <li class:uk-active={$value.is_pull}>
+        <a href="/" on:click|preventDefault={() => value.switchPull()}>Pull</a>
       </li>
     </ul>
 
     <fieldset class="pull-form">
-      <input class="uk-input" type="text" bind:value={pull_url}
+      <input class="uk-input" type="text" bind:value={$value.pull_url}
              placeholder="rtmp://...">
       <div class="uk-alert">
         Server will pull RTMP stream from this address
@@ -72,7 +75,7 @@
     <fieldset class="push-form">
       <label>rtmp://{public_host}/<input class="uk-input" type="text"
                                          placeholder="<stream-name>"
-                                         bind:value={push_key}>/in</label>
+                                         bind:value={$value.push_key}>/in</label>
       <div class="uk-alert">
         Server will await RTMP stream to be published onto this address
       </div>
@@ -80,7 +83,7 @@
 
     <button class="uk-button uk-button-primary"
             disabled={!submitable}
-            on:click={submit}>Add</button>
+            on:click={submit}>{#if $value.edit_id}Edit{:else}Add{/if}</button>
   </div>
 </div>
 </template>

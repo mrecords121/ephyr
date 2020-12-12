@@ -3,33 +3,32 @@
 
   import { AddOutput } from './api/graphql/client.graphql';
 
+  import { outputModal as value } from './stores.js';
+
   import { showError } from './util';
+  import {onDestroy} from "svelte";
 
   const addOutputMutation = mutation(AddOutput);
 
-  export let show = false;
-
-  export let input_id = "";
-
-  let dst_url = "";
-  $: if (!show) {
-    dst_url = "";
-  }
-
-  $: submitable = dst_url.trim() !== "";
+  let submitable = false;
+  const unsubscribe = value.subscribe(v => {
+    submitable = v.value.trim() !== "";
+  });
+  onDestroy(() => unsubscribe());
 
   function onAreaClick(event) {
     if (event.target.classList.contains('uk-modal')) {
-      show = false;
+      value.close();
     }
   }
 
   async function submit() {
     if (!submitable) return;
-    const vars = {variables: {input_id: input_id, url: dst_url.trim()}};
+    const v = value.get();
+    const vars = {variables: {input_id: v.input_id, url: v.value.trim()}};
     try {
       await addOutputMutation(vars);
-      show = false;
+      value.close();
     } catch (e) {
       showError(e.message);
     }
@@ -37,14 +36,14 @@
 </script>
 
 <template>
-<div class="uk-modal" class:uk-open="{show}" on:click={onAreaClick}>
+<div class="uk-modal" class:uk-open="{$value.visible}" on:click={onAreaClick}>
   <div class="uk-modal-dialog uk-modal-body">
     <h2 class="uk-modal-title">Add new output destination for re-streaming</h2>
     <button class="uk-modal-close-outside" uk-close
-            type="button" on:click={() => show = false}></button>
+            type="button" on:click={() => value.close()}></button>
 
     <fieldset>
-      <input class="uk-input" type="text" bind:value={dst_url}
+      <input class="uk-input" type="text" bind:value={$value.value}
              placeholder="rtmp://...">
       <div class="uk-alert">
         Server will publish input RTMP stream to this address

@@ -9,8 +9,11 @@
     DisableOutput, EnableOutput, RemoveOutput,
   } from './api/graphql/client.graphql';
 
-  import Toggle from "./Toggle.svelte";
   import {showError} from "./util";
+
+  import { inputModal, outputModal } from './stores.js';
+
+  import Toggle from "./Toggle.svelte";
 
   const disableInputMutation = mutation(DisableInput);
   const enableInputMutation = mutation(EnableInput);
@@ -24,7 +27,15 @@
   export let public_host = "localhost";
   export let value;
 
-  let isPull = value.input.__typename === 'PullInput';
+  $: isPull = value.input.__typename === 'PullInput';
+
+  function openEditInputModal() {
+    inputModal.openEdit(
+      value.id,
+      isPull ? value.input.src : value.input.name,
+      isPull,
+    );
+  }
 
   async function removeInput() {
     try {
@@ -48,7 +59,7 @@
   }
 
   function openAddOutputModal() {
-    dispatch('open_output_modal', {input_id: value.id});
+    outputModal.open(value.id);
   }
 
   function toggleOutput(id) {
@@ -100,10 +111,14 @@
     <span class:uk-alert-danger={value.input.status === 'OFFLINE'}
           class:uk-alert-warning={value.input.status === 'INITIALIZING'}
           class:uk-alert-success={value.input.status === 'ONLINE'}>
-      <i class="fas"
-         class:fa-arrow-down={isPull}
-         class:fa-arrow-right={!isPull}
-         title="{ isPull ? 'Pulls' : 'Accepts'} RTMP stream"></i>
+      {#key isPull}
+        <span>
+          <i class="fas"
+             class:fa-arrow-down={isPull}
+             class:fa-arrow-right={!isPull}
+             title="{ isPull ? 'Pulls' : 'Accepts'} RTMP stream"></i>
+        </span>
+      {/key}
     </span>
     <span>
       {#if isPull}
@@ -112,6 +127,9 @@
         rtmp://{public_host}/{ value.input.name }/in
       {/if}
     </span>
+    <a class="edit-input" href="/" on:click|preventDefault={openEditInputModal}>
+      <i class="far fa-edit" title="Edit input"></i>
+    </a>
   </span>
 
   {#if value.outputs && value.outputs.length > 0}
@@ -186,4 +204,15 @@
 
       .uk-close
         margin-top: 3px
+
+  .edit-input
+    margin-left: 6px
+    color: #666
+    opacity: 0
+    transition: opacity .3s ease
+    &:hover
+      color: #444
+  .uk-section:hover
+    .edit-input
+      opacity: 1
 </style>

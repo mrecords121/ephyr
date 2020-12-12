@@ -96,55 +96,73 @@ impl State {
     }
 
     #[must_use]
-    pub fn add_new_pull_input(&self, src: Url) -> bool {
+    pub fn add_new_pull_input(
+        &self,
+        src: Url,
+        replace_id: Option<InputId>,
+    ) -> Option<bool> {
         let mut restreams = self.0.lock_mut();
 
-        if restreams
-            .iter_mut()
-            .find(|r| r.input.is_pull() && r.input.has_id(src.as_str()))
-            .is_some()
-        {
-            return false;
+        for r in &*restreams {
+            if let Input::Pull(i) = &r.input {
+                if &src == &i.src && replace_id != Some(r.id) {
+                    return Some(false);
+                }
+            }
         }
 
-        restreams.push(Restream {
-            id: InputId::new(),
-            input: PullInput {
-                src,
-                status: Status::Offline,
-            }
-            .into(),
-            outputs: vec![],
-            enabled: true,
-            srs_publisher_id: None,
+        let input = Input::Pull(PullInput {
+            src,
+            status: Status::Offline,
         });
-        true
+
+        if let Some(id) = replace_id {
+            restreams.iter_mut().find(|r| r.id == id)?.input = input;
+        } else {
+            restreams.push(Restream {
+                id: InputId::new(),
+                input,
+                outputs: vec![],
+                enabled: true,
+                srs_publisher_id: None,
+            });
+        }
+        Some(true)
     }
 
     #[must_use]
-    pub fn add_new_push_input(&self, name: String) -> bool {
+    pub fn add_new_push_input(
+        &self,
+        name: String,
+        replace_id: Option<InputId>,
+    ) -> Option<bool> {
         let mut restreams = self.0.lock_mut();
 
-        if restreams
-            .iter_mut()
-            .find(|r| !r.input.is_pull() && r.input.has_id(&name))
-            .is_some()
-        {
-            return false;
+        for r in &*restreams {
+            if let Input::Push(i) = &r.input {
+                if &name == &i.name && replace_id != Some(r.id) {
+                    return Some(false);
+                }
+            }
         }
 
-        restreams.push(Restream {
-            id: InputId::new(),
-            input: PushInput {
-                name,
-                status: Status::Offline,
-            }
-            .into(),
-            outputs: vec![],
-            enabled: true,
-            srs_publisher_id: None,
+        let input = Input::Push(PushInput {
+            name,
+            status: Status::Offline,
         });
-        true
+
+        if let Some(id) = replace_id {
+            restreams.iter_mut().find(|r| r.id == id)?.input = input;
+        } else {
+            restreams.push(Restream {
+                id: InputId::new(),
+                input,
+                outputs: vec![],
+                enabled: true,
+                srs_publisher_id: None,
+            });
+        }
+        Some(true)
     }
 
     #[must_use]
@@ -305,15 +323,6 @@ impl Input {
         match self {
             Self::Pull(i) => i.status = new,
             Self::Push(i) => i.status = new,
-        }
-    }
-
-    #[inline]
-    #[must_use]
-    pub fn has_id(&self, id: &str) -> bool {
-        match self {
-            Self::Pull(i) => i.src.as_str() == id,
-            Self::Push(i) => i.name.as_str() == id,
         }
     }
 

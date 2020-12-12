@@ -61,25 +61,28 @@ pub struct MutationsRoot;
 impl MutationsRoot {
     fn add_pull_input(
         src: Url,
+        replace_id: Option<InputId>,
         context: &Context,
-    ) -> Result<bool, graphql::Error> {
+    ) -> Result<Option<bool>, graphql::Error> {
         if !matches!(src.scheme(), "rtmp" | "rtmps") {
             return Err(graphql::Error::new("INVALID_SRC_RTMP_URL")
                 .status(StatusCode::BAD_REQUEST)
                 .message("Provided `src` is invalid: non-RTMP scheme"));
         }
-        if !context.state().add_new_pull_input(src) {
-            return Err(graphql::Error::new("DUPLICATE_SRC_RTMP_URL")
+        match context.state().add_new_pull_input(src, replace_id) {
+            None => Ok(None),
+            Some(true) => Ok(Some(true)),
+            Some(false) => Err(graphql::Error::new("DUPLICATE_SRC_RTMP_URL")
                 .status(StatusCode::CONFLICT)
-                .message("Provided `src` is used already"));
+                .message("Provided `src` is used already")),
         }
-        Ok(true)
     }
 
     fn add_push_input(
         name: String,
+        replace_id: Option<InputId>,
         context: &Context,
-    ) -> Result<bool, graphql::Error> {
+    ) -> Result<Option<bool>, graphql::Error> {
         static NAME_REGEX: Lazy<Regex> =
             Lazy::new(|| Regex::new("^[a-z0-9_-]{1,20}$").unwrap());
         if name.starts_with("pull_") {
@@ -92,12 +95,13 @@ impl MutationsRoot {
                 .status(StatusCode::BAD_REQUEST)
                 .message("Provided `name` is invalid: not [a-z0-9_-]{1,20}"));
         }
-        if !context.state().add_new_push_input(name) {
-            return Err(graphql::Error::new("DUPLICATE_INPUT_NAME")
+        match context.state().add_new_push_input(name, replace_id) {
+            None => Ok(None),
+            Some(true) => Ok(Some(true)),
+            Some(false) => Err(graphql::Error::new("DUPLICATE_INPUT_NAME")
                 .status(StatusCode::CONFLICT)
-                .message("Provided `name` is used already"));
+                .message("Provided `name` is used already")),
         }
-        Ok(true)
     }
 
     fn remove_input(id: InputId, context: &Context) -> bool {

@@ -12,8 +12,10 @@
   import UIkit from 'uikit';
   import Icons from 'uikit/dist/js/uikit-icons';
 
-  import AddInputModal from './AddInputModal.svelte';
-  import AddOutputModal from './AddOutputModal.svelte';
+  import { inputModal } from './stores.js';
+
+  import InputModal from './InputModal.svelte';
+  import OutputModal from './OutputModal.svelte';
   import Restream from './Restream.svelte';
 
   UIkit.use(Icons);
@@ -45,11 +47,6 @@
   const info = query(Info);
   const state = subscribe(State, {errorPolicy: 'all'});
 
-  let openInputAddModal = false;
-
-  let openOutputAddModal = false;
-  let idForOutPutModal = "";
-
   function refetchInfo() {
     info.refetch();
   }
@@ -59,13 +56,11 @@
   <header class="uk-container">
     {#if isOnline && $info.data}
       <button class="uk-button uk-button-primary"
-              on:click={() => openInputAddModal = true}>
+              on:click={() => inputModal.openAdd()}>
         <i class="fas fa-plus"></i>&nbsp;<span>Input</span>
       </button>
-      <AddInputModal bind:show={openInputAddModal}
-                     public_host="{$info.data.info.publicHost}"/>
-      <AddOutputModal bind:show={openOutputAddModal}
-                      bind:input_id={idForOutPutModal}/>
+      <InputModal public_host="{$info.data.info.publicHost}"/>
+      <OutputModal/>
     {:else if $info.error}
       {showError($info.error.message)}
     {/if}
@@ -79,13 +74,9 @@
     {#if !isOnline || $state.loading}
       <div class="uk-alert uk-alert-warning loading">Loading...</div>
     {:else if isOnline && $state.data && $info.data}
-      {#each $state.data.state.restreams as restream, i}
+      {#each $state.data.state.restreams as restream}
         <Restream public_host="{$info.data.info.publicHost}"
-                  value="{restream}"
-                  on:open_output_modal={(e) => {
-                    idForOutPutModal = e.detail.input_id;
-                    openOutputAddModal = true;
-                  }}/>
+                  value="{restream}"/>
       {/each}
     {/if}
     {#if $info.error}
