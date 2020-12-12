@@ -46,12 +46,12 @@
       <input class="uk-input" type="text" bind:value={dst_url}
              placeholder="rtmp://...">
       <div class="uk-alert">
-        Server will publish source RTMP stream to this address
+        Server will publish input RTMP stream to this address
       </div>
     </fieldset>
 
     <button class="uk-button uk-button-primary"
-            disabled="{!submitable}"
+            disabled={!submitable}
             on:click={submit}>Add</button>
   </div>
 </div>

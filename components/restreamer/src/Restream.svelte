@@ -98,10 +98,10 @@
 
   <button class="uk-button uk-button-primary uk-button-small"
           on:click={openAddOutputModal}>
-    <i class="fas fa-plus"></i>&nbsp;<span>Add output</span>
+    <i class="fas fa-plus"></i>&nbsp;<span>Output</span>
   </button>
 
-  {#if value.outputs.length > 0}
+  {#if value.outputs && value.outputs.length > 0}
     <span class="count">{value.outputs.length}</span>
   {/if}
 
@@ -126,7 +126,7 @@
     </span>
   </span>
 
-  {#if value.outputs}
+  {#if value.outputs && value.outputs.length > 0}
     <div class="uk-grid uk-grid-small" uk-grid>
       {#each value.outputs as output (output) }
         <div class="uk-card uk-card-default uk-card-body uk-margin-left">

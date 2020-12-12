@@ -48,7 +48,7 @@
 <template>
 <div class="uk-modal" class:uk-open="{show}" on:click={onAreaClick}>
   <div class="uk-modal-dialog uk-modal-body" class:is-pull={is_pull}>
-    <h2 class="uk-modal-title">Add new source for re-streaming</h2>
+    <h2 class="uk-modal-title">Add new input source for re-streaming</h2>
     <button class="uk-modal-close-outside" uk-close
             type="button" on:click={() => show = false}></button>
 
@@ -79,7 +79,7 @@
     </fieldset>
 
     <button class="uk-button uk-button-primary"
-            disabled="{!submitable}"
+            disabled={!submitable}
             on:click={submit}>Add</button>
   </div>
 </div>

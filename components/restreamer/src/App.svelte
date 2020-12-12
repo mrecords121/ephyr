@@ -60,7 +60,7 @@
     {#if isOnline && $info.data}
       <button class="uk-button uk-button-primary"
               on:click={() => openInputAddModal = true}>
-        <i class="fas fa-plus"></i>&nbsp;<span>Add source</span>
+        <i class="fas fa-plus"></i>&nbsp;<span>Input</span>
       </button>
       <AddInputModal bind:show={openInputAddModal}
                      public_host="{$info.data.info.publicHost}"/>
@@ -72,7 +72,7 @@
 
     <img class="logo" src="logo.jpg" alt="Logo">
 
-    <h3>Ephyr re-streamer v0.1.0-beta.1</h3>
+    <h3>Ephyr re-streamer v0.1.0-beta.2</h3>
   </header>
 
   <main class="uk-container">
@@ -116,4 +116,9 @@
   main
     > .loading
       text-align: center
+
+  .uk-button-primary
+    background-color: #08c
+    &:not([disabled]):hover
+      background-color: #046
 </style>
