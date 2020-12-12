@@ -8,8 +8,10 @@ use std::{
 
 use anyhow::anyhow;
 use askama::Template;
-use ephyr_log::log;
+use derive_more::Display;
+use ephyr_log::{log, slog};
 use futures::future::{self, FutureExt as _, TryFutureExt as _};
+use smart_default::SmartDefault;
 use tokio::{fs, process::Command};
 
 use crate::{api, display_panic};
@@ -149,4 +151,38 @@ impl Drop for ClientId {
 #[template(path = "restreamer.srs.conf.j2", escape = "none")]
 pub struct Config {
     pub callback_port: u16,
+    pub log_level: LogLevel,
+}
+
+#[derive(Clone, Copy, Debug, Display, SmartDefault)]
+pub enum LogLevel {
+    #[display(fmt = "error")]
+    Error,
+
+    #[display(fmt = "warn")]
+    Warn,
+
+    #[default]
+    #[display(fmt = "trace")]
+    Trace,
+
+    #[display(fmt = "info")]
+    Info,
+
+    #[display(fmt = "verbose")]
+    Verbose,
+}
+
+impl From<slog::Level> for LogLevel {
+    #[inline]
+    fn from(lvl: slog::Level) -> Self {
+        match lvl {
+            slog::Level::Critical => Self::Error,
+            slog::Level::Error => Self::Error,
+            slog::Level::Warning => Self::Warn,
+            slog::Level::Info => Self::Warn,
+            slog::Level::Debug => Self::Trace,
+            slog::Level::Trace => Self::Info,
+        }
+    }
 }

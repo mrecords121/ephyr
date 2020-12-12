@@ -42,17 +42,18 @@ pub use self::state::State;
 /// If running has failed and could not be performed. The appropriate error
 /// is logged.
 pub fn run() -> Result<(), cli::Failure> {
-    let cfg = cli::Opts::from_args();
-
-    // This guard should be held till the end of the program for the logger
-    // to present in global context.
-    mem::forget(ephyr_log::init(cfg.verbose.or_else(|| {
+    let mut cfg = cli::Opts::from_args();
+    cfg.verbose = cfg.verbose.or_else(|| {
         if cfg.debug {
             Some(slog::Level::Debug)
         } else {
             None
         }
-    })));
+    });
+
+    // This guard should be held till the end of the program for the logger
+    // to present in global context.
+    mem::forget(ephyr_log::init(cfg.verbose));
 
     server::run(cfg)
 }

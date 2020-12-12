@@ -43,6 +43,7 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
         &cfg.srs_path,
         &srs::Config {
             callback_port: cfg.callback_http_port,
+            log_level: cfg.verbose.map(Into::into).unwrap_or_default(),
         },
     )
     .await

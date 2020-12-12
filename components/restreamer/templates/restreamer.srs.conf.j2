@@ -3,7 +3,7 @@ inotify_auto_reload       on;
 auto_reload_for_docker    on;
 
 srs_log_tank    console;
-srs_log_level   trace;
+srs_log_level   {{ log_level }};
 
 listen             1935;
 max_connections    1000;
