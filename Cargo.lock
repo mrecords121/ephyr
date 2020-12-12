@@ -1218,6 +1218,7 @@ dependencies = [
  "structopt",
  "tokio",
  "url",
+ "uuid",
  "xxhash-rust",
 ]
 
@@ -1803,8 +1804,9 @@ dependencies = [
 
 [[package]]
 name = "juniper"
-version = "0.14.2"
-source = "git+https://github.com/graphql-rust/juniper?rev=f3170c7adf4405cc119d2129f78a591fe2fcd32b#f3170c7adf4405cc119d2129f78a591fe2fcd32b"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "18d2b30707fe15d9b703aa3967f8d680d460136d82be85da506e06db70b51d50"
 dependencies = [
  "async-trait",
  "bson",
@@ -1823,8 +1825,9 @@ dependencies = [
 
 [[package]]
 name = "juniper_actix"
-version = "0.1.0"
-source = "git+https://github.com/graphql-rust/juniper?rev=f3170c7adf4405cc119d2129f78a591fe2fcd32b#f3170c7adf4405cc119d2129f78a591fe2fcd32b"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc00d47263aab1fa5bfb198854f2402125da235862059f4e1b64df7a5ec8bae5"
 dependencies = [
  "actix",
  "actix-web",
@@ -1841,8 +1844,9 @@ dependencies = [
 
 [[package]]
 name = "juniper_codegen"
-version = "0.14.2"
-source = "git+https://github.com/graphql-rust/juniper?rev=f3170c7adf4405cc119d2129f78a591fe2fcd32b#f3170c7adf4405cc119d2129f78a591fe2fcd32b"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01ca688021de31672fb76baed11061b35a60845980eaead24c9a1c2565ae6f85"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -1852,8 +1856,9 @@ dependencies = [
 
 [[package]]
 name = "juniper_graphql_ws"
-version = "0.1.0"
-source = "git+https://github.com/graphql-rust/juniper?rev=f3170c7adf4405cc119d2129f78a591fe2fcd32b#f3170c7adf4405cc119d2129f78a591fe2fcd32b"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8cbe36e6c22056bbf0d43a18c3616ffee0783812afdda49951acf30e45a6d88"
 dependencies = [
  "juniper",
  "juniper_subscriptions",
@@ -1863,8 +1868,9 @@ dependencies = [
 
 [[package]]
 name = "juniper_subscriptions"
-version = "0.14.2"
-source = "git+https://github.com/graphql-rust/juniper?rev=f3170c7adf4405cc119d2129f78a591fe2fcd32b#f3170c7adf4405cc119d2129f78a591fe2fcd32b"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ea6f8a6813f87979a9d082f697c7de21b4665481dde5c914dddbf8113a9a110"
 dependencies = [
  "futures",
  "juniper",
@@ -3847,6 +3853,10 @@ name = "uuid"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9fde2f6a4bea1d6e007c4ad38c6839fa71cbb63b6dbf5b595aa38dc9b1093c11"
+dependencies = [
+ "rand 0.7.3",
+ "serde",
+]
 
 [[package]]
 name = "validator"

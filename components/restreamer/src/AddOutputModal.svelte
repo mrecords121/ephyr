@@ -26,8 +26,9 @@
 
   async function submit() {
     if (!submitable) return;
+    const vars = {variables: {input_id: input_id, url: dst_url.trim()}};
     try {
-      await addOutputMutation({variables: {id: input_id, url: dst_url.trim()}});
+      await addOutputMutation(vars);
       show = false;
     } catch (e) {
       showError(e.message);

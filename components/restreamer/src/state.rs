@@ -1,7 +1,7 @@
 use std::{future::Future, panic::AssertUnwindSafe, path::Path};
 
 use anyhow::anyhow;
-use derive_more::{Deref, From};
+use derive_more::{Deref, Display, From};
 use ephyr_log::log;
 use futures::{
     future::TryFutureExt as _,
@@ -9,11 +9,12 @@ use futures::{
     stream::{StreamExt as _, TryStreamExt as _},
 };
 use futures_signals::signal::{Mutable, SignalExt as _};
-use juniper::{GraphQLEnum, GraphQLObject, GraphQLUnion};
+use juniper::{GraphQLEnum, GraphQLObject, GraphQLScalarValue, GraphQLUnion};
 use serde::{Deserialize, Serialize};
 use smart_default::SmartDefault;
 use tokio::{fs, io::AsyncReadExt as _};
 use url::Url;
+use uuid::Uuid;
 use xxhash::xxh3::xxh3_64;
 
 use crate::display_panic;
@@ -107,6 +108,7 @@ impl State {
         }
 
         restreams.push(Restream {
+            id: InputId::new(),
             input: PullInput {
                 src,
                 status: Status::Offline,
@@ -132,6 +134,7 @@ impl State {
         }
 
         restreams.push(Restream {
+            id: InputId::new(),
             input: PushInput {
                 name,
                 status: Status::Offline,
@@ -145,17 +148,17 @@ impl State {
     }
 
     #[must_use]
-    pub fn remove_input(&self, input_id: &str) -> bool {
+    pub fn remove_input(&self, id: InputId) -> bool {
         let mut restreams = self.0.lock_mut();
         let prev_len = restreams.len();
-        restreams.retain(|r| !r.input.has_id(input_id));
+        restreams.retain(|r| r.id != id);
         restreams.len() != prev_len
     }
 
     #[must_use]
-    pub fn enable_input(&self, input_id: &str) -> Option<bool> {
+    pub fn enable_input(&self, id: InputId) -> Option<bool> {
         let mut restreams = self.0.lock_mut();
-        let input = restreams.iter_mut().find(|r| r.input.has_id(input_id))?;
+        let input = restreams.iter_mut().find(|r| r.id == id)?;
 
         if input.enabled {
             return Some(false);
@@ -166,9 +169,9 @@ impl State {
     }
 
     #[must_use]
-    pub fn disable_input(&self, input_id: &str) -> Option<bool> {
+    pub fn disable_input(&self, id: InputId) -> Option<bool> {
         let mut restreams = self.0.lock_mut();
-        let input = restreams.iter_mut().find(|r| r.input.has_id(input_id))?;
+        let input = restreams.iter_mut().find(|r| r.id == id)?;
 
         if !input.enabled {
             return Some(false);
@@ -181,20 +184,19 @@ impl State {
     #[must_use]
     pub fn add_new_output(
         &self,
-        input_id: &str,
+        input_id: InputId,
         output_dst: Url,
     ) -> Option<bool> {
         let mut restreams = self.0.lock_mut();
-        let outputs = &mut restreams
-            .iter_mut()
-            .find(|r| r.input.has_id(input_id))?
-            .outputs;
+        let outputs =
+            &mut restreams.iter_mut().find(|r| r.id == input_id)?.outputs;
 
         if outputs.iter_mut().find(|o| &o.dst == &output_dst).is_some() {
             return Some(false);
         }
 
         outputs.push(Output {
+            id: OutputId::new(),
             dst: output_dst,
             enabled: false,
             status: Status::Offline,
@@ -205,33 +207,31 @@ impl State {
     #[must_use]
     pub fn remove_output(
         &self,
-        input_id: &str,
-        output_dst: &Url,
+        input_id: InputId,
+        output_id: OutputId,
     ) -> Option<bool> {
         let mut restreams = self.0.lock_mut();
-        let outputs = &mut restreams
-            .iter_mut()
-            .find(|r| r.input.has_id(input_id))?
-            .outputs;
+        let outputs =
+            &mut restreams.iter_mut().find(|r| r.id == input_id)?.outputs;
 
         let prev_len = outputs.len();
-        outputs.retain(|o| &o.dst != output_dst);
+        outputs.retain(|o| o.id != output_id);
         Some(outputs.len() != prev_len)
     }
 
     #[must_use]
     pub fn enable_output(
         &self,
-        input_id: &str,
-        output_dst: &Url,
+        input_id: InputId,
+        output_id: OutputId,
     ) -> Option<bool> {
         let mut restreams = self.0.lock_mut();
         let output = &mut restreams
             .iter_mut()
-            .find(|r| r.input.has_id(input_id))?
+            .find(|r| r.id == input_id)?
             .outputs
             .iter_mut()
-            .find(|o| &o.dst == output_dst)?;
+            .find(|o| o.id == output_id)?;
 
         if output.enabled {
             return Some(false);
@@ -244,16 +244,16 @@ impl State {
     #[must_use]
     pub fn disable_output(
         &self,
-        input_id: &str,
-        output_dst: &Url,
+        input_id: InputId,
+        output_id: OutputId,
     ) -> Option<bool> {
         let mut restreams = self.0.lock_mut();
         let output = &mut restreams
             .iter_mut()
-            .find(|r| r.input.has_id(input_id))?
+            .find(|r| r.id == input_id)?
             .outputs
             .iter_mut()
-            .find(|o| &o.dst == output_dst)?;
+            .find(|o| o.id == output_id)?;
 
         if !output.enabled {
             return Some(false);
@@ -266,6 +266,7 @@ impl State {
 
 #[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
 pub struct Restream {
+    pub id: InputId,
     pub input: Input,
     pub outputs: Vec<Output>,
     pub enabled: bool,
@@ -412,6 +413,7 @@ impl PushInput {
 
 #[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
 pub struct Output {
+    pub id: OutputId,
     pub dst: Url,
     pub enabled: bool,
     #[serde(skip)]
@@ -438,4 +440,50 @@ pub enum Status {
     Offline,
     Initializing,
     Online,
+}
+
+/// ID of an [`Input`].
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Display,
+    Eq,
+    GraphQLScalarValue,
+    PartialEq,
+    Serialize,
+)]
+pub struct InputId(Uuid);
+
+impl InputId {
+    /// Generates new random [`InputId`].
+    #[inline]
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+/// ID of an [`Output`].
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Display,
+    Eq,
+    GraphQLScalarValue,
+    PartialEq,
+    Serialize,
+)]
+pub struct OutputId(Uuid);
+
+impl OutputId {
+    /// Generates new random [`OutputId`].
+    #[inline]
+    #[must_use]
+    pub fn new() -> Self {
+        Self(Uuid::new_v4())
+    }
 }

@@ -10,7 +10,10 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use url::Url;
 
-use crate::{api::graphql, state::Restream};
+use crate::{
+    api::graphql,
+    state::{InputId, OutputId, Restream},
+};
 
 use super::Context;
 
@@ -97,20 +100,20 @@ impl MutationsRoot {
         Ok(true)
     }
 
-    fn remove_input(id: String, context: &Context) -> bool {
-        context.state().remove_input(&id)
+    fn remove_input(id: InputId, context: &Context) -> bool {
+        context.state().remove_input(id)
     }
 
-    fn enable_input(id: String, context: &Context) -> Option<bool> {
-        context.state().enable_input(&id)
+    fn enable_input(id: InputId, context: &Context) -> Option<bool> {
+        context.state().enable_input(id)
     }
 
-    fn disable_input(id: String, context: &Context) -> Option<bool> {
-        context.state().disable_input(&id)
+    fn disable_input(id: InputId, context: &Context) -> Option<bool> {
+        context.state().disable_input(id)
     }
 
     fn add_output(
-        input_id: String,
+        input_id: InputId,
         dst: Url,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
@@ -121,7 +124,7 @@ impl MutationsRoot {
         }
         context
             .state()
-            .add_new_output(&input_id, dst)
+            .add_new_output(input_id, dst)
             .map(|added| {
                 if added {
                     Ok(added)
@@ -137,27 +140,27 @@ impl MutationsRoot {
     }
 
     fn remove_output(
-        input_id: String,
-        dst: Url,
+        input_id: InputId,
+        output_id: OutputId,
         context: &Context,
     ) -> Option<bool> {
-        context.state().remove_output(&input_id, &dst)
+        context.state().remove_output(input_id, output_id)
     }
 
     fn enable_output(
-        input_id: String,
-        dst: Url,
+        input_id: InputId,
+        output_id: OutputId,
         context: &Context,
     ) -> Option<bool> {
-        context.state().enable_output(&input_id, &dst)
+        context.state().enable_output(input_id, output_id)
     }
 
     fn disable_output(
-        input_id: String,
-        dst: Url,
+        input_id: InputId,
+        output_id: OutputId,
         context: &Context,
     ) -> Option<bool> {
-        context.state().disable_output(&input_id, &dst)
+        context.state().disable_output(input_id, output_id)
     }
 }
 

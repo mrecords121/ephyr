@@ -7,6 +7,8 @@ query Info {
 subscription State {
     state {
         restreams {
+            id
+            enabled
             input {
                 ...on PushInput {
                     name
@@ -18,11 +20,11 @@ subscription State {
                 }
             }
             outputs{
-                dst
+                id
                 enabled
+                dst
                 status
             }
-            enabled
         }
     }
 }
@@ -36,31 +38,31 @@ mutation AddPushInput($key: String!) {
     addPushInput(name: $key)
 }
 
-mutation RemoveInput($id: String!) {
+mutation RemoveInput($id: InputId!) {
     removeInput(id: $id)
 }
 
-mutation EnableInput($id: String!) {
+mutation EnableInput($id: InputId!) {
     enableInput(id: $id)
 }
 
-mutation DisableInput($id: String!) {
+mutation DisableInput($id: InputId!) {
     disableInput(id: $id)
 }
 
 
-mutation AddOutput($id: String!, $url: Url!) {
-    addOutput(inputId: $id, dst: $url)
+mutation AddOutput($input_id: InputId!, $url: Url!) {
+    addOutput(inputId: $input_id, dst: $url)
 }
 
-mutation RemoveOutput($id: String!, $url: Url!) {
-    removeOutput(inputId: $id, dst: $url)
+mutation RemoveOutput($input_id: InputId!, $output_id: OutputId!) {
+    removeOutput(inputId: $input_id, outputId: $output_id)
 }
 
-mutation EnableOutput($id: String!, $url: Url!) {
-    enableOutput(inputId: $id, dst: $url)
+mutation EnableOutput($input_id: InputId!, $output_id: OutputId!) {
+    enableOutput(inputId: $input_id, outputId: $output_id)
 }
 
-mutation DisableOutput($id: String!, $url: Url!) {
-    disableOutput(inputId: $id, dst: $url)
+mutation DisableOutput($input_id: InputId!, $output_id: OutputId!) {
+    disableOutput(inputId: $input_id, outputId: $output_id)
 }

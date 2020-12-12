@@ -82,7 +82,6 @@
       {#each $state.data.state.restreams as restream, i}
         <Restream public_host="{$info.data.info.publicHost}"
                   value="{restream}"
-                  id="{i}"
                   on:open_output_modal={(e) => {
                     idForOutPutModal = e.detail.input_id;
                     openOutputAddModal = true;
