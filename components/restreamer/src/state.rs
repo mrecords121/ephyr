@@ -212,6 +212,7 @@ impl State {
         &self,
         input_id: InputId,
         output_dst: Url,
+        label: Option<String>,
     ) -> Option<bool> {
         let mut restreams = self.0.lock_mut();
         let outputs =
@@ -224,6 +225,7 @@ impl State {
         outputs.push(Output {
             id: OutputId::new(),
             dst: output_dst,
+            label,
             enabled: false,
             status: Status::Offline,
         });
@@ -474,6 +476,8 @@ impl PushInput {
 pub struct Output {
     pub id: OutputId,
     pub dst: Url,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     pub enabled: bool,
     #[serde(skip)]
     pub status: Status,

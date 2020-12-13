@@ -58,14 +58,16 @@ function newInputModal() {
 function newOutputModal() {
   const { subscribe, set, update } = writable({
     input_id: null,
-    value: "",
+    label: "",
+    url: "",
     visible: false,
   });
 
   return {
     subscribe,
     set: v => {
-      v.value = sanitize(v.value);
+      v.label = sanitize(v.label);
+      v.url = sanitize(v.url);
       return set(v);
     },
     get: () => get({subscribe}),
@@ -76,7 +78,8 @@ function newOutputModal() {
     }),
     close: () => update(v => {
       v.input_id = null;
-      v.value = "";
+      v.label = "";
+      v.url = "";
       v.visible = false;
       return v;
     }),

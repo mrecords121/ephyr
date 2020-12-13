@@ -19,10 +19,11 @@ subscription State {
                     status
                 }
             }
-            outputs{
+            outputs {
                 id
                 enabled
                 dst
+                label
                 status
             }
         }
@@ -51,8 +52,8 @@ mutation DisableInput($id: InputId!) {
 }
 
 
-mutation AddOutput($input_id: InputId!, $url: Url!) {
-    addOutput(inputId: $input_id, dst: $url)
+mutation AddOutput($input_id: InputId!, $url: Url!, $label: String) {
+    addOutput(inputId: $input_id, dst: $url, label: $label)
 }
 
 mutation RemoveOutput($input_id: InputId!, $output_id: OutputId!) {

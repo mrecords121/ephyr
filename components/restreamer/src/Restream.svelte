@@ -31,6 +31,7 @@
   export let value;
 
   $: isPull = value.input.__typename === 'PullInput';
+  $: allEnabled = value.outputs.every(o => o.enabled);
 
   function openEditInputModal() {
     inputModal.openEdit(
@@ -84,7 +85,7 @@
   async function toggleAllOutputs() {
     if (value.outputs.length < 1) return;
     try {
-      if (value.outputs.every(o => o.enabled)) {
+      if (allEnabled) {
         await disableAllOutputsMutation({variables: {input_id: value.id}});
       } else {
         await enableAllOutputsMutation({variables: {input_id: value.id}});
@@ -120,8 +121,8 @@
     <span class="total">
       <span class="count">{value.outputs.length}</span>
       <Toggle id="all-outputs-toggle-{value.id}"
-              checked={value.outputs.every(o => o.enabled)}
-              title="Toggle all outputs"
+              checked={allEnabled}
+              title="{allEnabled ? 'Disable' : 'Enable'} all outputs"
               on:change={toggleAllOutputs}/>
     </span>
   {/if}
@@ -160,6 +161,10 @@
         <div class="uk-card uk-card-default uk-card-body uk-margin-left">
           <button type="button" class="uk-close" uk-close
                   on:click={removeOutput(output.id)}></button>
+
+          {#if output.label}
+            <span class="label">{output.label}</span>
+          {/if}
 
           <Toggle id="output-toggle-{output.id}" classes="small"
                   checked={output.enabled}
@@ -219,6 +224,7 @@
         margin-left: 15px !important
 
     .uk-card
+      position: relative
       padding: 6px
       width: calc((100% - (15px * 2)) / 2)
       min-width 250px
@@ -228,6 +234,12 @@
 
       .uk-close
         margin-top: 3px
+
+      .label
+        position: absolute
+        top: -2px
+        left: 2px
+        font-size: 8px
 
   .edit-input
     margin-left: 6px

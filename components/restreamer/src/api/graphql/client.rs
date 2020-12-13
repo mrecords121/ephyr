@@ -119,6 +119,7 @@ impl MutationsRoot {
     fn add_output(
         input_id: InputId,
         dst: Url,
+        label: Option<String>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
         if !matches!(dst.scheme(), "rtmp" | "rtmps") {
@@ -126,9 +127,22 @@ impl MutationsRoot {
                 .status(StatusCode::BAD_REQUEST)
                 .message("Provided `dst` is invalid: non-RTMP scheme"));
         }
+
+        static LABEL_REGEX: Lazy<Regex> =
+            Lazy::new(|| Regex::new("^[a-zA-Z0-9_-]{1,40}$").unwrap());
+        if let Some(label) = &label {
+            if !LABEL_REGEX.is_match(label) {
+                return Err(graphql::Error::new("INVALID_OUTPUT_LABEL")
+                    .status(StatusCode::BAD_REQUEST)
+                    .message(
+                        "Provided `label` is invalid: not [a-zA-Z0-9_-]{1,40}",
+                    ));
+            }
+        }
+
         context
             .state()
-            .add_new_output(input_id, dst)
+            .add_new_output(input_id, dst, label)
             .map(|added| {
                 if added {
                     Ok(added)

@@ -12,7 +12,7 @@
 
   let submitable = false;
   const unsubscribe = value.subscribe(v => {
-    submitable = v.value !== "";
+    submitable = v.url !== "";
   });
   onDestroy(() => unsubscribe());
 
@@ -25,7 +25,11 @@
   async function submit() {
     if (!submitable) return;
     const v = value.get();
-    const vars = {variables: {input_id: v.input_id, url: sanitize(v.value)}};
+    let vars = {variables: {input_id: v.input_id, url: sanitize(v.url)}};
+    const label = sanitize(v.label);
+    if (label !== '') {
+      vars.variables.label = label;
+    }
     try {
       await addOutputMutation(vars);
       value.close();
@@ -43,7 +47,9 @@
             type="button" on:click={() => value.close()}></button>
 
     <fieldset>
-      <input class="uk-input" type="text" bind:value={$value.value}
+      <input class="uk-input uk-form-small" type="text" bind:value={$value.label}
+             placeholder="optional label">
+      <input class="uk-input" type="text" bind:value={$value.url}
              placeholder="rtmp://...">
       <div class="uk-alert">
         Server will publish input RTMP stream to this address
@@ -67,6 +73,11 @@
 
     fieldset
       border: none
+
+      .uk-form-small
+        width: auto
+        margin-bottom: 5px
+
       .uk-alert
         font-size: 14px
         margin-bottom: 0
