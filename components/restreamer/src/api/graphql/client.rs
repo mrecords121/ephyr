@@ -7,6 +7,7 @@ use futures::stream::BoxStream;
 use futures_signals::signal::SignalExt as _;
 use juniper::{graphql_object, graphql_subscription, GraphQLObject, RootNode};
 use once_cell::sync::Lazy;
+use rand::Rng as _;
 use regex::Regex;
 use url::Url;
 
@@ -41,13 +42,12 @@ impl QueriesRoot {
     fn info(context: &Context) -> Info {
         Info {
             public_host: context.config().public_host.clone().unwrap(),
+            password_hash: context.state().password_hash.get_cloned(),
         }
     }
 
-    fn state(context: &Context) -> Restreams {
-        Restreams {
-            restreams: context.state().get_cloned(),
-        }
+    fn restreams(context: &Context) -> Vec<Restream> {
+        context.state().restreams.get_cloned()
     }
 }
 
@@ -194,6 +194,47 @@ impl MutationsRoot {
     ) -> Option<bool> {
         context.state().disable_all_outputs(input_id)
     }
+
+    fn set_password(
+        new: Option<String>,
+        old: Option<String>,
+        context: &Context,
+    ) -> Result<bool, graphql::Error> {
+        let mut current = context.state().password_hash.lock_mut();
+
+        if let Some(hash) = &*current {
+            match old {
+                None => {
+                    return Err(graphql::Error::new("NO_OLD_PASSWORD")
+                        .status(StatusCode::FORBIDDEN)
+                        .message("Old password required for this action"))
+                }
+                Some(pass) => {
+                    if !argon2::verify_encoded(hash, pass.as_bytes()).unwrap() {
+                        return Err(graphql::Error::new("WRONG_OLD_PASSWORD")
+                            .status(StatusCode::FORBIDDEN)
+                            .message("Wrong old password specified"));
+                    }
+                }
+            }
+        }
+
+        if current.is_none() && new.is_none() {
+            return Ok(false);
+        }
+
+        static HASH_CFG: Lazy<argon2::Config<'static>> =
+            Lazy::new(argon2::Config::default);
+        *current = new.map(|v| {
+            argon2::hash_encoded(
+                v.as_bytes(),
+                &rand::thread_rng().gen::<[u8; 32]>(),
+                &*HASH_CFG,
+            )
+            .unwrap()
+        });
+        Ok(true)
+    }
 }
 
 /// Root of all [GraphQL subscriptions][1] in [`Schema`].
@@ -204,12 +245,27 @@ pub struct SubscriptionsRoot;
 
 #[graphql_subscription(name = "Subscriptions", context = Context)]
 impl SubscriptionsRoot {
-    async fn state(context: &Context) -> BoxStream<'static, Restreams> {
+    async fn info(context: &Context) -> BoxStream<'static, Info> {
+        let public_host = context.config().public_host.clone().unwrap();
         context
             .state()
+            .password_hash
             .signal_cloned()
             .dedupe_cloned()
-            .map(|v| Restreams { restreams: v })
+            .map(move |h| Info {
+                public_host: public_host.clone(),
+                password_hash: h,
+            })
+            .to_stream()
+            .boxed()
+    }
+
+    async fn restreams(context: &Context) -> BoxStream<'static, Vec<Restream>> {
+        context
+            .state()
+            .restreams
+            .signal_cloned()
+            .dedupe_cloned()
             .to_stream()
             .boxed()
     }
@@ -218,9 +274,5 @@ impl SubscriptionsRoot {
 #[derive(Clone, Debug, GraphQLObject)]
 pub struct Info {
     pub public_host: String,
-}
-
-#[derive(Clone, Debug, Eq, GraphQLObject, PartialEq)]
-pub struct Restreams {
-    pub restreams: Vec<Restream>,
+    pub password_hash: Option<String>,
 }

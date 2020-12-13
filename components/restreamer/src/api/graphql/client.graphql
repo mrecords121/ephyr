@@ -1,31 +1,30 @@
-query Info {
+subscription Info {
     info {
         publicHost
+        passwordHash
     }
 }
 
 subscription State {
-    state {
-        restreams {
-            id
-            enabled
-            input {
-                ...on PushInput {
-                    name
-                    status
-                }
-                ...on PullInput {
-                    src
-                    status
-                }
-            }
-            outputs {
-                id
-                enabled
-                dst
-                label
+    restreams {
+        id
+        enabled
+        input {
+            ...on PushInput {
+                name
                 status
             }
+            ...on PullInput {
+                src
+                status
+            }
+        }
+        outputs {
+            id
+            enabled
+            dst
+            label
+            status
         }
     }
 }
@@ -74,4 +73,9 @@ mutation EnableAllOutputs($input_id: InputId!) {
 
 mutation DisableAllOutputs($input_id: InputId!) {
     disableAllOutputs(inputId: $input_id)
+}
+
+
+mutation SetPassword($new: String, $old: String) {
+    setPassword(new: $new, old: $old)
 }

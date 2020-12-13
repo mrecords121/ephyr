@@ -1,7 +1,7 @@
 use std::{future::Future, panic::AssertUnwindSafe, path::Path};
 
 use anyhow::anyhow;
-use derive_more::{Deref, Display, From};
+use derive_more::{Display, From};
 use ephyr_log::log;
 use futures::{
     future::TryFutureExt as _,
@@ -19,8 +19,11 @@ use xxhash::xxh3::xxh3_64;
 
 use crate::{display_panic, srs};
 
-#[derive(Clone, Debug, Deref)]
-pub struct State(Mutable<Vec<Restream>>);
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct State {
+    pub password_hash: Mutable<Option<String>>,
+    pub restreams: Mutable<Vec<Restream>>,
+}
 
 impl State {
     pub async fn try_new<P: AsRef<Path>>(
@@ -44,8 +47,8 @@ impl State {
                 anyhow!("Failed to read '{}' file: {}", file.display(), e)
             })?;
 
-        let state = Self(Mutable::new(if contents.is_empty() {
-            vec![]
+        let state = if contents.is_empty() {
+            State::default()
         } else {
             serde_json::from_slice(&contents).map_err(|e| {
                 anyhow!(
@@ -54,33 +57,39 @@ impl State {
                     e,
                 )
             })?
-        }));
+        };
 
-        let file = file.to_owned();
-        state.on_change("persist_state", move |restreams| {
+        let (file, persisted_state) = (file.to_owned(), state.clone());
+        let persist_state1 = move || {
             fs::write(
                 file.clone(),
-                serde_json::to_vec(&restreams)
+                serde_json::to_vec(&persisted_state)
                     .expect("Failed to serialize server state"),
             )
             .map_err(|e| log::error!("Failed to persist server state: {}", e))
+        };
+        let persist_state2 = persist_state1.clone();
+        Self::on_change("persist_restreams", &state.restreams, move |_| {
+            persist_state1()
         });
+        Self::on_change(
+            "persist_password_hash",
+            &state.password_hash,
+            move |_| persist_state2(),
+        );
 
         Ok(state)
     }
 
-    pub fn on_change<F, Fut>(&self, name: &'static str, hook: F)
+    pub fn on_change<F, Fut, T>(name: &'static str, val: &Mutable<T>, hook: F)
     where
-        F: FnMut(Vec<Restream>) -> Fut + Send + 'static,
+        F: FnMut(T) -> Fut + Send + 'static,
         Fut: Future + Send + 'static,
+        T: Clone + PartialEq + Send + Sync + 'static,
     {
         let _ = tokio::spawn(
             AssertUnwindSafe(
-                self.0
-                    .signal_cloned()
-                    .dedupe_cloned()
-                    .to_stream()
-                    .then(hook),
+                val.signal_cloned().dedupe_cloned().to_stream().then(hook),
             )
             .catch_unwind()
             .map_err(move |p| {
@@ -101,7 +110,7 @@ impl State {
         src: Url,
         replace_id: Option<InputId>,
     ) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
 
         for r in &*restreams {
             if let Input::Pull(i) = &r.input {
@@ -127,7 +136,7 @@ impl State {
         name: String,
         replace_id: Option<InputId>,
     ) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
 
         for r in &*restreams {
             if let Input::Push(i) = &r.input {
@@ -175,7 +184,7 @@ impl State {
 
     #[must_use]
     pub fn remove_input(&self, id: InputId) -> bool {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
         let prev_len = restreams.len();
         restreams.retain(|r| r.id != id);
         restreams.len() != prev_len
@@ -183,7 +192,7 @@ impl State {
 
     #[must_use]
     pub fn enable_input(&self, id: InputId) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
         let input = restreams.iter_mut().find(|r| r.id == id)?;
 
         if input.enabled {
@@ -196,7 +205,7 @@ impl State {
 
     #[must_use]
     pub fn disable_input(&self, id: InputId) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
         let input = restreams.iter_mut().find(|r| r.id == id)?;
 
         if !input.enabled {
@@ -215,7 +224,7 @@ impl State {
         output_dst: Url,
         label: Option<String>,
     ) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
         let outputs =
             &mut restreams.iter_mut().find(|r| r.id == input_id)?.outputs;
 
@@ -239,7 +248,7 @@ impl State {
         input_id: InputId,
         output_id: OutputId,
     ) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
         let outputs =
             &mut restreams.iter_mut().find(|r| r.id == input_id)?.outputs;
 
@@ -254,7 +263,7 @@ impl State {
         input_id: InputId,
         output_id: OutputId,
     ) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
         let output = &mut restreams
             .iter_mut()
             .find(|r| r.id == input_id)?
@@ -276,7 +285,7 @@ impl State {
         input_id: InputId,
         output_id: OutputId,
     ) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
         let output = &mut restreams
             .iter_mut()
             .find(|r| r.id == input_id)?
@@ -294,7 +303,7 @@ impl State {
 
     #[must_use]
     pub fn enable_all_outputs(&self, input_id: InputId) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
         Some(
             restreams
                 .iter_mut()
@@ -311,7 +320,7 @@ impl State {
 
     #[must_use]
     pub fn disable_all_outputs(&self, input_id: InputId) -> Option<bool> {
-        let mut restreams = self.0.lock_mut();
+        let mut restreams = self.restreams.lock_mut();
         Some(
             restreams
                 .iter_mut()

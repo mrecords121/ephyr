@@ -15,11 +15,10 @@
   export let public_host = "localhost";
 
   let submitable = false;
-  const unsubscribe = value.subscribe(v => {
+  onDestroy(value.subscribe(v => {
     const val = v.is_pull ? v.pull_url : v.push_key;
     submitable = (val !== "") && (val !== v.prev);
-  });
-  onDestroy(() => unsubscribe());
+  }));
 
   function onAreaClick(event) {
     if (event.target.classList.contains('uk-modal')) {

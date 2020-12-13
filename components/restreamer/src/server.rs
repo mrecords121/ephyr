@@ -51,7 +51,7 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
 
     let mut restreamers =
         ffmpeg::RestreamersPool::new(ffmpeg_path, state.clone());
-    state.on_change("spawn_restreamers", move |restreams| {
+    State::on_change("spawn_restreamers", &state.restreams, move |restreams| {
         future::ready(restreamers.apply(restreams))
     });
 
@@ -67,12 +67,18 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
 pub mod client {
     use std::time::Duration;
 
+    use actix_service::Service as _;
     use actix_web::{
-        get, middleware, route, web, App, Error, HttpRequest, HttpResponse,
-        HttpServer,
+        dev::ServiceRequest, error, get, middleware, route, web, App, Error,
+        HttpRequest, HttpResponse, HttpServer,
+    };
+    use actix_web_httpauth::extractors::{
+        basic::{self, BasicAuth},
+        AuthExtractor as _, AuthExtractorConfig, AuthenticationError,
     };
     use actix_web_static_files::ResourceFiles;
     use ephyr_log::log;
+    use futures::{future, FutureExt as _};
     use juniper::http::playground::playground_source;
     use juniper_actix::{
         graphql_handler, subscriptions::subscriptions_handler,
@@ -121,8 +127,15 @@ pub mod client {
             let mut app = App::new()
                 .app_data(stored_cfg.clone())
                 .app_data(state.clone())
+                .app_data(
+                    basic::Config::default().realm("Any login is allowed"),
+                )
                 .data(api::graphql::client::schema())
                 .wrap(middleware::Logger::default())
+                .wrap_fn(|req, srv| match authorize(req) {
+                    Ok(req) => srv.call(req).left_future(),
+                    Err(e) => future::err(e).right_future(),
+                })
                 .service(graphql);
             if in_debug_mode {
                 app = app.service(playground);
@@ -173,6 +186,31 @@ pub mod client {
             .content_type("text/html; charset=utf-8")
             .body(html)
     }
+
+    fn authorize(req: ServiceRequest) -> Result<ServiceRequest, Error> {
+        let hash =
+            match req.app_data::<State>().unwrap().password_hash.get_cloned() {
+                Some(h) => h,
+                None => return Ok(req),
+            };
+
+        let err = || {
+            AuthenticationError::new(
+                req.app_data::<basic::Config>()
+                    .unwrap()
+                    .clone()
+                    .into_inner(),
+            )
+        };
+
+        let auth = BasicAuth::from_service_request(&req).into_inner()?;
+        let pass = auth.password().ok_or_else(err)?;
+        if argon2::verify_encoded(hash.as_str(), pass.as_bytes()) != Ok(true) {
+            return Err(err().into());
+        }
+
+        return Ok(req);
+    }
 }
 
 /// Callback HTTP server responding to [SRS] HTTP callbacks.
@@ -222,7 +260,7 @@ pub mod callback {
         req: &api::srs::callback::Request,
         state: &State,
     ) -> Result<(), Error> {
-        let restreams = state.get_cloned();
+        let restreams = state.restreams.get_cloned();
         let _ = restreams
             .iter()
             .find(|r| r.enabled && r.input.uses_srs_app(&req.app))
@@ -234,7 +272,7 @@ pub mod callback {
         req: &api::srs::callback::Request,
         state: &State,
     ) -> Result<(), Error> {
-        let mut restreams = state.lock_mut();
+        let mut restreams = state.restreams.lock_mut();
         let restream = restreams
             .iter_mut()
             .find(|r| r.enabled && r.input.uses_srs_app(&req.app))
@@ -257,7 +295,7 @@ pub mod callback {
         req: &api::srs::callback::Request,
         state: &State,
     ) -> Result<(), Error> {
-        let mut restreams = state.lock_mut();
+        let mut restreams = state.restreams.lock_mut();
         let restream = restreams
             .iter_mut()
             .find(|r| r.input.uses_srs_app(&req.app))

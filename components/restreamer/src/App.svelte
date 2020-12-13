@@ -3,7 +3,8 @@
   import { ApolloClient } from '@apollo/client/core';
   import { WebSocketLink } from '@apollo/client/link/ws';
   import { SubscriptionClient } from 'subscriptions-transport-ws';
-  import { setClient, subscribe, query } from 'svelte-apollo';
+  import { onDestroy } from 'svelte';
+  import { setClient, subscribe } from 'svelte-apollo';
 
   import { Info, State } from './api/graphql/client.graphql';
 
@@ -16,6 +17,7 @@
 
   import InputModal from './InputModal.svelte';
   import OutputModal from './OutputModal.svelte';
+  import PasswordModal from './PasswordModal.svelte';
   import Restream from './Restream.svelte';
 
   UIkit.use(Icons);
@@ -31,11 +33,9 @@
   );
   wsClient.onConnected(() => {
     isOnline = true;
-    refetchInfo();
   });
   wsClient.onReconnected(() => {
     isOnline = true;
-    refetchInfo();
   });
   wsClient.onDisconnected(() => isOnline = false);
   const gqlClient = new ApolloClient({
@@ -44,12 +44,22 @@
   });
   setClient(gqlClient);
 
-  const info = query(Info);
+  const info = subscribe(Info, {errorPolicy: 'all'});
   const state = subscribe(State, {errorPolicy: 'all'});
 
-  function refetchInfo() {
-    info.refetch();
-  }
+  let currentHash = undefined;
+  onDestroy(info.subscribe(i => {
+    if (i.data) {
+      const newHash = i.data.info.passwordHash;
+      if (currentHash === undefined) {
+        currentHash = newHash;
+      } else if (!!newHash && (newHash !== currentHash)) {
+        window.location.reload();
+      }
+    }
+  }));
+
+  let openPasswordModal = false;
 </script>
 
 <template>
@@ -59,8 +69,20 @@
               on:click={() => inputModal.openAdd()}>
         <i class="fas fa-plus"></i>&nbsp;<span>Input</span>
       </button>
+      {#key $info.data.info.passwordHash}
+        <a href="/" class="set-password"
+           on:click|preventDefault={() => openPasswordModal = true}>
+          <i class="fas"
+             class:fa-lock-open={!$info.data.info.passwordHash}
+             class:fa-lock={!!$info.data.info.passwordHash}
+             title="{!$info.data.info.passwordHash ? 'Set' : 'Change'} password"
+          ></i>
+        </a>
+      {/key}
       <InputModal public_host="{$info.data.info.publicHost}"/>
       <OutputModal/>
+      <PasswordModal current_hash="{$info.data.info.passwordHash}"
+                     bind:visible={openPasswordModal}/>
     {:else if $info.error}
       {showError($info.error.message)}
     {/if}
@@ -74,13 +96,13 @@
     {#if !isOnline || $state.loading}
       <div class="uk-alert uk-alert-warning loading">Loading...</div>
     {:else if isOnline && $state.data && $info.data}
-      {#each $state.data.state.restreams as restream}
+      {#each $state.data.restreams as restream}
         <Restream public_host="{$info.data.info.publicHost}"
                   value="{restream}"/>
       {/each}
     {/if}
-    {#if $info.error}
-      {showError($info.error.message)}
+    {#if $state.error}
+      {showError($state.error.message)}
     {/if}
   </main>
 </template>
@@ -96,6 +118,15 @@
 
     button
       float: right
+    .set-password
+      float: right
+      margin-right: 30px
+      font-size: 26px
+      color: #666
+      outline: none
+      &:hover
+        text-decoration: none
+        color: #444
     h3
       margin: 4px 44px 4px 52px
     .logo

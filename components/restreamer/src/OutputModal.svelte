@@ -12,11 +12,10 @@
 
   let submitable = false;
   let invalidLine;
-  const unsubscribe = value.subscribe(v => {
+  onDestroy(value.subscribe(v => {
     submitable = (!v.multi && v.url !== "") ||
                  (v.multi && v.list !== "" && !invalidLine);
-  });
-  onDestroy(() => unsubscribe());
+  }));
 
   function sanitizeList(list) {
     if (list === '') return list;

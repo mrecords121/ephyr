@@ -1195,7 +1195,9 @@ dependencies = [
 name = "ephyr-restreamer"
 version = "0.1.0-beta.2"
 dependencies = [
+ "actix-service",
  "actix-web",
+ "actix-web-httpauth",
  "actix-web-static-files",
  "anyhow",
  "askama",
@@ -1211,6 +1213,7 @@ dependencies = [
  "rand 0.7.3",
  "regex",
  "reqwest",
+ "rust-argon2",
  "send_wrapper",
  "serde",
  "serde_json",

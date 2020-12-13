@@ -188,7 +188,7 @@ impl Restreamer {
     }
 
     fn set_status(status: Status, key: (u64, u64), state: &State) {
-        for r in state.lock_mut().iter_mut() {
+        for r in state.restreams.lock_mut().iter_mut() {
             if status != Status::Online
                 && r.input.is_pull()
                 && r.input.upstream_url_hash().unwrap() == key.0
