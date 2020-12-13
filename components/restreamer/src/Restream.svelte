@@ -33,6 +33,26 @@
   $: isPull = value.input.__typename === 'PullInput';
   $: allEnabled = value.outputs.every(o => o.enabled);
 
+  $: onlineCount = value.outputs.filter(o => o.status === 'ONLINE').length;
+  $: initCount = value.outputs.filter(o => o.status === 'INITIALIZING').length;
+  $: offlineCount = value.outputs.filter(o => o.status === 'OFFLINE').length;
+  $: presentBitmask = (onlineCount > 0 ? 1 : 0 ) +
+                      2 * (initCount > 0 ? 1 : 0 ) +
+                      4 * (offlineCount > 0 ? 1 : 0 );
+
+  let enabledBitmask = 0;
+  $: if (enabledBitmask === presentBitmask) {
+    enabledBitmask = 0;
+  }
+
+  $: showAll = ((enabledBitmask & presentBitmask) === presentBitmask) ||
+               ((enabledBitmask & presentBitmask) === 0);
+  $: showFiltered = {
+    ONLINE: !showAll && ((enabledBitmask & 1) === 1),
+    INITIALIZING: !showAll && ((enabledBitmask & 2) === 2),
+    OFFLINE: !showAll && ((enabledBitmask & 4) === 4),
+  };
+
   function openEditInputModal() {
     inputModal.openEdit(
       value.id,
@@ -119,7 +139,21 @@
 
   {#if value.outputs && value.outputs.length > 0}
     <span class="total">
-      <span class="count">{value.outputs.length}</span>
+      {#if offlineCount > 0}
+        <a href="/" on:click|preventDefault={() => enabledBitmask ^= 4}
+           class:enabled={showFiltered['OFFLINE']}
+           class="count uk-alert-danger">{offlineCount}</a>
+      {/if}
+      {#if initCount > 0}
+        <a href="/" on:click|preventDefault={() => enabledBitmask ^= 2}
+           class:enabled={showFiltered['INITIALIZING']}
+           class="count uk-alert-warning">{initCount}</a>
+      {/if}
+      {#if onlineCount > 0}
+        <a href="/" on:click|preventDefault={() => enabledBitmask ^= 1}
+           class:enabled={showFiltered['ONLINE']}
+           class="count uk-alert-success">{onlineCount}</a>
+      {/if}
       <Toggle id="all-outputs-toggle-{value.id}"
               checked={allEnabled}
               title="{allEnabled ? 'Disable' : 'Enable'} all outputs"
@@ -158,7 +192,8 @@
   {#if value.outputs && value.outputs.length > 0}
     <div class="uk-grid uk-grid-small" uk-grid>
       {#each value.outputs as output (output) }
-        <div class="uk-card uk-card-default uk-card-body uk-margin-left">
+        <div class="uk-card uk-card-default uk-card-body uk-margin-left"
+             class:hidden={!showAll && !showFiltered[output.status]}>
           <button type="button" class="uk-close" uk-close
                   on:click={removeOutput(output.id)}></button>
 
@@ -205,7 +240,16 @@
       margin-right: 30px
       .count
         text-align: right
-        margin-right: 5px
+        margin-right: 2px
+        background-color: inherit
+        padding: 1px 4px
+        border-radius: 2px
+        outline: none
+        &:hover, &.enabled
+          background-color: #cecece
+        &:hover
+          color: inherit
+          text-decoration: none
 
     .fa-arrow-down, .fa-arrow-right
       font-size: 14px
@@ -231,6 +275,8 @@
       font-size: 13px
       @media screen and (max-width: 600px)
         width: 100%
+      &.hidden
+        display: none
 
       .uk-close
         margin-top: 3px

@@ -15,8 +15,12 @@ function newInputModal() {
   return {
     subscribe,
     set: v => {
-      v.pull_url = sanitize(v.pull_url);
-      v.push_key = sanitize(v.push_key);
+      if (v.pull_url !== '') {
+        v.pull_url = sanitize(v.pull_url);
+      }
+      if (v.push_key !== '') {
+        v.push_key = sanitize(v.push_key);
+      }
       return set(v);
     },
     get: () => get({subscribe}),
