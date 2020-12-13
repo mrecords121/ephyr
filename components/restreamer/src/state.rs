@@ -204,6 +204,7 @@ impl State {
         }
 
         input.enabled = false;
+        input.srs_publisher_id = None;
         Some(true)
     }
 
