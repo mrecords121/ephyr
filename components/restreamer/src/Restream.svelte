@@ -7,6 +7,7 @@
   import {
     DisableInput, EnableInput, RemoveInput,
     DisableOutput, EnableOutput, RemoveOutput,
+    DisableAllOutputs, EnableAllOutputs,
   } from './api/graphql/client.graphql';
 
   import {showError} from "./util";
@@ -18,7 +19,9 @@
   const disableInputMutation = mutation(DisableInput);
   const enableInputMutation = mutation(EnableInput);
   const removeInputMutation = mutation(RemoveInput);
+  const disableAllOutputsMutation = mutation(DisableAllOutputs);
   const disableOutputMutation = mutation(DisableOutput);
+  const enableAllOutputsMutation = mutation(EnableAllOutputs);
   const enableOutputMutation = mutation(EnableOutput);
   const removeOutputMutation = mutation(RemoveOutput);
 
@@ -78,6 +81,19 @@
     }
   }
 
+  async function toggleAllOutputs() {
+    if (value.outputs.length < 1) return;
+    try {
+      if (value.outputs.every(o => o.enabled)) {
+        await disableAllOutputsMutation({variables: {input_id: value.id}});
+      } else {
+        await enableAllOutputsMutation({variables: {input_id: value.id}});
+      }
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
   function removeOutput(id) {
     const vars = {variables: {input_id: value.id, output_id: id}};
     return async () => {
@@ -101,7 +117,13 @@
   </button>
 
   {#if value.outputs && value.outputs.length > 0}
-    <span class="count">{value.outputs.length}</span>
+    <span class="total">
+      <span class="count">{value.outputs.length}</span>
+      <Toggle id="all-outputs-toggle-{value.id}"
+              checked={value.outputs.every(o => o.enabled)}
+              title="Toggle all outputs"
+              on:change={toggleAllOutputs}/>
+    </span>
   {/if}
 
   <Toggle id="input-toggle-{value.id}"
@@ -139,7 +161,7 @@
           <button type="button" class="uk-close" uk-close
                   on:click={removeOutput(output.id)}></button>
 
-          <Toggle id="output-toggle-{output.id}" size="8px"
+          <Toggle id="output-toggle-{output.id}" classes="small"
                   checked={output.enabled}
                   on:change={toggleOutput(output.id)}/>
           {#if output.status === 'ONLINE'}
@@ -173,10 +195,12 @@
       margin-top: -2px
       margin-right: 30px
 
-    .count
+    .total
       float: right
-      text-align: right
       margin-right: 30px
+      .count
+        text-align: right
+        margin-right: 5px
 
     .fa-arrow-down, .fa-arrow-right
       font-size: 14px

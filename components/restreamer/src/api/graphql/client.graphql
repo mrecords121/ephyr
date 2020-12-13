@@ -66,3 +66,11 @@ mutation EnableOutput($input_id: InputId!, $output_id: OutputId!) {
 mutation DisableOutput($input_id: InputId!, $output_id: OutputId!) {
     disableOutput(inputId: $input_id, outputId: $output_id)
 }
+
+mutation EnableAllOutputs($input_id: InputId!) {
+    enableAllOutputs(inputId: $input_id)
+}
+
+mutation DisableAllOutputs($input_id: InputId!) {
+    disableAllOutputs(inputId: $input_id)
+}

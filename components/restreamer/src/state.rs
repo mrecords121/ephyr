@@ -288,6 +288,40 @@ impl State {
         output.enabled = false;
         Some(true)
     }
+
+    #[must_use]
+    pub fn enable_all_outputs(&self, input_id: InputId) -> Option<bool> {
+        let mut restreams = self.0.lock_mut();
+        Some(
+            restreams
+                .iter_mut()
+                .find(|r| r.id == input_id)?
+                .outputs
+                .iter_mut()
+                .filter(|o| !o.enabled)
+                .fold(false, |_, o| {
+                    o.enabled = true;
+                    true
+                }),
+        )
+    }
+
+    #[must_use]
+    pub fn disable_all_outputs(&self, input_id: InputId) -> Option<bool> {
+        let mut restreams = self.0.lock_mut();
+        Some(
+            restreams
+                .iter_mut()
+                .find(|r| r.id == input_id)?
+                .outputs
+                .iter_mut()
+                .filter(|o| o.enabled)
+                .fold(false, |_, o| {
+                    o.enabled = false;
+                    true
+                }),
+        )
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]

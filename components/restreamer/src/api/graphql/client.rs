@@ -166,6 +166,20 @@ impl MutationsRoot {
     ) -> Option<bool> {
         context.state().disable_output(input_id, output_id)
     }
+
+    fn enable_all_outputs(
+        input_id: InputId,
+        context: &Context,
+    ) -> Option<bool> {
+        context.state().enable_all_outputs(input_id)
+    }
+
+    fn disable_all_outputs(
+        input_id: InputId,
+        context: &Context,
+    ) -> Option<bool> {
+        context.state().disable_all_outputs(input_id)
+    }
 }
 
 /// Root of all [GraphQL subscriptions][1] in [`Schema`].
