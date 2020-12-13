@@ -58,16 +58,23 @@ function newInputModal() {
 function newOutputModal() {
   const { subscribe, set, update } = writable({
     input_id: null,
+    multi: false,
     label: "",
     url: "",
+    list: "",
     visible: false,
   });
 
   return {
     subscribe,
+    update,
     set: v => {
-      v.label = sanitize(v.label);
-      v.url = sanitize(v.url);
+      if (v.label !== '') {
+        v.label = sanitize(v.label);
+      }
+      if (v.url !== '') {
+        v.url = sanitize(v.url);
+      }
       return set(v);
     },
     get: () => get({subscribe}),
@@ -76,10 +83,19 @@ function newOutputModal() {
       v.visible = true;
       return v;
     }),
+    switchSingle: () => update(v => {
+      v.multi = false;
+      return v;
+    }),
+    switchMulti: () => update(v => {
+      v.multi = true;
+      return v;
+    }),
     close: () => update(v => {
       v.input_id = null;
       v.label = "";
       v.url = "";
+      v.list = "";
       v.visible = false;
       return v;
     }),
