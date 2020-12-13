@@ -324,7 +324,9 @@ impl State {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
 pub struct Restream {
     pub id: InputId,
     pub input: Input,
@@ -432,7 +434,9 @@ impl Input {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
 pub struct PullInput {
     pub src: Url,
     #[serde(skip)]
@@ -447,7 +451,9 @@ impl PullInput {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
 pub struct PushInput {
     pub name: String,
     #[serde(skip)]
@@ -462,7 +468,9 @@ impl PushInput {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize)]
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
 pub struct Output {
     pub id: OutputId,
     pub dst: Url,

@@ -123,7 +123,9 @@ pub struct Video {
 /// ID of a [`Video`] on [YouTube].
 ///
 /// [YouTube]: https://youtube.com
-#[derive(Clone, Debug, Deserialize, Display, Eq, From, PartialEq, Serialize)]
+#[derive(
+    Clone, Debug, Deserialize, Display, Eq, From, PartialEq, Serialize,
+)]
 #[from(forward)]
 pub struct YoutubeId(String);
 
