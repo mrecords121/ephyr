@@ -3,8 +3,12 @@
 set -e
 
 # Install Podman for running containers.
+echo "deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_20.04/ /" \
+  | tee /etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list
+curl -L https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_20.04/Release.key \
+  | apt-key add -
 apt-get -y update
-apt-get -y install runc podman
+apt-get -y install podman
 
 # Install Ephyr re-streamer.
 cat << 'EOF' > /etc/systemd/system/ephyr-restreamer.service
@@ -16,13 +20,13 @@ After=podman.service
 [Service]
 Environment=EPHYR_CONTAINER_NAME=ephyr-restreamer
 Environment=EPHYR_IMAGE_NAME=allatra/ephyr
-Environment=EPHYR_IMAGE_TAG=restreamer-0.1.0-beta.1
+Environment=EPHYR_IMAGE_TAG=restreamer-0.1.0-beta.2
 
 ExecStartPre=/usr/bin/mkdir -p /var/lib/${EPHYR_CONTAINER_NAME}/
 ExecStartPre=touch /var/lib/${EPHYR_CONTAINER_NAME}/srs.conf
 ExecStartPre=touch /var/lib/${EPHYR_CONTAINER_NAME}/state.json
 
-#ExecStartPre=-/usr/bin/podman pull ${EPHYR_IMAGE_NAME}:${EPHYR_IMAGE_TAG}
+ExecStartPre=-/usr/bin/podman pull ${EPHYR_IMAGE_NAME}:${EPHYR_IMAGE_TAG}
 ExecStartPre=-/usr/bin/podman stop ${EPHYR_CONTAINER_NAME}
 ExecStartPre=-/usr/bin/podman rm --volumes ${EPHYR_CONTAINER_NAME}
 ExecStart=/usr/bin/podman run \
