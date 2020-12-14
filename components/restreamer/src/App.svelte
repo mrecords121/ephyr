@@ -87,9 +87,12 @@
       {showError($info.error.message)}
     {/if}
 
-    <img class="logo" src="logo.jpg" alt="Logo">
-
-    <h3>Ephyr re-streamer v0.1.0-beta.2</h3>
+    <a href="https://allatraunites.com" target="_blank"
+       class="logo" title="Join us on allatraunites.com">
+      <img src="logo.jpg" alt="Logo">
+      <h3>Creative Society </h3>
+      <small>Ephyr re-streamer 0.1.0-beta.2</small>
+    </a>
   </header>
 
   <main class="uk-container">
@@ -105,16 +108,25 @@
       {showError($state.error.message)}
     {/if}
   </main>
+
+  <footer class="uk-container">
+    Developed for people with ❤ by
+    <a href="https://github.com/ALLATRA-IT" target="_blank">AllatRa IT</a>
+  </footer>
 </template>
 
 <style lang="stylus" global>
   @require "../node_modules/uikit/dist/css/uikit.min.css"
+
+  $header_height = 64px
+  $footer_height = 30px
 
   h2, h3
     color: #666
 
   header
     padding: 10px
+    height: $header_height - 2 * @padding
 
     button
       float: right
@@ -127,14 +139,35 @@
       &:hover
         text-decoration: none
         color: #444
-    h3
-      margin: 4px 44px 4px 52px
+
     .logo
-      width: 44px
-      height: @width
-      float: left
+      outline: none
+      position: relative
+      white-space: nowrap
+      display: inline-block
+      &:hover
+        text-decoration: none
+
+      img
+        width: 44px
+        height: @width
+        float: left
+
+      h3
+        margin: 4px 0 4px 52px
+        max-width: 50%
+
+      small
+        position: absolute
+        font-size: 12px
+        width: 200px
+        bottom: -6px
+        left: 68px
+        color: #999
 
   main
+    min-height: "calc(100vh - %s)" % ($header_height + $footer_height)
+
     > .loading
       text-align: center
 
@@ -142,4 +175,9 @@
     background-color: #08c
     &:not([disabled]):hover
       background-color: #046
+
+  footer
+    padding-top: 10px
+    height: $footer_height - @padding-top
+    font-size: 12px
 </style>
