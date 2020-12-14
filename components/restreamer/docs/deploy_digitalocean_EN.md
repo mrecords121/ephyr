@@ -83,7 +83,7 @@ After you've launched a droplet creation, wait from 5 to 15 minutes until it is 
 
 ![Droplet IP](images/do_2.jpg)
 
-Use IP address of the created droplet in browser's address bar to access the installed Ephyr re-streamer.
+Use IP address of the created droplet in browser's address bar to access the installed Ephyr re-streamer(Web UI may look a bit different from the picture below).
 
 ![Address bar](images/browser.jpg)
 
