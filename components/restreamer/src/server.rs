@@ -69,7 +69,7 @@ pub mod client {
 
     use actix_service::Service as _;
     use actix_web::{
-        dev::ServiceRequest, error, get, middleware, route, web, App, Error,
+        dev::ServiceRequest, get, middleware, route, web, App, Error,
         HttpRequest, HttpResponse, HttpServer,
     };
     use actix_web_httpauth::extractors::{

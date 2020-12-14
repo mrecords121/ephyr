@@ -10,9 +10,11 @@
   export let visible = false;
   export let current_hash;
   let new_password = "";
+  let rep_password = "";
   let old_password = "";
 
   $: change_submitable = (new_password !== '') &&
+                         (new_password === rep_password) &&
                          ((old_password !== '' && !!current_hash) ||
                           !current_hash);
   $: remove_submitable = !!current_hash && (old_password !== '');
@@ -26,6 +28,7 @@
   function close() {
     visible = false;
     new_password = "";
+    rep_password = "";
     old_password = "";
   }
 
@@ -73,8 +76,10 @@
     <fieldset class="single-form">
       <input class="uk-input" type="password" bind:value={new_password}
              placeholder="{!current_hash ? 'P' : 'New p'}assword...">
+      <input class="uk-input" type="password" bind:value={rep_password}
+             placeholder="Repeat the password...">
       {#if !!current_hash}
-        <input class="uk-input" type="password" bind:value={old_password}
+        <input class="uk-input old" type="password" bind:value={old_password}
                placeholder="Current password for confirmation...">
       {/if}
       {#if !current_hash}
@@ -108,8 +113,11 @@
     fieldset
       border: none
 
-      input + input
-        margin-top: 5px
+      input
+        & + input
+          margin-top: 5px
+        &.old
+          margin-top: 20px
 
       .uk-alert
         font-size: 14px
