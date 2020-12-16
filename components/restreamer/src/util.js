@@ -5,6 +5,10 @@ export function showError(message) {
   return '';
 }
 
-export function sanitize(url) {
-  return url.replace(/[\s\r\n\t]+/g, '');
+export function sanitizeLabel(url) {
+  return url.replace(/[\s]+/g, ' ').trim();
+}
+
+export function sanitizeUrl(url) {
+  return url.replace(/[\s]+/g, '');
 }

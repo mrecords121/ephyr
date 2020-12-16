@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 
-import { sanitize } from "./util";
+import { sanitizeUrl } from "./util";
 
 function newInputModal() {
   const { subscribe, set, update } = writable({
@@ -16,10 +16,10 @@ function newInputModal() {
     subscribe,
     set: v => {
       if (v.pull_url !== '') {
-        v.pull_url = sanitize(v.pull_url);
+        v.pull_url = sanitizeUrl(v.pull_url);
       }
       if (v.push_key !== '') {
-        v.push_key = sanitize(v.push_key);
+        v.push_key = sanitizeUrl(v.push_key);
       }
       return set(v);
     },
@@ -33,9 +33,9 @@ function newInputModal() {
       v.prev = val;
       v.is_pull = is_pull;
       if (v.is_pull) {
-        v.pull_url = sanitize(val);
+        v.pull_url = sanitizeUrl(val);
       } else {
-        v.push_key = sanitize(val);
+        v.push_key = sanitizeUrl(val);
       }
       v.visible = true;
       return v;
@@ -73,11 +73,8 @@ function newOutputModal() {
     subscribe,
     update,
     set: v => {
-      if (v.label !== '') {
-        v.label = sanitize(v.label);
-      }
       if (v.url !== '') {
-        v.url = sanitize(v.url);
+        v.url = sanitizeUrl(v.url);
       }
       return set(v);
     },

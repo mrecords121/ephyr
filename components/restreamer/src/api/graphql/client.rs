@@ -129,13 +129,13 @@ impl MutationsRoot {
         }
 
         static LABEL_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new("^[a-zA-Z0-9_-]{1,40}$").unwrap());
+            Lazy::new(|| Regex::new(r"^[^,\n\t\r\f\v]{1,40}$").unwrap());
         if let Some(label) = &label {
             if !LABEL_REGEX.is_match(label) {
                 return Err(graphql::Error::new("INVALID_OUTPUT_LABEL")
                     .status(StatusCode::BAD_REQUEST)
                     .message(
-                        "Provided `label` is invalid: not [a-zA-Z0-9_-]{1,40}",
+                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,40}",
                     ));
             }
         }

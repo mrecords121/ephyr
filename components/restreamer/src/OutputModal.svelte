@@ -6,7 +6,7 @@
 
   import { outputModal as value } from './stores.js';
 
-  import { sanitize, showError } from './util';
+  import { sanitizeLabel, sanitizeUrl, showError } from './util';
 
   const addOutputMutation = mutation(AddOutput);
 
@@ -17,13 +17,30 @@
                  (v.multi && v.list !== "" && !invalidLine);
   }));
 
+  function revalidateLabel() {
+    value.update(v => {
+      if (v.label !== '') {
+        v.label = sanitizeLabel(v.label);
+      }
+      return v;
+    });
+  }
+
   function sanitizeList(list) {
     if (list === '') return list;
     return list.trim().split(/\r\n|\r|\n/)
-      .map(line => line.trim().split(',')
-        .map(v => sanitize(v))
-        .filter(v => v !== '')
-        .join(','))
+      .map(line => {
+        const p = line.trim().split(',');
+        let i = 0;
+        if (p.length > 1) {
+          p[i] = sanitizeLabel(p[i]);
+          i += 1;
+        }
+        for (; i < p.length; i += 1) {
+          p[i] = sanitizeUrl(p[i]);
+        }
+        return p.filter(v => v !== '').join(',');
+      })
       .filter(line => line !== '')
       .join("\n");
   }
@@ -32,11 +49,14 @@
     value.update(v => {
       v.list = sanitizeList(v.list);
 
-      invalidLine = v.list.split(/\r\n|\r|\n/)
-        .find(line => line.split(',').length > 2);
+      const lines = v.list.split(/\r\n|\r|\n/);
+      const invalidIndex = lines.findIndex(line => line.split(',').length > 2);
+      invalidLine = (invalidIndex !== -1)
+        ? (invalidIndex + 1) + ": " + lines[invalidIndex]
+        : undefined;
 
       return v;
-    })
+    });
   }
 
   function onAreaClick(event) {
@@ -62,8 +82,8 @@
           submit.push(vars);
         });
     } else {
-      let vars = {input_id: v.input_id, url: sanitize(v.url)};
-      const label = sanitize(v.label);
+      let vars = {input_id: v.input_id, url: sanitizeUrl(v.url)};
+      const label = sanitizeLabel(v.label);
       if (label !== '') {
         vars.label = label;
       }
@@ -114,7 +134,9 @@
     </ul>
 
     <fieldset class="single-form">
-      <input class="uk-input uk-form-small" type="text" bind:value={$value.label}
+      <input class="uk-input uk-form-small" type="text"
+             bind:value={$value.label}
+             on:change={revalidateLabel}
              placeholder="optional label">
       <input class="uk-input" type="text" bind:value={$value.url}
              placeholder="rtmp://...">
@@ -125,7 +147,7 @@
 
     <fieldset class="multi-form">
       {#if !!invalidLine}
-        <span class="uk-form-danger line-err">Invalid line: {invalidLine}</span>
+        <span class="uk-form-danger line-err">Invalid line {invalidLine}</span>
       {/if}
       <textarea class="uk-textarea" class:uk-form-danger={!!invalidLine}
                 bind:value={$value.list}

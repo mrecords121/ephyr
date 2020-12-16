@@ -5,7 +5,7 @@
 
   import { AddPullInput, AddPushInput } from './api/graphql/client.graphql';
 
-  import { sanitize, showError } from './util';
+  import { sanitizeUrl, showError } from './util';
 
   import { inputModal as value } from './stores.js';
 
@@ -32,10 +32,10 @@
     let p = {variables: v.edit_id ? {replace_id: v.edit_id} : {}};
     try {
       if (v.is_pull) {
-        p.variables.url = sanitize(v.pull_url);
+        p.variables.url = sanitizeUrl(v.pull_url);
         await addPullInputMutation(p);
       } else {
-        p.variables.key = sanitize(v.push_key);
+        p.variables.key = sanitizeUrl(v.push_key);
         await addPushInputMutation(p);
       }
       value.close();
