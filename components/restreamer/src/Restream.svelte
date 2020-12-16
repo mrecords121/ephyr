@@ -262,7 +262,7 @@
       margin-top: 10px
 
       .uk-card
-        margin-top: 10px !important
+        margin-top: 15px !important
 
       .uk-margin-left
         margin-left: 15px !important
@@ -283,9 +283,13 @@
 
       .label
         position: absolute
-        top: -2px
-        left: 2px
-        font-size: 8px
+        top: -12px
+        left: 0
+        padding: 0 6px
+        border-top-left-radius: 4px
+        border-top-right-radius: 4px
+        font-size: 13px
+        background-color: #fff
 
   .edit-input
     margin-left: 6px
