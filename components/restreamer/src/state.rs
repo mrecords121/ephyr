@@ -108,6 +108,7 @@ impl State {
     pub fn add_pull_input(
         &self,
         src: Url,
+        label: Option<String>,
         replace_id: Option<InputId>,
     ) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
@@ -126,6 +127,7 @@ impl State {
                 src,
                 status: Status::Offline,
             }),
+            label,
             replace_id,
         )
     }
@@ -134,6 +136,7 @@ impl State {
     pub fn add_push_input(
         &self,
         name: String,
+        label: Option<String>,
         replace_id: Option<InputId>,
     ) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
@@ -152,6 +155,7 @@ impl State {
                 name,
                 status: Status::Offline,
             }),
+            label,
             replace_id,
         )
     }
@@ -159,6 +163,7 @@ impl State {
     fn add_input_to(
         restreams: &mut Vec<Restream>,
         input: Input,
+        label: Option<String>,
         replace_id: Option<InputId>,
     ) -> Option<bool> {
         if let Some(id) = replace_id {
@@ -170,9 +175,11 @@ impl State {
                     o.status = Status::Offline;
                 }
             }
+            r.label = label;
         } else {
             restreams.push(Restream {
                 id: InputId::new(),
+                label,
                 input,
                 outputs: vec![],
                 enabled: true,
@@ -341,6 +348,8 @@ impl State {
 )]
 pub struct Restream {
     pub id: InputId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     pub input: Input,
     pub outputs: Vec<Output>,
     pub enabled: bool,

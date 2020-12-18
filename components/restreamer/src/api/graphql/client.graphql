@@ -9,6 +9,7 @@ subscription State {
     restreams {
         id
         enabled
+        label
         input {
             ...on PushInput {
                 name
@@ -30,12 +31,12 @@ subscription State {
 }
 
 
-mutation AddPullInput($url: Url!, $replace_id: InputId) {
-    addPullInput(src: $url, replaceId: $replace_id)
+mutation AddPullInput($url: Url!, $label: String, $replace_id: InputId) {
+    addPullInput(src: $url, label: $label, replaceId: $replace_id)
 }
 
-mutation AddPushInput($key: String!, $replace_id: InputId) {
-    addPushInput(name: $key, replaceId: $replace_id)
+mutation AddPushInput($key: String!, $label: String, $replace_id: InputId) {
+    addPushInput(name: $key, label: $label, replaceId: $replace_id)
 }
 
 mutation RemoveInput($id: InputId!) {

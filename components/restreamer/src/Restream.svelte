@@ -57,6 +57,7 @@
     inputModal.openEdit(
       value.id,
       isPull ? value.input.src : value.input.name,
+      value.label,
       isPull,
     );
   }
@@ -136,6 +137,10 @@
           on:click={openAddOutputModal}>
     <i class="fas fa-plus"></i>&nbsp;<span>Output</span>
   </button>
+
+  {#if !!value.label}
+    <span class="label">{value.label}</span>
+  {/if}
 
   {#if value.outputs && value.outputs.length > 0}
     <span class="total">
@@ -221,7 +226,8 @@
 
 <style lang="stylus">
   .uk-section
-    margin-top: 10px
+    position: relative
+    margin-top: 20px
     padding-left: 10px
     padding-right: @padding-left
 
@@ -267,6 +273,15 @@
       .uk-margin-left
         margin-left: 15px !important
 
+    .label
+      position: absolute
+      top: -12px
+      left: 0
+      padding: 2px 10px
+      border-top-left-radius: 4px
+      border-top-right-radius: 4px
+      background-color: #f8f8f8
+
     .uk-card
       position: relative
       padding: 6px
@@ -282,12 +297,8 @@
         margin-top: 3px
 
       .label
-        position: absolute
         top: -12px
-        left: 0
         padding: 0 6px
-        border-top-left-radius: 4px
-        border-top-right-radius: 4px
         font-size: 13px
         background-color: #fff
 

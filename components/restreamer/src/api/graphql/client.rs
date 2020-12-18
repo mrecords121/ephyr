@@ -61,6 +61,7 @@ pub struct MutationsRoot;
 impl MutationsRoot {
     fn add_pull_input(
         src: Url,
+        label: Option<String>,
         replace_id: Option<InputId>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
@@ -69,7 +70,18 @@ impl MutationsRoot {
                 .status(StatusCode::BAD_REQUEST)
                 .message("Provided `src` is invalid: non-RTMP scheme"));
         }
-        match context.state().add_pull_input(src, replace_id) {
+
+        if let Some(label) = &label {
+            if !LABEL_REGEX.is_match(label) {
+                return Err(graphql::Error::new("INVALID_INPUT_LABEL")
+                    .status(StatusCode::BAD_REQUEST)
+                    .message(
+                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,40}",
+                    ));
+            }
+        }
+
+        match context.state().add_pull_input(src, label, replace_id) {
             None => Ok(None),
             Some(true) => Ok(Some(true)),
             Some(false) => Err(graphql::Error::new("DUPLICATE_SRC_RTMP_URL")
@@ -80,6 +92,7 @@ impl MutationsRoot {
 
     fn add_push_input(
         name: String,
+        label: Option<String>,
         replace_id: Option<InputId>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
@@ -95,7 +108,18 @@ impl MutationsRoot {
                 .status(StatusCode::BAD_REQUEST)
                 .message("Provided `name` is invalid: not [a-z0-9_-]{1,20}"));
         }
-        match context.state().add_push_input(name, replace_id) {
+
+        if let Some(label) = &label {
+            if !LABEL_REGEX.is_match(label) {
+                return Err(graphql::Error::new("INVALID_INPUT_LABEL")
+                    .status(StatusCode::BAD_REQUEST)
+                    .message(
+                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,40}",
+                    ));
+            }
+        }
+
+        match context.state().add_push_input(name, label, replace_id) {
             None => Ok(None),
             Some(true) => Ok(Some(true)),
             Some(false) => Err(graphql::Error::new("DUPLICATE_INPUT_NAME")
@@ -128,8 +152,6 @@ impl MutationsRoot {
                 .message("Provided `dst` is invalid: non-RTMP scheme"));
         }
 
-        static LABEL_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new(r"^[^,\n\t\r\f\v]{1,40}$").unwrap());
         if let Some(label) = &label {
             if !LABEL_REGEX.is_match(label) {
                 return Err(graphql::Error::new("INVALID_OUTPUT_LABEL")
@@ -270,6 +292,9 @@ impl SubscriptionsRoot {
             .boxed()
     }
 }
+
+static LABEL_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^[^,\n\t\r\f\v]{1,40}$").unwrap());
 
 #[derive(Clone, Debug, GraphQLObject)]
 pub struct Info {

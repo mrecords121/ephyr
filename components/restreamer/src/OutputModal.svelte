@@ -17,15 +17,6 @@
                  (v.multi && v.list !== "" && !invalidLine);
   }));
 
-  function revalidateLabel() {
-    value.update(v => {
-      if (v.label !== '') {
-        v.label = sanitizeLabel(v.label);
-      }
-      return v;
-    });
-  }
-
   function sanitizeList(list) {
     if (list === '') return list;
     return list.trim().split(/\r\n|\r|\n/)
@@ -136,7 +127,7 @@
     <fieldset class="single-form">
       <input class="uk-input uk-form-small" type="text"
              bind:value={$value.label}
-             on:change={revalidateLabel}
+             on:change={() => value.sanitizeLabel()}
              placeholder="optional label">
       <input class="uk-input" type="text" bind:value={$value.url}
              placeholder="rtmp://...">
