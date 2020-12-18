@@ -13,6 +13,8 @@ pub struct Request {
     pub client_id: u32,
     pub ip: IpAddr,
     pub app: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stream: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize)]

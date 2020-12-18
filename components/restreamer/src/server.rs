@@ -272,6 +272,10 @@ pub mod callback {
         req: &api::srs::callback::Request,
         state: &State,
     ) -> Result<(), Error> {
+        if req.stream.as_ref().map(String::as_str) != Some("in") {
+            return Err(error::ErrorNotFound("Such `stream` doesn't exist"));
+        }
+
         let mut restreams = state.restreams.lock_mut();
         let restream = restreams
             .iter_mut()
