@@ -76,7 +76,7 @@ impl MutationsRoot {
                 return Err(graphql::Error::new("INVALID_INPUT_LABEL")
                     .status(StatusCode::BAD_REQUEST)
                     .message(
-                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,40}",
+                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,70}",
                     ));
             }
         }
@@ -114,7 +114,7 @@ impl MutationsRoot {
                 return Err(graphql::Error::new("INVALID_INPUT_LABEL")
                     .status(StatusCode::BAD_REQUEST)
                     .message(
-                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,40}",
+                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,70}",
                     ));
             }
         }
@@ -157,7 +157,7 @@ impl MutationsRoot {
                 return Err(graphql::Error::new("INVALID_OUTPUT_LABEL")
                     .status(StatusCode::BAD_REQUEST)
                     .message(
-                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,40}",
+                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,70}",
                     ));
             }
         }
@@ -294,7 +294,7 @@ impl SubscriptionsRoot {
 }
 
 static LABEL_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[^,\n\t\r\f\v]{1,40}$").unwrap());
+    Lazy::new(|| Regex::new(r"^[^,\n\t\r\f\v]{1,70}$").unwrap());
 
 #[derive(Clone, Debug, GraphQLObject)]
 pub struct Info {
