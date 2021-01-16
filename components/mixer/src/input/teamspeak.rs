@@ -32,10 +32,10 @@ use tokio::{
     task::JoinHandle,
     time,
 };
-use tsclientlib::{Connection, DisconnectOptions, StreamItem};
+use tsclientlib::{DisconnectOptions, StreamItem};
 use tsproto_packets::packets::AudioData;
 
-pub use tsclientlib::ConnectOptions as Config;
+pub use tsclientlib::{ConnectOptions as Config, Connection};
 
 /// Handler responsible for decoding, tracking and mixing audio of all
 /// [TeamSpeak] channel members.
@@ -385,7 +385,9 @@ impl AudioCapture {
         audio: Arc<Mutex<AudioHandler>>,
     ) -> Result<(), AudioCaptureError> {
         log::debug!("Connecting to TeamSpeak server...");
-        let conn = Connection::new(cfg.hardware_id(Self::new_hwid()))
+        let conn = cfg
+            .hardware_id(Self::new_hwid())
+            .connect()
             .map_err(AudioCaptureError::InitializationFailed)?;
         AudioCapture::new(conn, audio).await
     }
@@ -508,6 +510,7 @@ impl AudioCaptureError {
                 | E::QueueFull
                 | E::TooLate { .. }
                 | E::TooManySamples => false,
+                _ => false, // due to #[non_exhaustive]
             },
         };
         if is_permanent {

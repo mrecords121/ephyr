@@ -34,11 +34,11 @@ validator = { version = "0.11", features = ["derive"] }
     version = "0.2"
     features = ["io-util", "process", "rt-core", "signal", "stream"]
 [dependencies.tsclientlib]
-    git = "https://github.com/ALLATRA-IT/tsclientlib"
-    rev = "0ac2ef2e1135626b186c1664bad90814c54f793a" # branch = "master"
+    git = "https://github.com/ReSpeak/tsclientlib"
+    rev = "ee95d775ad6dda552847bf9f484ab3ff1a70f833" # branch = "master"
 [dependencies.tsproto-packets]
-    git = "https://github.com/ALLATRA-IT/tsclientlib"
-    rev = "0ac2ef2e1135626b186c1664bad90814c54f793a" # branch = "master"
+    git = "https://github.com/ReSpeak/tsclientlib"
+    rev = "ee95d775ad6dda552847bf9f484ab3ff1a70f833" # branch = "master"
 
 [dev-dependencies]
 serde_json = "1.0"

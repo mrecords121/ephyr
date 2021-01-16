@@ -171,7 +171,7 @@ impl Mixer {
             self.app, self.stream, self.name, name,
         );
         self.stdin = Some(teamspeak::Input::new(
-            teamspeak::Config::new(host.as_str())
+            teamspeak::Connection::build(host.as_str())
                 .channel(channel)
                 .name(name),
         ));

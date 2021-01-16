@@ -38,10 +38,10 @@ async fn main() -> Result<(), cli::Failure> {
 
 #[allow(clippy::non_ascii_literal)]
 async fn run() -> Result<(), anyhow::Error> {
-    let cfg = teamspeak::Config::new("ts3.ts3.online:8722")
+    let conn = teamspeak::Connection::build("ts3.ts3.online:8722")
         .channel("[cspacer]Best-of-Trance-Radio")
         .name("🤖 ephyr::mix_ts");
-    let mut ts_input = teamspeak::Input::new(cfg);
+    let mut ts_input = teamspeak::Input::new(conn);
 
     let ffmpeg = Command::new("ffmpeg")
         .args(&["-loglevel", "debug"])
