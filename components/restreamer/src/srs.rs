@@ -1,3 +1,7 @@
+//! [SRS]-based definitions and implementations.
+//!
+//! [SRS]: https://github.com/ossrs/srs
+
 use std::{
     ops::Deref,
     panic::AssertUnwindSafe,
@@ -16,13 +20,30 @@ use tokio::{fs, process::Command};
 
 use crate::{api, display_panic};
 
+/// [SRS] server spawnable as a separate process.
+///
+/// [SRS]: https://github.com/ossrs/srs
 #[derive(Clone, Debug)]
 pub struct Server {
+    /// Path where [SRS] configuration file should be created.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     conf_path: PathBuf,
+
+    /// Handle to the actual spawned [SRS] process.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     process: Arc<ServerProcess>,
 }
 
 impl Server {
+    /// Tries to create and run a new [SRS] server process.
+    ///
+    /// # Errors
+    ///
+    /// If [SRS] configuration file fails to be created.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     #[must_use]
     pub async fn try_new<P: AsRef<Path>>(
         workdir: P,
@@ -76,7 +97,7 @@ impl Server {
 
         let srv = Self {
             conf_path,
-            process: Arc::new(ServerProcess { abort_handle }),
+            process: Arc::new(ServerProcess(abort_handle)),
         };
 
         // Pre-create SRS conf file.
@@ -88,6 +109,14 @@ impl Server {
         Ok(srv)
     }
 
+    /// Updates [SRS] configuration file and reloads the spawned [SRS] server
+    /// to catch up the changes.
+    ///
+    /// # Errors
+    ///
+    /// If [SRS] configuration file fails to be created.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     pub async fn refresh(&self, cfg: &Config) -> anyhow::Result<()> {
         // SRS server reloads automatically on its conf file changes.
         fs::write(
@@ -101,17 +130,25 @@ impl Server {
     }
 }
 
+/// Handle to a spawned [SRS] server process.
+///
+/// [SRS]: https://github.com/ossrs/srs
 #[derive(Clone, Debug)]
-struct ServerProcess {
-    abort_handle: future::AbortHandle,
-}
+struct ServerProcess(future::AbortHandle);
 
 impl Drop for ServerProcess {
+    #[inline]
     fn drop(&mut self) {
-        self.abort_handle.abort();
+        self.0.abort();
     }
 }
 
+/// ID of [SRS] server client guarded by its participation.
+///
+/// Once this ID is fully [`Drop`]ped the client will be kicked from [SRS]
+/// server.
+///
+/// [SRS]: https://github.com/ossrs/srs
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ClientId(Arc<u32>);
 
@@ -132,6 +169,10 @@ impl Deref for ClientId {
 }
 
 impl Drop for ClientId {
+    /// Kicks a client behind this [`ClientId`] from [SRS] server it there are
+    /// no more copies left.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     fn drop(&mut self) {
         if let Some(&mut client_id) = Arc::get_mut(&mut self.0) {
             let _ = tokio::spawn(
@@ -147,28 +188,57 @@ impl Drop for ClientId {
     }
 }
 
+/// Configuration parameters of [SRS] server used by this application.
+///
+/// [SRS]: https://github.com/ossrs/srs
 #[derive(Clone, Debug, Template)]
 #[template(path = "restreamer.srs.conf.j2", escape = "none")]
 pub struct Config {
+    /// Port that [HTTP Callback API][1] is exposed on.
+    ///
+    /// [1]: https://en.wikipedia.org/wiki/Basic_access_authentication
     pub callback_port: u16,
+
+    /// Severity of [SRS] server logs.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     pub log_level: LogLevel,
 }
 
+/// Severity of [SRS] [server logs][1].
+///
+/// [SRS]: https://github.com/ossrs/srs
+/// [1]: https://github.com/ossrs/srs/wiki/v3_EN_SrsLog#loglevel
 #[derive(Clone, Copy, Debug, Display, SmartDefault)]
 pub enum LogLevel {
+    /// Error level.
     #[display(fmt = "error")]
     Error,
 
+    /// Warning log, without debug log.
     #[display(fmt = "warn")]
     Warn,
 
+    /// Important log, less and [SRS] enables it as a default level.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     #[default]
     #[display(fmt = "trace")]
     Trace,
 
+    /// Detail log, which huts performance.
+    ///
+    /// [SRS] defaults to disable it when compile.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     #[display(fmt = "info")]
     Info,
 
+    /// Lots of log, which hurts performance.
+    ///
+    /// [SRS] defaults to disable it when compile.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     #[display(fmt = "verbose")]
     Verbose,
 }

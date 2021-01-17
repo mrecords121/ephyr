@@ -34,7 +34,7 @@
   async function submit() {
     if (!submitable) return;
     const v = get(value);
-    let p = {variables: v.edit_id ? {replace_id: v.edit_id} : {}};
+    let p = {variables: v.edit_id ? {id: v.edit_id} : {}};
     const label = sanitizeLabel(v.label);
     if (label !== '') {
       p.variables.label = label;

@@ -38,12 +38,18 @@ impl Context {
         Self(None)
     }
 
+    /// Returns [`cli::Opts`] parameters stored in [`HttpRequest`]'s context.
+    ///
+    /// [`cli::Opts`]: crate::cli::Opts
     #[inline]
     #[must_use]
     pub fn config(&self) -> &crate::cli::Opts {
         self.app_data::<crate::cli::Opts>().unwrap()
     }
 
+    /// Returns current [`State`] stored in [`HttpRequest`]'s context.
+    ///
+    /// [`State`]: crate::State
     #[inline]
     #[must_use]
     pub fn state(&self) -> &crate::State {

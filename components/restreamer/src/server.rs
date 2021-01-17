@@ -11,12 +11,14 @@ use crate::{
     ffmpeg, srs, State,
 };
 
-/// Runs all application's HTTP servers.
+/// Initializes and runs all application's HTTP servers.
 ///
 /// # Errors
 ///
 /// If some [`HttpServer`] cannot run due to already used port, etc.
 /// The actual error is witten to logs.
+///
+/// [`HttpServer`]: actix_web::HttpServer
 #[actix_web::main]
 pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
     if cfg.public_host.is_none() {
@@ -94,8 +96,6 @@ pub mod client {
     pub mod public_dir {
         #![allow(unused_results)]
         #![doc(hidden)]
-
-        use std::collections::HashMap;
 
         include!(concat!(env!("OUT_DIR"), "/generated.rs"));
     }
@@ -187,6 +187,12 @@ pub mod client {
             .body(html)
     }
 
+    /// Performs [`HttpRequest`] [Basic authorization][1] as middleware against
+    /// [`State::password_hash`]. Doesn't consider username anyhow.
+    ///
+    /// No-op if [`State::password_hash`] is [`None`].
+    ///
+    /// [1]: https://en.wikipedia.org/wiki/Basic_access_authentication
     fn authorize(req: ServiceRequest) -> Result<ServiceRequest, Error> {
         let hash =
             match req.app_data::<State>().unwrap().password_hash.get_cloned() {
@@ -226,6 +232,16 @@ pub mod callback {
         state::{State, Status},
     };
 
+    /// Runs HTTP server for exposing [SRS] [HTTP Callback API][1] on `/`
+    /// endpoint for responding to [SRS] HTTP callbacks.
+    ///
+    /// # Errors
+    ///
+    /// If [`HttpServer`] cannot run due to already used port, etc.
+    /// The actual error is logged.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    /// [1]: https://github.com/ossrs/srs/wiki/v3_EN_HTTPCallback
     pub async fn run(cfg: &Opts, state: State) -> Result<(), Failure> {
         Ok(HttpServer::new(move || {
             App::new()
@@ -242,20 +258,38 @@ pub mod callback {
         })?)
     }
 
+    /// Endpoint serving the whole [HTTP Callback API][1] for [SRS].
+    ///
+    /// # Errors
+    ///
+    /// If [SRS] HTTP callback doesn't succeed.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    /// [1]: https://github.com/ossrs/srs/wiki/v3_EN_HTTPCallback
     #[post("/")]
     async fn callback(
         req: web::Json<api::srs::callback::Request>,
         state: web::Data<State>,
     ) -> Result<&'static str, Error> {
-        use api::srs::callback::Action;
+        use api::srs::callback::Event;
         match req.action {
-            Action::OnConnect => on_connect(&req, &*state)?,
-            Action::OnPublish => on_publish(&req, &*state)?,
-            Action::OnUnpublish => on_unpublish(&req, &*state)?,
+            Event::OnConnect => on_connect(&req, &*state)?,
+            Event::OnPublish => on_publish(&req, &*state)?,
+            Event::OnUnpublish => on_unpublish(&req, &*state)?,
         }
         Ok("0")
     }
 
+    /// Handles [`api::srs::callback::Event::OnConnect`].
+    ///
+    /// Only checks whether the appropriate [`state::Restream::input`] exists.
+    ///
+    /// # Errors
+    ///
+    /// If [`api::srs::callback::Request::app`] matches no existing
+    /// [`state::Restream`].
+    ///
+    /// [`state::Restream`]: crate::state::Restream
     fn on_connect(
         req: &api::srs::callback::Request,
         state: &State,
@@ -268,6 +302,21 @@ pub mod callback {
         Ok(())
     }
 
+    /// Handles [`api::srs::callback::Event::OnPublish`].
+    ///
+    /// Updates the appropriate [`state::Restream::input`] to
+    /// [`Status::Online`].
+    ///
+    /// # Errors
+    ///
+    /// - If [`api::srs::callback::Request::app`] or
+    ///   [`api::srs::callback::Request::stream`] matches no existing
+    ///   [`state::Restream`].
+    /// - If [`state::Restream`] with [`PullInput`] is tried to be published
+    ///   by external client.
+    ///
+    /// [`PullInput`]: crate::state::PullInput
+    /// [`state::Restream`]: crate::state::Restream
     fn on_publish(
         req: &api::srs::callback::Request,
         state: &State,
@@ -295,6 +344,18 @@ pub mod callback {
         Ok(())
     }
 
+    /// Handles [`api::srs::callback::Event::OnUnpublish`].
+    ///
+    /// Updates the appropriate [`state::Restream::input`] to
+    /// [`Status::Offline`].
+    ///
+    /// # Errors
+    ///
+    /// If [`api::srs::callback::Request::app`] matches no existing
+    /// [`state::Restream`].
+    ///
+    /// [`PullInput`]: crate::state::PullInput
+    /// [`state::Restream`]: crate::state::Restream
     fn on_unpublish(
         req: &api::srs::callback::Request,
         state: &State,
@@ -311,6 +372,10 @@ pub mod callback {
     }
 }
 
+/// Tries to detect public IP address of the machine where this application
+/// runs.
+///
+/// See [`public_ip`] crate for details.
 pub async fn detect_public_ip() -> Option<IpAddr> {
     use public_ip::{dns, http, BoxToResolver, ToResolver as _};
 

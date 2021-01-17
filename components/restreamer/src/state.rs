@@ -1,3 +1,5 @@
+//! Application state.
+
 use std::{future::Future, panic::AssertUnwindSafe, path::Path};
 
 use anyhow::anyhow;
@@ -19,13 +21,26 @@ use xxhash::xxh3::xxh3_64;
 
 use crate::{display_panic, srs};
 
+/// Reactive application state.
+///
+/// Any changes to it automatically propagate to appropriate subscribers.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct State {
+    /// [`argon2`] hash of password which protects access to this application's
+    /// public APIs.
     pub password_hash: Mutable<Option<String>>,
+
+    /// All [`Restream`]s performed by this application.
     pub restreams: Mutable<Vec<Restream>>,
 }
 
 impl State {
+    /// Instantiates a new [`State`] reading it from a file (if any) and
+    /// performing all the required inner subscriptions.
+    ///
+    /// # Errors
+    ///
+    /// If [`State`] file exists, but fails to be parsed.
     pub async fn try_new<P: AsRef<Path>>(
         file: P,
     ) -> Result<Self, anyhow::Error> {
@@ -81,6 +96,9 @@ impl State {
         Ok(state)
     }
 
+    /// Subscribes the specified `hook` to changes of the [`Mutable`] `val`ue.
+    ///
+    /// `name` is just a convenience for describing the `hook` in logs.
     pub fn on_change<F, Fut, T>(name: &'static str, val: &Mutable<T>, hook: F)
     where
         F: FnMut(T) -> Fut + Send + 'static,
@@ -104,18 +122,22 @@ impl State {
         );
     }
 
+    /// Adds new [`Restream`] with [`PullInput`] to this [`State`].
+    ///
+    /// If `update_id` is [`Some`] then updates an existing [`Restream`], if
+    /// any. So, returns [`None`] if no [`Restream`] with `update_id` exists.
     #[must_use]
     pub fn add_pull_input(
         &self,
         src: Url,
         label: Option<String>,
-        replace_id: Option<InputId>,
+        update_id: Option<InputId>,
     ) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
 
         for r in &*restreams {
             if let Input::Pull(i) = &r.input {
-                if &src == &i.src && replace_id != Some(r.id) {
+                if &src == &i.src && update_id != Some(r.id) {
                     return Some(false);
                 }
             }
@@ -128,22 +150,26 @@ impl State {
                 status: Status::Offline,
             }),
             label,
-            replace_id,
+            update_id,
         )
     }
 
+    /// Adds new [`Restream`] with [`PushInput`] to this [`State`].
+    ///
+    /// If `update_id` is [`Some`] then updates an existing [`Restream`], if
+    /// any. So, returns [`None`] if no [`Restream`] with `update_id` exists.
     #[must_use]
     pub fn add_push_input(
         &self,
         name: String,
         label: Option<String>,
-        replace_id: Option<InputId>,
+        update_id: Option<InputId>,
     ) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
 
         for r in &*restreams {
             if let Input::Push(i) = &r.input {
-                if &name == &i.name && replace_id != Some(r.id) {
+                if &name == &i.name && update_id != Some(r.id) {
                     return Some(false);
                 }
             }
@@ -156,17 +182,21 @@ impl State {
                 status: Status::Offline,
             }),
             label,
-            replace_id,
+            update_id,
         )
     }
 
+    /// Adds new [`Restream`] with the given [`Input`] to this [`State`].
+    ///
+    /// If `update_id` is [`Some`] then updates an existing [`Restream`], if
+    /// any. So, returns [`None`] if no [`Restream`] with `update_id` exists.
     fn add_input_to(
         restreams: &mut Vec<Restream>,
         input: Input,
         label: Option<String>,
-        replace_id: Option<InputId>,
+        update_id: Option<InputId>,
     ) -> Option<bool> {
-        if let Some(id) = replace_id {
+        if let Some(id) = update_id {
             let r = restreams.iter_mut().find(|r| r.id == id)?;
             if !r.input.is(&input) {
                 r.input = input;
@@ -189,6 +219,9 @@ impl State {
         Some(true)
     }
 
+    /// Removes [`Restream`] with the given `id` from this [`State`].
+    ///
+    /// Returns `true` if it has been removed, or `false` if doesn't exist.
     #[must_use]
     pub fn remove_input(&self, id: InputId) -> bool {
         let mut restreams = self.restreams.lock_mut();
@@ -197,6 +230,10 @@ impl State {
         restreams.len() != prev_len
     }
 
+    /// Enables [`Restream`] with the given `id` in this [`State`].
+    ///
+    /// Returns `true` if it has been enabled, or `false` if it already has been
+    /// enabled.
     #[must_use]
     pub fn enable_input(&self, id: InputId) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
@@ -210,6 +247,10 @@ impl State {
         Some(true)
     }
 
+    /// Disables [`Restream`] with the given `id` in this [`State`].
+    ///
+    /// Returns `true` if it has been disabled, or `false` if it already has
+    /// been disabled.
     #[must_use]
     pub fn disable_input(&self, id: InputId) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
@@ -224,6 +265,9 @@ impl State {
         Some(true)
     }
 
+    /// Adds new [`Output`] to the specified [`Restream`] of this [`State`].
+    ///
+    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
     #[must_use]
     pub fn add_new_output(
         &self,
@@ -249,6 +293,10 @@ impl State {
         Some(true)
     }
 
+    /// Removes [`Output`] from the specified [`Restream`] of this [`State`].
+    ///
+    /// Returns `true` if it has been removed, or `false` if doesn't exist.
+    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
     #[must_use]
     pub fn remove_output(
         &self,
@@ -264,6 +312,11 @@ impl State {
         Some(outputs.len() != prev_len)
     }
 
+    /// Enables [`Output`] in the specified [`Restream`] of this [`State`].
+    ///
+    /// Returns `true` if it has been enabled, or `false` if it already has been
+    /// enabled.
+    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
     #[must_use]
     pub fn enable_output(
         &self,
@@ -286,6 +339,11 @@ impl State {
         Some(true)
     }
 
+    /// Disables [`Output`] in the specified [`Restream`] of this [`State`].
+    ///
+    /// Returns `true` if it has been disabled, or `false` if it already has
+    /// been disabled.
+    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
     #[must_use]
     pub fn disable_output(
         &self,
@@ -308,6 +366,11 @@ impl State {
         Some(true)
     }
 
+    /// Enables all [`Output`]s in the specified [`Restream`] of this [`State`].
+    ///
+    /// Returns `true` if at least one has been enabled, or `false` if all of
+    /// them already have been enabled.
+    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
     #[must_use]
     pub fn enable_all_outputs(&self, input_id: InputId) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
@@ -325,6 +388,12 @@ impl State {
         )
     }
 
+    /// Disables all [`Output`]s in the specified [`Restream`] of this
+    /// [`State`].
+    ///
+    /// Returns `true` if at least one has been disabled, or `false` if all of
+    /// them already have been disabled.
+    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
     #[must_use]
     pub fn disable_all_outputs(&self, input_id: InputId) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
@@ -343,37 +412,59 @@ impl State {
     }
 }
 
+/// Restream of a live RTMP stream from one `Input` to many `Output`s.
 #[derive(
     Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
 )]
 pub struct Restream {
+    /// Unique ID of this `Restream`.
     pub id: InputId,
+
+    /// Optional label of this `Restream`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+
+    /// `Input` that live RTMP stream is received from.
     pub input: Input,
+
+    /// `Output`s that live RTMP stream is restreamed to.
     pub outputs: Vec<Output>,
+
+    /// Indicator whether this `Restream` is enabled, so allows to receive a
+    /// live RTMP stream from `Input`.
     pub enabled: bool,
+
+    /// ID of [SRS] client who publishes the ongoing live RTMP stream to
+    /// [`Input`].
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     #[graphql(skip)]
     #[serde(skip)]
     pub srs_publisher_id: Option<srs::ClientId>,
 }
 
+/// Source of a live RTMP stream for `Restream`.
 #[derive(
     Clone, Debug, Deserialize, Eq, From, GraphQLUnion, PartialEq, Serialize,
 )]
 #[serde(rename_all = "lowercase")]
 pub enum Input {
+    /// Receiving a live RTMP stream from an external client.
     Push(PushInput),
+
+    /// Pulling a live RTMP stream from a remote server.
     Pull(PullInput),
 }
 
 impl Input {
+    /// Indicates whether this [`Input`] is a [`PullInput`].
     #[inline]
     #[must_use]
     pub fn is_pull(&self) -> bool {
         matches!(self, Input::Pull(_))
     }
 
+    /// Returns [`Status`] of this [`Input`].
     #[inline]
     #[must_use]
     pub fn status(&self) -> Status {
@@ -383,6 +474,7 @@ impl Input {
         }
     }
 
+    /// Sets a `new` [`Status`] of this [`Input`].
     #[inline]
     pub fn set_status(&mut self, new: Status) {
         match self {
@@ -391,6 +483,7 @@ impl Input {
         }
     }
 
+    /// Checks whether this [`Input`] is the same as `other` one.
     #[inline]
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
@@ -401,6 +494,7 @@ impl Input {
         }
     }
 
+    /// Calculates a unique hash of this [`Input`].
     #[inline]
     #[must_use]
     pub fn hash(&self) -> u64 {
@@ -410,6 +504,8 @@ impl Input {
         }
     }
 
+    /// Returns an URL of the remote server that this [`Input`] receives a live
+    /// RTMP stream from, if any.
     #[inline]
     #[must_use]
     pub fn upstream_url(&self) -> Option<&Url> {
@@ -420,12 +516,18 @@ impl Input {
         }
     }
 
+    /// Returns hash of an URL of the remote server that this [`Input`] receives
+    /// a live RTMP stream from, if any.
     #[inline]
     #[must_use]
     pub fn upstream_url_hash(&self) -> Option<u64> {
         self.upstream_url().map(|u| xxh3_64(u.as_ref().as_bytes()))
     }
 
+    /// Returns an URL of the local [SRS] server that a received live RTMP
+    /// stream by this [`Input`] may be pulled from.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     #[must_use]
     pub fn srs_url(&self) -> Url {
         Url::parse(&match self {
@@ -437,12 +539,20 @@ impl Input {
         .unwrap()
     }
 
+    /// Returns hash of an URL of the local [SRS] server that a received live
+    /// RTMP stream by this [`Input`] may be pulled from.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     #[inline]
     #[must_use]
     pub fn srs_url_hash(&self) -> u64 {
         xxh3_64(self.srs_url().as_ref().as_bytes())
     }
 
+    /// Checks whether the given `app` parameter of a [SRS] media stream is
+    /// related to this [`Input`].
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
     #[inline]
     #[must_use]
     pub fn uses_srs_app(&self, app: &str) -> bool {
@@ -455,16 +565,21 @@ impl Input {
     }
 }
 
+/// `Input` pulling a live RTMP stream from a remote server.
 #[derive(
     Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
 )]
 pub struct PullInput {
+    /// URL of a live RTMP stream to be pulled.
     pub src: Url,
+
+    /// `Status` of this `PullInput` indicating whether it performs pulling.
     #[serde(skip)]
     pub status: Status,
 }
 
 impl PullInput {
+    /// Checks whether this [`PullInput`] is the same as `other` on.
     #[inline]
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
@@ -472,16 +587,23 @@ impl PullInput {
     }
 }
 
+/// `Input` receiving a live RTMP stream from a remote client.
 #[derive(
     Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
 )]
 pub struct PushInput {
+    /// Name of a live RTMP stream to expose it with for receiving and
+    /// restreaming media traffic.
     pub name: String,
+
+    /// `Status` of this `PushInput` indicating whether it receives media
+    /// traffic.
     #[serde(skip)]
     pub status: Status,
 }
 
 impl PushInput {
+    /// Checks whether this [`PushInput`] is the same as `other` on.
     #[inline]
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
@@ -489,26 +611,40 @@ impl PushInput {
     }
 }
 
+/// Destination that `Restream` should restream a live RTMP stream to.
 #[derive(
     Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
 )]
 pub struct Output {
+    /// Unique ID of this `Output`.
     pub id: OutputId,
+
+    /// URL to push a live RTMP stream to.
     pub dst: Url,
+
+    /// Optional label of this `Output`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+
+    /// Indicator whether this `Output` is enabled, so performs a live RTMP
+    /// stream restream to destination.
     pub enabled: bool,
+
+    /// `Status` of this `Output` indicating whether it pushes media traffic to
+    /// destination.
     #[serde(skip)]
     pub status: Status,
 }
 
 impl Output {
+    /// Checks whether this [`Output`] is the same as `other` on.
     #[inline]
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
         &self.dst == &other.dst
     }
 
+    /// Calculates a unique hash of this [`Output`].
     #[inline]
     #[must_use]
     pub fn hash(&self) -> u64 {
@@ -516,15 +652,22 @@ impl Output {
     }
 }
 
+/// Status indicating what's going on in `Input` or `Output`.
 #[derive(Clone, Copy, Debug, Eq, GraphQLEnum, PartialEq, SmartDefault)]
 pub enum Status {
+    /// Inactive, no operations are performed and no media traffic is allowed.
     #[default]
     Offline,
+
+    /// Initializing, media traffic is allowed, but not yet flows as expected.
     Initializing,
+
+    /// Active, all operations are performing successfully and media traffic
+    /// flows as expected.
     Online,
 }
 
-/// ID of an [`Input`].
+/// ID of an `Input`.
 #[derive(
     Clone,
     Copy,
@@ -547,7 +690,7 @@ impl InputId {
     }
 }
 
-/// ID of an [`Output`].
+/// ID of an `Output`.
 #[derive(
     Clone,
     Copy,

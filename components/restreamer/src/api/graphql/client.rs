@@ -20,7 +20,7 @@ use super::Context;
 
 /// Full schema of [`api::graphql::client`].
 ///
-/// [`api::graphql::client`]: crate::api::graphql::client
+/// [`api::graphql::client`]: graphql::client
 pub type Schema =
     RootNode<'static, QueriesRoot, MutationsRoot, SubscriptionsRoot>;
 
@@ -31,26 +31,6 @@ pub fn schema() -> Schema {
     Schema::new(QueriesRoot, MutationsRoot, SubscriptionsRoot)
 }
 
-/// Root of all [GraphQL queries][1] in [`Schema`].
-///
-/// [1]: https://spec.graphql.org/June2018/#sec-Root-Operation-Types
-#[derive(Clone, Copy, Debug)]
-pub struct QueriesRoot;
-
-#[graphql_object(name = "Queries", context = Context)]
-impl QueriesRoot {
-    fn info(context: &Context) -> Info {
-        Info {
-            public_host: context.config().public_host.clone().unwrap(),
-            password_hash: context.state().password_hash.get_cloned(),
-        }
-    }
-
-    fn restreams(context: &Context) -> Vec<Restream> {
-        context.state().restreams.get_cloned()
-    }
-}
-
 /// Root of all [GraphQL mutations][1] in [`Schema`].
 ///
 /// [1]: https://spec.graphql.org/June2018/#sec-Root-Operation-Types
@@ -59,10 +39,32 @@ pub struct MutationsRoot;
 
 #[graphql_object(name = "Mutations", context = Context)]
 impl MutationsRoot {
+    /// Adds new `Restream` with `PullInput`.
+    ///
+    /// If `id` is specified, then tries to update parameters of the existent
+    /// `Restream`.
+    ///
+    /// ### Idempotency
+    ///
+    /// Idempotent if `id` is specified. Otherwise is non-idempotent, always
+    /// creates a new `Restream` and errors on the `src` duplicates.
+    ///
+    /// ### Result
+    ///
+    /// Returns `null` if `Restream` with the given `id` doesn't exist.
+    /// Otherwise always returns `true`.
+    #[graphql(arguments(
+        src(description = "RTMP URL to pull media stream from."),
+        label(description = "Optional label for this `Restream`."),
+        id(
+            description = "ID of `Restream` to be updated rather than creating \
+                           a new one."
+        ),
+    ))]
     fn add_pull_input(
         src: Url,
         label: Option<String>,
-        replace_id: Option<InputId>,
+        id: Option<InputId>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
         if !matches!(src.scheme(), "rtmp" | "rtmps") {
@@ -81,7 +83,7 @@ impl MutationsRoot {
             }
         }
 
-        match context.state().add_pull_input(src, label, replace_id) {
+        match context.state().add_pull_input(src, label, id) {
             None => Ok(None),
             Some(true) => Ok(Some(true)),
             Some(false) => Err(graphql::Error::new("DUPLICATE_SRC_RTMP_URL")
@@ -90,10 +92,32 @@ impl MutationsRoot {
         }
     }
 
+    /// Adds new `Restream` with `PushInput`.
+    ///
+    /// If `id` is specified, then tries to update parameters of the existent
+    /// `Restream`.
+    ///
+    /// ### Idempotency
+    ///
+    /// Idempotent if `id` is specified. Otherwise is non-idempotent, always
+    /// creates a new `Restream` and errors on the `name` duplicates.
+    ///
+    /// ### Result
+    ///
+    /// Returns `null` if `Restream` with the given `id` doesn't exist.
+    /// Otherwise always returns `true`.
+    #[graphql(arguments(
+        name(description = "Name of RTMP media stream used in its URL."),
+        label(description = "Optional label for this `Restream`."),
+        id(
+            description = "ID of `Restream` to be updated rather than creating \
+                           a new one."
+        ),
+    ))]
     fn add_push_input(
         name: String,
         label: Option<String>,
-        replace_id: Option<InputId>,
+        id: Option<InputId>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
         static NAME_REGEX: Lazy<Regex> =
@@ -119,7 +143,7 @@ impl MutationsRoot {
             }
         }
 
-        match context.state().add_push_input(name, label, replace_id) {
+        match context.state().add_push_input(name, label, id) {
             None => Ok(None),
             Some(true) => Ok(Some(true)),
             Some(false) => Err(graphql::Error::new("DUPLICATE_INPUT_NAME")
@@ -128,18 +152,62 @@ impl MutationsRoot {
         }
     }
 
+    /// Removes `Restream` by its `id`.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if `Restream` with the given `id` has been removed, or
+    /// `false` if it doesn't exist.
+    #[graphql(arguments(id(description = "ID of `Restream` to be removed.")))]
     fn remove_input(id: InputId, context: &Context) -> bool {
         context.state().remove_input(id)
     }
 
+    /// Enables `Restream` by its `id`.
+    ///
+    /// Enabled `Restream` starts accepting or pulling media traffic.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if `Restream` with the given `id` has been enabled,
+    /// `false` if it has been enabled already, and `null` if it doesn't exist.
+    #[graphql(arguments(id(description = "ID of `Restream` to be enabled.")))]
     fn enable_input(id: InputId, context: &Context) -> Option<bool> {
         context.state().enable_input(id)
     }
 
+    /// Disables `Restream` by its `id`.
+    ///
+    /// Disabled `Restream` stops and forbids accepting or pulling media
+    /// traffic.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if `Restream` with the given `id` has been disabled,
+    /// `false` if it has been disabled already, and `null` if it doesn't exist.
+    #[graphql(arguments(id(
+        description = "ID of `Restream` to be disabled."
+    )))]
     fn disable_input(id: InputId, context: &Context) -> Option<bool> {
         context.state().disable_input(id)
     }
 
+    /// Adds new `Output` to the specified `Restream`.
+    ///
+    /// ### Non-idempotent
+    ///
+    /// Always creates a new `Output` and errors on the `dst` duplicates within
+    /// the specified `Restream`.
+    ///
+    /// ### Result
+    ///
+    /// Returns `null` if `Restream` with the given `inputId` doesn't exist.
+    /// Otherwise always returns `true`.
+    #[graphql(arguments(
+        input_id(description = "ID of `Restream` to add `Output` to."),
+        dst(description = "RTMP URL to push media stream to."),
+        label(description = "Optional label for this `Output`."),
+    ))]
     fn add_output(
         input_id: InputId,
         dst: Url,
@@ -179,6 +247,17 @@ impl MutationsRoot {
             .transpose()
     }
 
+    /// Removes `Output` by its ID from the specified `Restream`.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if `Output` with the given `id` has been removed,
+    /// `false` if it has been removed already, and `null` if the specified
+    /// `Restream` doesn't exist.
+    #[graphql(arguments(
+        input_id(description = "ID of `Restream` to remove `Output` from."),
+        output_id(description = "ID of `Output` to be removed."),
+    ))]
     fn remove_output(
         input_id: InputId,
         output_id: OutputId,
@@ -187,6 +266,19 @@ impl MutationsRoot {
         context.state().remove_output(input_id, output_id)
     }
 
+    /// Enables `Output` by its ID in the specified `Restream`.
+    ///
+    /// Enabled `Output` starts pushing media traffic to its destination.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if `Output` with the given `id` has been enabled,
+    /// `false` if it has been enabled already, and `null` if the specified
+    /// `Restream`/`Output` doesn't exist.
+    #[graphql(arguments(
+        input_id(description = "ID of `Restream` to enable `Output` in."),
+        output_id(description = "ID of `Output` to be enabled."),
+    ))]
     fn enable_output(
         input_id: InputId,
         output_id: OutputId,
@@ -195,6 +287,19 @@ impl MutationsRoot {
         context.state().enable_output(input_id, output_id)
     }
 
+    /// Disables `Output` by its ID in the specified `Restream`.
+    ///
+    /// Disabled `Output` stops pushing media traffic to its destination.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if `Output` with the given `id` has been disabled,
+    /// `false` if it has been disabled already, and `null` if the specified
+    /// `Restream`/`Output` doesn't exist.
+    #[graphql(arguments(
+        input_id(description = "ID of `Restream` to disable `Output` in."),
+        output_id(description = "ID of `Output` to be disabled."),
+    ))]
     fn disable_output(
         input_id: InputId,
         output_id: OutputId,
@@ -203,6 +308,18 @@ impl MutationsRoot {
         context.state().disable_output(input_id, output_id)
     }
 
+    /// Enables all `Output`s in the specified `Restream`.
+    ///
+    /// Enabled `Output`s start pushing media traffic to their destinations.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if at least `Output`has been enabled, `false` if all
+    /// `Output`s have been enabled already, and `null` if the specified
+    /// `Restream` doesn't exist.
+    #[graphql(arguments(input_id(
+        description = "ID of `Restream` to enable all `Output`s in."
+    )))]
     fn enable_all_outputs(
         input_id: InputId,
         context: &Context,
@@ -210,6 +327,18 @@ impl MutationsRoot {
         context.state().enable_all_outputs(input_id)
     }
 
+    /// Disables all `Output`s in the specified `Restream`.
+    ///
+    /// Disabled `Output`s stop pushing media traffic to their destinations.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if at least `Output` has been disabled, `false` if all
+    /// `Output`s have been disabled already, and `null` if the specified
+    /// `Restream` doesn't exist.
+    #[graphql(arguments(input_id(
+        description = "ID of `Restream` to disable all `Output`s in."
+    )))]
     fn disable_all_outputs(
         input_id: InputId,
         context: &Context,
@@ -217,6 +346,26 @@ impl MutationsRoot {
         context.state().disable_all_outputs(input_id)
     }
 
+    /// Sets or unsets the password to protect this GraphQL API with.
+    ///
+    /// Once password is set, any subsequent requests to this GraphQL API should
+    /// perform [HTTP Basic auth][1], where any username is allowed, but the
+    /// password should match the one being set.
+    ///
+    /// ### Result
+    ///
+    /// Returns if password has been changed or unset, otherwise `false` if
+    /// nothing changes.
+    ///
+    /// [1]: https://en.wikipedia.org/wiki/Basic_access_authentication
+    #[graphql(arguments(
+        new(
+            description = "New password to be set. In `null` then unsets the \
+                           current password."
+        ),
+        old(description = "Old password for authorization, if it was set \
+                           previously."),
+    ))]
     fn set_password(
         new: Option<String>,
         old: Option<String>,
@@ -265,8 +414,31 @@ impl MutationsRoot {
 #[derive(Clone, Copy, Debug)]
 pub struct SubscriptionsRoot;
 
+/// Root of all [GraphQL queries][1] in [`Schema`].
+///
+/// [1]: https://spec.graphql.org/June2018/#sec-Root-Operation-Types
+#[derive(Clone, Copy, Debug)]
+pub struct QueriesRoot;
+
+#[graphql_object(name = "Queries", context = Context)]
+impl QueriesRoot {
+    /// Returns current `Info` parameters of this server.
+    fn info(context: &Context) -> Info {
+        Info {
+            public_host: context.config().public_host.clone().unwrap(),
+            password_hash: context.state().password_hash.get_cloned(),
+        }
+    }
+
+    /// Returns all `Restream`s happening on this server.
+    fn restreams(context: &Context) -> Vec<Restream> {
+        context.state().restreams.get_cloned()
+    }
+}
+
 #[graphql_subscription(name = "Subscriptions", context = Context)]
 impl SubscriptionsRoot {
+    /// Subscribes to updates of `Info` parameters of this server.
     async fn info(context: &Context) -> BoxStream<'static, Info> {
         let public_host = context.config().public_host.clone().unwrap();
         context
@@ -282,6 +454,7 @@ impl SubscriptionsRoot {
             .boxed()
     }
 
+    /// Subscribes to updates of all `Restream`s happening on this server.
     async fn restreams(context: &Context) -> BoxStream<'static, Vec<Restream>> {
         context
             .state()
@@ -293,11 +466,29 @@ impl SubscriptionsRoot {
     }
 }
 
+/// [`Regex`] for validating format of [`Restream::label`]/[`Output::label`].
+///
+/// [`Input::label`]: state::Input::label
+/// [`Output::label`]: state::Output::label
 static LABEL_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^[^,\n\t\r\f\v]{1,70}$").unwrap());
 
+/// Information about parameters that server operates with.
 #[derive(Clone, Debug, GraphQLObject)]
 pub struct Info {
+    /// Host that this server is reachable via in public.
+    ///
+    /// Use it for constructing URLs to this server.
     pub public_host: String,
+
+    /// [Argon2] hash of the password that this server's GraphQL API is
+    /// protected with, if any.
+    ///
+    /// Non-`null` value means that any request to GraphQL API should perform
+    /// [HTTP Basic auth][1]. Any username is allowed, but the password should
+    /// match this hash.
+    ///
+    /// [Argon2]: https://en.wikipedia.org/wiki/Argon2
+    /// [1]: https://en.wikipedia.org/wiki/Basic_access_authentication
     pub password_hash: Option<String>,
 }

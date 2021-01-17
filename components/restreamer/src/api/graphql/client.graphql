@@ -31,12 +31,12 @@ subscription State {
 }
 
 
-mutation AddPullInput($url: Url!, $label: String, $replace_id: InputId) {
-    addPullInput(src: $url, label: $label, replaceId: $replace_id)
+mutation AddPullInput($url: Url!, $label: String, $id: InputId) {
+    addPullInput(src: $url, label: $label, id: $id)
 }
 
-mutation AddPushInput($key: String!, $label: String, $replace_id: InputId) {
-    addPushInput(name: $key, label: $label, replaceId: $replace_id)
+mutation AddPushInput($key: String!, $label: String, $id: InputId) {
+    addPushInput(name: $key, label: $label, id: $id)
 }
 
 mutation RemoveInput($id: InputId!) {

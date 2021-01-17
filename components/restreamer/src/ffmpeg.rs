@@ -1,3 +1,7 @@
+//! [FFmpeg]-based definitions and implementations.
+//!
+//! [FFmpeg]: https://ffmpeg.org
+
 use std::{
     collections::HashMap,
     panic::AssertUnwindSafe,
@@ -16,14 +20,30 @@ use crate::{
     state::{Restream, State, Status},
 };
 
+/// Pool of [FFmpeg] processes performing restreaming of media traffic.
+///
+/// [FFmpeg]: https://ffmpeg.org
 #[derive(Clone, Debug)]
 pub struct RestreamersPool {
+    /// Path to [FFmpeg] binary used for spawning processes.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
     ffmpeg_path: PathBuf,
+
+    /// Pool of currently running [FFmpeg] processes identified by it source
+    /// and destination and represented by the processes' abort handles.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
     pool: HashMap<(u64, u64), DroppableAbortHandle>,
+
+    /// Application [`State`] dictating which [FFmpeg] processes should run.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
     state: State,
 }
 
 impl RestreamersPool {
+    /// Creates new [`RestreamersPool`] out of the given parameters.
     #[inline]
     #[must_use]
     pub fn new<P: Into<PathBuf>>(ffmpeg_path: P, state: State) -> Self {
@@ -34,6 +54,10 @@ impl RestreamersPool {
         }
     }
 
+    /// Adjusts this [`RestreamersPool`] to run [FFmpeg] restreaming processes
+    /// according to the given [`Restream`]s.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
     pub fn apply(&mut self, restreams: Vec<Restream>) {
         if restreams.is_empty() {
             return;
@@ -92,12 +116,21 @@ impl RestreamersPool {
     }
 }
 
+/// [FFmpeg] process performing restreaming.
+///
+/// [FFmpeg]: https://ffmpeg.org
 #[derive(Debug)]
 pub struct Restreamer {
+    /// Exact [`Command`] representing this [`Restreamer`] process.
     cmd: Command,
 }
 
 impl Restreamer {
+    /// Creates new [`Restreamer`] accepting `path` to [FFmpeg] binary.
+    ///
+    /// Doesn't run or spawn any processes.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
     #[must_use]
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         let mut cmd = Command::new(path.as_ref());
@@ -109,6 +142,7 @@ impl Restreamer {
         Self { cmd }
     }
 
+    /// Sets [`Url`] to pull RTMP media stream from by this [`Restreamer`].
     #[inline]
     #[must_use]
     pub fn src_url(mut self, url: &Url) -> Self {
@@ -116,6 +150,7 @@ impl Restreamer {
         self
     }
 
+    /// Sets [`Url`] to push RTMP media stream to by this [`Restreamer`].
     #[inline]
     #[must_use]
     pub fn dst_url(mut self, url: &Url) -> Self {
@@ -123,6 +158,10 @@ impl Restreamer {
         self
     }
 
+    /// Runs this [`Restreamer`] spawning the actual [FFmpeg] process and
+    /// returning the handle to abort it.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
     #[must_use]
     pub fn run(self, key: (u64, u64), state: State) -> DroppableAbortHandle {
         let (mut cmd, state_for_abort) = (self.cmd, state.clone());
@@ -137,9 +176,7 @@ impl Restreamer {
                         time::delay_for(Duration::from_secs(5)).await;
                         Self::set_status(Status::Online, key, &state);
                     });
-                    let _abort = DroppableAbortHandle {
-                        abort_handle: abort,
-                    };
+                    let _abort = DroppableAbortHandle(abort);
 
                     let process = cmd.spawn().map_err(|e| {
                         log::crit!("Cannot start FFmpeg re-streamer: {}", e)
@@ -184,9 +221,11 @@ impl Restreamer {
             Self::set_status(Status::Offline, key, &state_for_abort)
         }));
 
-        DroppableAbortHandle { abort_handle }
+        DroppableAbortHandle(abort_handle)
     }
 
+    /// Sets the given [`Status`] to [`Input`]s and [`Output`]s related to the
+    /// given `key` [`Restreamer`] identified in the given [`State`].
     fn set_status(status: Status, key: (u64, u64), state: &State) {
         for r in state.restreams.lock_mut().iter_mut() {
             if status != Status::Online
@@ -209,13 +248,15 @@ impl Restreamer {
     }
 }
 
+/// Abort handle of a spawned [FFmpeg] [`Restreamer`] process.
+///
+/// [FFmpeg]: https://ffmpeg.org
 #[derive(Clone, Debug)]
-pub struct DroppableAbortHandle {
-    abort_handle: future::AbortHandle,
-}
+pub struct DroppableAbortHandle(future::AbortHandle);
 
 impl Drop for DroppableAbortHandle {
+    #[inline]
     fn drop(&mut self) {
-        self.abort_handle.abort();
+        self.0.abort();
     }
 }
