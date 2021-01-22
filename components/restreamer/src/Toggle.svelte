@@ -1,15 +1,18 @@
 <script lang="ts">
   export let id: string;
   export let checked = false;
-  export let classes = "";
-  export let title = "";
+  export let classes = '';
+  export let title = '';
 </script>
 
 <template>
-  <span class="toggle {classes}" title="{title}"
-        style="font-size:{classes.includes('small') ? 8 : 10}px">
-    <input type="checkbox" bind:checked="{checked}" id="{id}" on:change>
-    <label for="{id}" class="toggle"></label>
+  <span
+    class="toggle {classes}"
+    {title}
+    style="font-size:{classes.includes('small') ? 8 : 10}px"
+  >
+    <input type="checkbox" bind:checked {id} on:change />
+    <label for={id} class="toggle" />
   </span>
 </template>
 

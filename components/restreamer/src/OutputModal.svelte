@@ -12,10 +12,13 @@
 
   let submitable = false;
   let invalidLine;
-  onDestroy(value.subscribe(v => {
-    submitable = (!v.multi && v.url !== "") ||
-                 (v.multi && v.list !== "" && !invalidLine);
-  }));
+  onDestroy(
+    value.subscribe((v) => {
+      submitable =
+        (!v.multi && v.url !== '') ||
+        (v.multi && v.list !== '' && !invalidLine);
+    })
+  );
 
   /**
    * Sanitizes the given `list` of multiple labels and URLs.
@@ -26,8 +29,10 @@
    */
   function sanitizeList(list) {
     if (list === '') return list;
-    return list.trim().split(/\r\n|\r|\n/)
-      .map(line => {
+    return list
+      .trim()
+      .split(/\r\n|\r|\n/)
+      .map((line) => {
         const p = line.trim().split(',');
         let i = 0;
         if (p.length > 1) {
@@ -37,21 +42,24 @@
         for (; i < p.length; i += 1) {
           p[i] = sanitizeUrl(p[i]);
         }
-        return p.filter(v => v !== '').join(',');
+        return p.filter((v) => v !== '').join(',');
       })
-      .filter(line => line !== '')
-      .join("\n");
+      .filter((line) => line !== '')
+      .join('\n');
   }
 
   function revalidateList() {
-    value.update(v => {
+    value.update((v) => {
       v.list = sanitizeList(v.list);
 
       const lines = v.list.split(/\r\n|\r|\n/);
-      const invalidIndex = lines.findIndex(line => line.split(',').length > 2);
-      invalidLine = (invalidIndex !== -1)
-        ? (invalidIndex + 1) + ": " + lines[invalidIndex]
-        : undefined;
+      const invalidIndex = lines.findIndex(
+        (line) => line.split(',').length > 2
+      );
+      invalidLine =
+        invalidIndex !== -1
+          ? invalidIndex + 1 + ': ' + lines[invalidIndex]
+          : undefined;
 
       return v;
     });
@@ -70,22 +78,21 @@
     let submit = [];
     const v = value.get();
     if (v.multi) {
-      v.list.split(/\r\n|\r|\n/)
-        .forEach(line => {
-          const vs = line.split(',');
-          let vars = {
-              input_id: v.input_id,
-              url: vs[vs.length - 1],
-          };
-          if (vs.length > 1) {
-            vars.label = vs[0];
-          }
-          submit.push(vars);
-        });
+      v.list.split(/\r\n|\r|\n/).forEach((line) => {
+        const vs = line.split(',');
+        let vars = {
+          input_id: v.input_id,
+          url: vs[vs.length - 1],
+        };
+        if (vs.length > 1) {
+          vars.label = vs[0];
+        }
+        submit.push(vars);
+      });
     } else {
       let vars = {
-          input_id: v.input_id,
-          url: sanitizeUrl(v.url),
+        input_id: v.input_id,
+        url: sanitizeUrl(v.url),
       };
       const label = sanitizeLabel(v.label);
       if (label !== '') {
@@ -96,80 +103,103 @@
     if (submit.length < 1) return;
 
     let failed = [];
-    await Promise.all(submit.map(async (vars) => {
-      try {
-        await addOutputMutation({variables: vars});
-      } catch (e) {
-        showError("Failed to add " + vars.url + ":\n" + e.message);
-        failed.push(vars);
-      }
-    }))
+    await Promise.all(
+      submit.map(async (vars) => {
+        try {
+          await addOutputMutation({ variables: vars });
+        } catch (e) {
+          showError('Failed to add ' + vars.url + ':\n' + e.message);
+          failed.push(vars);
+        }
+      })
+    );
     if (failed.length < 1) {
       value.close();
       return;
     }
-    value.update(v => {
-      v.list = failed.map(vars => {
-        return (vars.label ? vars.label + ',' : '') + vars.url;
-      }).join("\n");
+    value.update((v) => {
+      v.list = failed
+        .map((vars) => {
+          return (vars.label ? vars.label + ',' : '') + vars.url;
+        })
+        .join('\n');
       return v;
     });
   }
 </script>
 
 <template>
-<div class="uk-modal" class:uk-open="{$value.visible}" on:click={onAreaClick}>
-  <div class="uk-modal-dialog uk-modal-body" class:is-multi={$value.multi}>
-    <h2 class="uk-modal-title">
-      Add new output destination{$value.multi ? 's' : ''} for re-streaming
-    </h2>
-    <button class="uk-modal-close-outside" uk-close
-            type="button" on:click={() => value.close()}></button>
+  <div class="uk-modal" class:uk-open={$value.visible} on:click={onAreaClick}>
+    <div class="uk-modal-dialog uk-modal-body" class:is-multi={$value.multi}>
+      <h2 class="uk-modal-title">
+        Add new output destination{$value.multi ? 's' : ''} for re-streaming
+      </h2>
+      <button
+        class="uk-modal-close-outside"
+        uk-close
+        type="button"
+        on:click={() => value.close()}
+      />
 
-    <ul class="uk-tab">
-      <li class:uk-active={!$value.multi}>
-        <a href="/"
-           on:click|preventDefault={() => value.switchSingle()}>Single</a>
-      </li>
-      <li class:uk-active={$value.multi}>
-        <a href="/"
-           on:click|preventDefault={() => value.switchMulti()}>Multiple</a>
-      </li>
-    </ul>
+      <ul class="uk-tab">
+        <li class:uk-active={!$value.multi}>
+          <a href="/" on:click|preventDefault={() => value.switchSingle()}
+            >Single</a
+          >
+        </li>
+        <li class:uk-active={$value.multi}>
+          <a href="/" on:click|preventDefault={() => value.switchMulti()}
+            >Multiple</a
+          >
+        </li>
+      </ul>
 
-    <fieldset class="single-form">
-      <input class="uk-input uk-form-small" type="text"
-             bind:value={$value.label}
-             on:change={() => value.sanitizeLabel()}
-             placeholder="optional label">
-      <input class="uk-input" type="text" bind:value={$value.url}
-             placeholder="rtmp://...">
-      <div class="uk-alert">
-        Server will publish input RTMP stream to this address
-      </div>
-    </fieldset>
+      <fieldset class="single-form">
+        <input
+          class="uk-input uk-form-small"
+          type="text"
+          bind:value={$value.label}
+          on:change={() => value.sanitizeLabel()}
+          placeholder="optional label"
+        />
+        <input
+          class="uk-input"
+          type="text"
+          bind:value={$value.url}
+          placeholder="rtmp://..."
+        />
+        <div class="uk-alert">
+          Server will publish input RTMP stream to this address
+        </div>
+      </fieldset>
 
-    <fieldset class="multi-form">
-      {#if !!invalidLine}
-        <span class="uk-form-danger line-err">Invalid line {invalidLine}</span>
-      {/if}
-      <textarea class="uk-textarea" class:uk-form-danger={!!invalidLine}
-                bind:value={$value.list}
-                on:change={revalidateList}
-                placeholder="One line - one address (with optional label):
+      <fieldset class="multi-form">
+        {#if !!invalidLine}
+          <span class="uk-form-danger line-err">Invalid line {invalidLine}</span
+          >
+        {/if}
+        <textarea
+          class="uk-textarea"
+          class:uk-form-danger={!!invalidLine}
+          bind:value={$value.list}
+          on:change={revalidateList}
+          placeholder="One line - one address (with optional label):
 label1,rtmp://1...
 rtmp://2...
-label3,rtmp://3..."></textarea>
-      <div class="uk-alert">
-        Server will publish input RTMP stream to these addresses
-      </div>
-    </fieldset>
+label3,rtmp://3..."
+        />
+        <div class="uk-alert">
+          Server will publish input RTMP stream to these addresses
+        </div>
+      </fieldset>
 
-    <button class="uk-button uk-button-primary"
-            disabled={!submitable}
-            on:click={submit}>Add</button>
+      <button
+        class="uk-button uk-button-primary"
+        disabled={!submitable}
+        on:click={submit}>Add</button
+      >
+    </div>
   </div>
-</div>
 </template>
 
 <style lang="stylus">

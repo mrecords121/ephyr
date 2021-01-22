@@ -11,11 +11,11 @@ subscription State {
         enabled
         label
         input {
-            ...on PushInput {
+            ... on PushInput {
                 name
                 status
             }
-            ...on PullInput {
+            ... on PullInput {
                 src
                 status
             }
@@ -29,7 +29,6 @@ subscription State {
         }
     }
 }
-
 
 mutation AddPullInput($url: Url!, $label: String, $id: InputId) {
     addPullInput(src: $url, label: $label, id: $id)
@@ -50,7 +49,6 @@ mutation EnableInput($id: InputId!) {
 mutation DisableInput($id: InputId!) {
     disableInput(id: $id)
 }
-
 
 mutation AddOutput($input_id: InputId!, $url: Url!, $label: String) {
     addOutput(inputId: $input_id, dst: $url, label: $label)
@@ -75,7 +73,6 @@ mutation EnableAllOutputs($input_id: InputId!) {
 mutation DisableAllOutputs($input_id: InputId!) {
     disableAllOutputs(inputId: $input_id)
 }
-
 
 mutation SetPassword($new: String, $old: String) {
     setPassword(new: $new, old: $old)

@@ -12,18 +12,20 @@
   const addPullInputMutation = mutation(AddPullInput);
   const addPushInputMutation = mutation(AddPushInput);
 
-  export let public_host = "localhost";
+  export let public_host = 'localhost';
 
   let submitable = false;
-  onDestroy(value.subscribe(v => {
-    const val = v.is_pull ? v.pull_url : v.push_key;
-    if (!v.edit_id) {
-      submitable = (val !== "");
-    } else {
-      submitable = (val !== "") &&
-                   ((val !== v.prev_value) || (v.label !== v.prev_label));
-    }
-  }));
+  onDestroy(
+    value.subscribe((v) => {
+      const val = v.is_pull ? v.pull_url : v.push_key;
+      if (!v.edit_id) {
+        submitable = val !== '';
+      } else {
+        submitable =
+          val !== '' && (val !== v.prev_value || v.label !== v.prev_label);
+      }
+    })
+  );
 
   function onAreaClick(event) {
     if (event.target.classList.contains('uk-modal')) {
@@ -34,7 +36,7 @@
   async function submit() {
     if (!submitable) return;
     const v = get(value);
-    let vars = v.edit_id ? {id: v.edit_id} : {};
+    let vars = v.edit_id ? { id: v.edit_id } : {};
     const label = sanitizeLabel(v.label);
     if (label !== '') {
       vars.label = label;
@@ -42,10 +44,10 @@
     try {
       if (v.is_pull) {
         vars.url = sanitizeUrl(v.pull_url);
-        await addPullInputMutation({variables: vars});
+        await addPullInputMutation({ variables: vars });
       } else {
         vars.key = sanitizeUrl(v.push_key);
-        await addPushInputMutation({variables: vars});
+        await addPushInputMutation({ variables: vars });
       }
       value.close();
     } catch (e) {
@@ -55,49 +57,70 @@
 </script>
 
 <template>
-<div class="uk-modal" class:uk-open={$value.visible} on:click={onAreaClick}>
-  <div class="uk-modal-dialog uk-modal-body">
-    <h2 class="uk-modal-title">
-      {#if $value.edit_id}Edit{:else}Add new{/if} input source for re-streaming
-    </h2>
-    <button class="uk-modal-close-outside" uk-close
-            type="button" on:click={() => value.close()}></button>
+  <div class="uk-modal" class:uk-open={$value.visible} on:click={onAreaClick}>
+    <div class="uk-modal-dialog uk-modal-body">
+      <h2 class="uk-modal-title">
+        {#if $value.edit_id}Edit{:else}Add new{/if} input source for re-streaming
+      </h2>
+      <button
+        class="uk-modal-close-outside"
+        uk-close
+        type="button"
+        on:click={() => value.close()}
+      />
 
-    <ul class="uk-tab">
-      <li class:uk-active={!$value.is_pull}>
-        <a href="/" on:click|preventDefault={() => value.switchPush()}>Push</a>
-      </li>
-      <li class:uk-active={$value.is_pull}>
-        <a href="/" on:click|preventDefault={() => value.switchPull()}>Pull</a>
-      </li>
-    </ul>
+      <ul class="uk-tab">
+        <li class:uk-active={!$value.is_pull}>
+          <a href="/" on:click|preventDefault={() => value.switchPush()}>Push</a
+          >
+        </li>
+        <li class:uk-active={$value.is_pull}>
+          <a href="/" on:click|preventDefault={() => value.switchPull()}>Pull</a
+          >
+        </li>
+      </ul>
 
-    <fieldset class:is-push={!$value.is_pull}>
-      <input class="uk-input uk-form-small" type="text"
-             bind:value={$value.label}
-             on:change={() => value.sanitizeLabel()}
-             placeholder="optional label">
-      {#if $value.is_pull}
-        <input class="uk-input" type="text" bind:value={$value.pull_url}
-               placeholder="rtmp://...">
-        <div class="uk-alert">
-          Server will pull RTMP stream from this address
-        </div>
-      {:else}
-        <label>rtmp://{public_host}/<input class="uk-input" type="text"
-                                        placeholder="<stream-name>"
-                                        bind:value={$value.push_key}>/in</label>
-        <div class="uk-alert">
-          Server will await RTMP stream to be published onto this address
-        </div>
-      {/if}
-    </fieldset>
+      <fieldset class:is-push={!$value.is_pull}>
+        <input
+          class="uk-input uk-form-small"
+          type="text"
+          bind:value={$value.label}
+          on:change={() => value.sanitizeLabel()}
+          placeholder="optional label"
+        />
+        {#if $value.is_pull}
+          <input
+            class="uk-input"
+            type="text"
+            bind:value={$value.pull_url}
+            placeholder="rtmp://..."
+          />
+          <div class="uk-alert">
+            Server will pull RTMP stream from this address
+          </div>
+        {:else}
+          <label
+            >rtmp://{public_host}/<input
+              class="uk-input"
+              type="text"
+              placeholder="<stream-name>"
+              bind:value={$value.push_key}
+            />/in</label
+          >
+          <div class="uk-alert">
+            Server will await RTMP stream to be published onto this address
+          </div>
+        {/if}
+      </fieldset>
 
-    <button class="uk-button uk-button-primary"
-            disabled={!submitable}
-            on:click={submit}>{#if $value.edit_id}Edit{:else}Add{/if}</button>
+      <button
+        class="uk-button uk-button-primary"
+        disabled={!submitable}
+        on:click={submit}
+        >{#if $value.edit_id}Edit{:else}Add{/if}</button
+      >
+    </div>
   </div>
-</div>
 </template>
 
 <style lang="stylus">
@@ -134,4 +157,3 @@
         label
           padding-left: 15px
 </style>
-

@@ -6,7 +6,7 @@ import UIkit from 'uikit';
  * @param message    Error message to be displayed.
  */
 export function showError(message: string) {
-  UIkit.notification(message, {status: 'danger', pos: 'top-center'});
+  UIkit.notification(message, { status: 'danger', pos: 'top-center' });
 }
 
 /**

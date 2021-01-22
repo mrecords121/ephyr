@@ -6,7 +6,7 @@ import MiniCssExtractPlugin from 'mini-css-extract-plugin';
 import MinifyHtmlWebpackPlugin from 'minify-html-webpack-plugin';
 import SveltePreprocess from 'svelte-preprocess';
 
-const is_prod = (process.env.NODE_ENV === 'production');
+const is_prod = process.env.NODE_ENV === 'production';
 const mode = is_prod ? 'production' : 'development';
 
 const config: webpack.Configuration = {
@@ -26,33 +26,38 @@ const config: webpack.Configuration = {
     chunkFilename: '[name].[id].js',
   },
   module: {
-    rules: [{
-      test: /\.svelte$/,
-      use: {
-        loader: 'svelte-loader',
-        options: {
-          preprocess: SveltePreprocess({}),
-          emitCss: true,
-          hotReload: true,
+    rules: [
+      {
+        test: /\.svelte$/,
+        use: {
+          loader: 'svelte-loader',
+          options: {
+            preprocess: SveltePreprocess({}),
+            emitCss: true,
+            hotReload: true,
+          },
         },
       },
-    }, {
-      test: /\.ts$/,
-      exclude: /node_modules/,
-      use: 'ts-loader',
-    }, {
-      test: /\.css$/,
-      use: [
-        // 'mini-css-extract-plugin' doesn't support HMR.
-        // Use 'style-loader' instead for development.
-        is_prod ? MiniCssExtractPlugin.loader : 'style-loader',
-        'css-loader',
-      ],
-    }, {
-      test: /\.graphql$/,
-      exclude: /node_modules/,
-      use: 'graphql-tag/loader',
-    }],
+      {
+        test: /\.ts$/,
+        exclude: /node_modules/,
+        use: 'ts-loader',
+      },
+      {
+        test: /\.css$/,
+        use: [
+          // 'mini-css-extract-plugin' doesn't support HMR.
+          // Use 'style-loader' instead for development.
+          is_prod ? MiniCssExtractPlugin.loader : 'style-loader',
+          'css-loader',
+        ],
+      },
+      {
+        test: /\.graphql$/,
+        exclude: /node_modules/,
+        use: 'graphql-tag/loader',
+      },
+    ],
   },
   mode,
   plugins: [
@@ -60,7 +65,7 @@ const config: webpack.Configuration = {
       filename: '[name].css',
     }),
     new CopyPlugin({
-      patterns: [{from: 'static'}],
+      patterns: [{ from: 'static' }],
     }),
     new webpack.EnvironmentPlugin({
       VERSION: process.env.CARGO_PKG_VERSION || process.env.npm_package_version,

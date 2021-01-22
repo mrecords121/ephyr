@@ -26,10 +26,13 @@
 
   const wsClient = new SubscriptionClient(
     //'ws://127.0.0.1/api',
-    'ws' + (window.location.protocol === 'https:' ? 's' : '') + '://' +
-           window.location.host +
-           window.location.pathname.replace(/\/?$/g, '') + '/api',
-    { reconnect: true },
+    'ws' +
+      (window.location.protocol === 'https:' ? 's' : '') +
+      '://' +
+      window.location.host +
+      window.location.pathname.replace(/\/?$/g, '') +
+      '/api',
+    { reconnect: true }
   );
   wsClient.onConnected(() => {
     isOnline = true;
@@ -37,27 +40,29 @@
   wsClient.onReconnected(() => {
     isOnline = true;
   });
-  wsClient.onDisconnected(() => isOnline = false);
+  wsClient.onDisconnected(() => (isOnline = false));
   const gqlClient = new ApolloClient({
     link: new WebSocketLink(wsClient),
     cache: new InMemoryCache(),
   });
   setClient(gqlClient);
 
-  const info = subscribe(Info, {errorPolicy: 'all'});
-  const state = subscribe(State, {errorPolicy: 'all'});
+  const info = subscribe(Info, { errorPolicy: 'all' });
+  const state = subscribe(State, { errorPolicy: 'all' });
 
   let currentHash = undefined;
-  onDestroy(info.subscribe(i => {
-    if (i.data) {
-      const newHash = i.data.info.passwordHash;
-      if (currentHash === undefined) {
-        currentHash = newHash;
-      } else if (!!newHash && (newHash !== currentHash)) {
-        window.location.reload();
+  onDestroy(
+    info.subscribe((i) => {
+      if (i.data) {
+        const newHash = i.data.info.passwordHash;
+        if (currentHash === undefined) {
+          currentHash = newHash;
+        } else if (!!newHash && newHash !== currentHash) {
+          window.location.reload();
+        }
       }
-    }
-  }));
+    })
+  );
 
   let openPasswordModal = false;
 </script>
@@ -65,31 +70,43 @@
 <template>
   <header class="uk-container">
     {#if isOnline && $info.data}
-      <button class="uk-button uk-button-primary"
-              on:click={() => inputModal.openAdd()}>
-        <i class="fas fa-plus"></i>&nbsp;<span>Input</span>
+      <button
+        class="uk-button uk-button-primary"
+        on:click={() => inputModal.openAdd()}
+      >
+        <i class="fas fa-plus" />&nbsp;<span>Input</span>
       </button>
       {#key $info.data.info.passwordHash}
-        <a href="/" class="set-password"
-           on:click|preventDefault={() => openPasswordModal = true}>
-          <i class="fas"
-             class:fa-lock-open={!$info.data.info.passwordHash}
-             class:fa-lock={!!$info.data.info.passwordHash}
-             title="{!$info.data.info.passwordHash ? 'Set' : 'Change'} password"
-          ></i>
+        <a
+          href="/"
+          class="set-password"
+          on:click|preventDefault={() => (openPasswordModal = true)}
+        >
+          <i
+            class="fas"
+            class:fa-lock-open={!$info.data.info.passwordHash}
+            class:fa-lock={!!$info.data.info.passwordHash}
+            title="{!$info.data.info.passwordHash ? 'Set' : 'Change'} password"
+          />
         </a>
       {/key}
-      <InputModal public_host="{$info.data.info.publicHost}"/>
-      <OutputModal/>
-      <PasswordModal current_hash="{$info.data.info.passwordHash}"
-                     bind:visible={openPasswordModal}/>
+      <InputModal public_host={$info.data.info.publicHost} />
+      <OutputModal />
+      <PasswordModal
+        current_hash={$info.data.info.passwordHash}
+        bind:visible={openPasswordModal}
+      />
     {:else if $info.error}
       {showError($info.error.message) || ''}
     {/if}
 
-    <a href="https://allatraunites.com" target="_blank"
-       class="logo" title="Join us on allatraunites.com">
-      <img src="logo.jpg" alt="Logo">
+    <a
+      href="https://allatraunites.com"
+      target="_blank"
+      class="logo"
+      title="Join us on allatraunites.com"
+    >
+      <img src="logo.jpg" alt="Logo" />
       <h3>Creative Society</h3>
       <small>Ephyr re-streamer {process.env.VERSION}</small>
     </a>
@@ -100,8 +117,7 @@
       <div class="uk-alert uk-alert-warning loading">Loading...</div>
     {:else if isOnline && $state.data && $info.data}
       {#each $state.data.restreams as restream}
-        <Restream public_host="{$info.data.info.publicHost}"
-                  value="{restream}"/>
+        <Restream public_host={$info.data.info.publicHost} value={restream} />
       {/each}
     {/if}
     {#if $state.error}

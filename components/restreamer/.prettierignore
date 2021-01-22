@@ -1,0 +1,7 @@
+/deploy/
+/docs/
+
+/client.graphql.schema.json
+/public/
+
+/node_modules/

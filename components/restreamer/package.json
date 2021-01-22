@@ -8,7 +8,8 @@
     "build:prod": "cross-env NODE_ENV=production yarn build",
     "dev": "webpack-dev-server --content-base public",
     "doc": "typedoc",
-    "lint": "svelte-check"
+    "fmt": "prettier --write .",
+    "lint": "prettier --check . && svelte-check"
   },
   "dependencies": {
     "@apollo/client": "~3.2.9",
@@ -30,6 +31,8 @@
     "graphql-tag": "^2.11",
     "mini-css-extract-plugin": "^0.6",
     "minify-html-webpack-plugin": "^1.1",
+    "prettier": "^2.2",
+    "prettier-plugin-svelte": "^2.1",
     "style-loader": "^0.23",
     "stylus": "^0.54",
     "stylus-loader": "^4.3",

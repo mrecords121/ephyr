@@ -1,12 +1,17 @@
-<svelte:options immutable={true}/>
+<svelte:options immutable={true} />
 
 <script lang="js">
   import { mutation } from 'svelte-apollo';
 
   import {
-    DisableInput, EnableInput, RemoveInput,
-    DisableOutput, EnableOutput, RemoveOutput,
-    DisableAllOutputs, EnableAllOutputs,
+    DisableInput,
+    EnableInput,
+    RemoveInput,
+    DisableOutput,
+    EnableOutput,
+    RemoveOutput,
+    DisableAllOutputs,
+    EnableAllOutputs,
   } from './api/graphql/client.graphql';
 
   import { showError } from './util';
@@ -24,30 +29,33 @@
   const enableOutputMutation = mutation(EnableOutput);
   const removeOutputMutation = mutation(RemoveOutput);
 
-  export let public_host = "localhost";
+  export let public_host = 'localhost';
   export let value;
 
   $: isPull = value.input.__typename === 'PullInput';
-  $: allEnabled = value.outputs.every(o => o.enabled);
+  $: allEnabled = value.outputs.every((o) => o.enabled);
 
-  $: onlineCount = value.outputs.filter(o => o.status === 'ONLINE').length;
-  $: initCount = value.outputs.filter(o => o.status === 'INITIALIZING').length;
-  $: offlineCount = value.outputs.filter(o => o.status === 'OFFLINE').length;
-  $: presentBitmask = (onlineCount > 0 ? 1 : 0 ) +
-                      2 * (initCount > 0 ? 1 : 0 ) +
-                      4 * (offlineCount > 0 ? 1 : 0 );
+  $: onlineCount = value.outputs.filter((o) => o.status === 'ONLINE').length;
+  $: initCount = value.outputs.filter((o) => o.status === 'INITIALIZING')
+    .length;
+  $: offlineCount = value.outputs.filter((o) => o.status === 'OFFLINE').length;
+  $: presentBitmask =
+    (onlineCount > 0 ? 1 : 0) +
+    2 * (initCount > 0 ? 1 : 0) +
+    4 * (offlineCount > 0 ? 1 : 0);
 
   let enabledBitmask = 0;
   $: if (enabledBitmask === presentBitmask) {
     enabledBitmask = 0;
   }
 
-  $: showAll = ((enabledBitmask & presentBitmask) === presentBitmask) ||
-               ((enabledBitmask & presentBitmask) === 0);
+  $: showAll =
+    (enabledBitmask & presentBitmask) === presentBitmask ||
+    (enabledBitmask & presentBitmask) === 0;
   $: showFiltered = {
-    ONLINE: !showAll && ((enabledBitmask & 1) === 1),
-    INITIALIZING: !showAll && ((enabledBitmask & 2) === 2),
-    OFFLINE: !showAll && ((enabledBitmask & 4) === 4),
+    ONLINE: !showAll && (enabledBitmask & 1) === 1,
+    INITIALIZING: !showAll && (enabledBitmask & 2) === 2,
+    OFFLINE: !showAll && (enabledBitmask & 4) === 4,
   };
 
   function openEditInputModal() {
@@ -55,20 +63,20 @@
       value.id,
       isPull ? value.input.src : value.input.name,
       value.label,
-      isPull,
+      isPull
     );
   }
 
   async function removeInput() {
     try {
-      await removeInputMutation({variables: {id: value.id}});
+      await removeInputMutation({ variables: { id: value.id } });
     } catch (e) {
       showError(e.message);
     }
   }
 
   async function toggleInput() {
-    const vars = {variables: {id: value.id}};
+    const vars = { variables: { id: value.id } };
     try {
       if (value.enabled) {
         await disableInputMutation(vars);
@@ -85,28 +93,28 @@
   }
 
   function toggleOutput(id) {
-    const vars = {input_id: value.id, output_id: id};
+    const vars = { input_id: value.id, output_id: id };
     return async () => {
-      let output = value.outputs.find(o => o.id === id);
+      let output = value.outputs.find((o) => o.id === id);
       try {
         if (output && output.enabled) {
-          await disableOutputMutation({variables: vars});
+          await disableOutputMutation({ variables: vars });
         } else {
-          await enableOutputMutation({variables: vars});
+          await enableOutputMutation({ variables: vars });
         }
       } catch (e) {
         showError(e.message);
       }
-    }
+    };
   }
 
   async function toggleAllOutputs() {
     if (value.outputs.length < 1) return;
     try {
       if (allEnabled) {
-        await disableAllOutputsMutation({variables: {input_id: value.id}});
+        await disableAllOutputsMutation({ variables: { input_id: value.id } });
       } else {
-        await enableAllOutputsMutation({variables: {input_id: value.id}});
+        await enableAllOutputsMutation({ variables: { input_id: value.id } });
       }
     } catch (e) {
       showError(e.message);
@@ -114,111 +122,142 @@
   }
 
   function removeOutput(id) {
-    const vars = {variables: {input_id: value.id, output_id: id}};
+    const vars = { variables: { input_id: value.id, output_id: id } };
     return async () => {
       try {
         await removeOutputMutation(vars);
       } catch (e) {
         showError(e.message);
       }
-    }
+    };
   }
 </script>
 
 <template>
-<div class="uk-section uk-section-muted uk-section-xsmall">
-  <button type="button" class="uk-close" uk-close
-          on:click={removeInput}></button>
+  <div class="uk-section uk-section-muted uk-section-xsmall">
+    <button type="button" class="uk-close" uk-close on:click={removeInput} />
 
-  <button class="uk-button uk-button-primary uk-button-small"
-          on:click={openAddOutputModal}>
-    <i class="fas fa-plus"></i>&nbsp;<span>Output</span>
-  </button>
+    <button
+      class="uk-button uk-button-primary uk-button-small"
+      on:click={openAddOutputModal}
+    >
+      <i class="fas fa-plus" />&nbsp;<span>Output</span>
+    </button>
 
-  {#if !!value.label}
-    <span class="label">{value.label}</span>
-  {/if}
+    {#if !!value.label}
+      <span class="label">{value.label}</span>
+    {/if}
 
-  {#if value.outputs && value.outputs.length > 0}
-    <span class="total">
-      {#if offlineCount > 0}
-        <a href="/" on:click|preventDefault={() => enabledBitmask ^= 4}
-           class:enabled={showFiltered['OFFLINE']}
-           class="count uk-alert-danger">{offlineCount}</a>
-      {/if}
-      {#if initCount > 0}
-        <a href="/" on:click|preventDefault={() => enabledBitmask ^= 2}
-           class:enabled={showFiltered['INITIALIZING']}
-           class="count uk-alert-warning">{initCount}</a>
-      {/if}
-      {#if onlineCount > 0}
-        <a href="/" on:click|preventDefault={() => enabledBitmask ^= 1}
-           class:enabled={showFiltered['ONLINE']}
-           class="count uk-alert-success">{onlineCount}</a>
-      {/if}
-      <Toggle id="all-outputs-toggle-{value.id}"
-              checked={allEnabled}
-              title="{allEnabled ? 'Disable' : 'Enable'} all outputs"
-              on:change={toggleAllOutputs}/>
-    </span>
-  {/if}
+    {#if value.outputs && value.outputs.length > 0}
+      <span class="total">
+        {#if offlineCount > 0}
+          <a
+            href="/"
+            on:click|preventDefault={() => (enabledBitmask ^= 4)}
+            class:enabled={showFiltered['OFFLINE']}
+            class="count uk-alert-danger">{offlineCount}</a
+          >
+        {/if}
+        {#if initCount > 0}
+          <a
+            href="/"
+            on:click|preventDefault={() => (enabledBitmask ^= 2)}
+            class:enabled={showFiltered['INITIALIZING']}
+            class="count uk-alert-warning">{initCount}</a
+          >
+        {/if}
+        {#if onlineCount > 0}
+          <a
+            href="/"
+            on:click|preventDefault={() => (enabledBitmask ^= 1)}
+            class:enabled={showFiltered['ONLINE']}
+            class="count uk-alert-success">{onlineCount}</a
+          >
+        {/if}
+        <Toggle
+          id="all-outputs-toggle-{value.id}"
+          checked={allEnabled}
+          title="{allEnabled ? 'Disable' : 'Enable'} all outputs"
+          on:change={toggleAllOutputs}
+        />
+      </span>
+    {/if}
 
-  <Toggle id="input-toggle-{value.id}"
-          checked={value.enabled}
-          on:change={toggleInput}/>
-  <span>
-    <span class:uk-alert-danger={value.input.status === 'OFFLINE'}
-          class:uk-alert-warning={value.input.status === 'INITIALIZING'}
-          class:uk-alert-success={value.input.status === 'ONLINE'}>
-      {#key isPull}
-        <span>
-          <i class="fas"
-             class:fa-arrow-down={isPull}
-             class:fa-arrow-right={!isPull}
-             title="{ isPull ? 'Pulls' : 'Accepts'} RTMP stream"></i>
-        </span>
-      {/key}
-    </span>
+    <Toggle
+      id="input-toggle-{value.id}"
+      checked={value.enabled}
+      on:change={toggleInput}
+    />
     <span>
-      {#if isPull}
-        { value.input.src }
-      {:else}
-        rtmp://{public_host}/{ value.input.name }/in
-      {/if}
+      <span
+        class:uk-alert-danger={value.input.status === 'OFFLINE'}
+        class:uk-alert-warning={value.input.status === 'INITIALIZING'}
+        class:uk-alert-success={value.input.status === 'ONLINE'}
+      >
+        {#key isPull}
+          <span>
+            <i
+              class="fas"
+              class:fa-arrow-down={isPull}
+              class:fa-arrow-right={!isPull}
+              title="{isPull ? 'Pulls' : 'Accepts'} RTMP stream"
+            />
+          </span>
+        {/key}
+      </span>
+      <span>
+        {#if isPull}
+          {value.input.src}
+        {:else}
+          rtmp://{public_host}/{value.input.name}/in
+        {/if}
+      </span>
+      <a
+        class="edit-input"
+        href="/"
+        on:click|preventDefault={openEditInputModal}
+      >
+        <i class="far fa-edit" title="Edit input" />
+      </a>
     </span>
-    <a class="edit-input" href="/" on:click|preventDefault={openEditInputModal}>
-      <i class="far fa-edit" title="Edit input"></i>
-    </a>
-  </span>
 
-  {#if value.outputs && value.outputs.length > 0}
-    <div class="uk-grid uk-grid-small" uk-grid>
-      {#each value.outputs as output (output) }
-        <div class="uk-card uk-card-default uk-card-body uk-margin-left"
-             class:hidden={!showAll && !showFiltered[output.status]}>
-          <button type="button" class="uk-close" uk-close
-                  on:click={removeOutput(output.id)}></button>
+    {#if value.outputs && value.outputs.length > 0}
+      <div class="uk-grid uk-grid-small" uk-grid>
+        {#each value.outputs as output (output)}
+          <div
+            class="uk-card uk-card-default uk-card-body uk-margin-left"
+            class:hidden={!showAll && !showFiltered[output.status]}
+          >
+            <button
+              type="button"
+              class="uk-close"
+              uk-close
+              on:click={removeOutput(output.id)}
+            />
 
-          {#if output.label}
-            <span class="label">{output.label}</span>
-          {/if}
+            {#if output.label}
+              <span class="label">{output.label}</span>
+            {/if}
 
-          <Toggle id="output-toggle-{output.id}" classes="small"
-                  checked={output.enabled}
-                  on:change={toggleOutput(output.id)}/>
-          {#if output.status === 'ONLINE'}
-            <i class="fas fa-circle uk-alert-success"></i>
-          {:else if output.status === 'INITIALIZING'}
-            <i class="fas fa-dot-circle uk-alert-warning"></i>
-          {:else}
-            <i class="far fa-dot-circle uk-alert-danger"></i>
-          {/if}
-          <span>{output.dst}</span>
-        </div>
-      {/each}
-    </div>
-  {/if}
-</div>
+            <Toggle
+              id="output-toggle-{output.id}"
+              classes="small"
+              checked={output.enabled}
+              on:change={toggleOutput(output.id)}
+            />
+            {#if output.status === 'ONLINE'}
+              <i class="fas fa-circle uk-alert-success" />
+            {:else if output.status === 'INITIALIZING'}
+              <i class="fas fa-dot-circle uk-alert-warning" />
+            {:else}
+              <i class="far fa-dot-circle uk-alert-danger" />
+            {/if}
+            <span>{output.dst}</span>
+          </div>
+        {/each}
+      </div>
+    {/if}
+  </div>
 </template>
 
 <style lang="stylus">
