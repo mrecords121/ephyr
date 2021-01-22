@@ -1,7 +1,6 @@
 <svelte:options immutable={true}/>
 
 <script lang="js">
-  import { createEventDispatcher } from 'svelte';
   import { mutation } from 'svelte-apollo';
 
   import {
@@ -10,11 +9,11 @@
     DisableAllOutputs, EnableAllOutputs,
   } from './api/graphql/client.graphql';
 
-  import {showError} from "./util";
+  import { showError } from './util';
 
-  import { inputModal, outputModal } from './stores.js';
+  import { inputModal, outputModal } from './stores';
 
-  import Toggle from "./Toggle.svelte";
+  import Toggle from './Toggle.svelte';
 
   const disableInputMutation = mutation(DisableInput);
   const enableInputMutation = mutation(EnableInput);
@@ -24,8 +23,6 @@
   const enableAllOutputsMutation = mutation(EnableAllOutputs);
   const enableOutputMutation = mutation(EnableOutput);
   const removeOutputMutation = mutation(RemoveOutput);
-
-  const dispatch = createEventDispatcher();
 
   export let public_host = "localhost";
   export let value;
@@ -88,14 +85,14 @@
   }
 
   function toggleOutput(id) {
-    const vars = {variables: {input_id: value.id, output_id: id}};
+    const vars = {input_id: value.id, output_id: id};
     return async () => {
       let output = value.outputs.find(o => o.id === id);
       try {
         if (output && output.enabled) {
-          await disableOutputMutation(vars);
+          await disableOutputMutation({variables: vars});
         } else {
-          await enableOutputMutation(vars);
+          await enableOutputMutation({variables: vars});
         }
       } catch (e) {
         showError(e.message);

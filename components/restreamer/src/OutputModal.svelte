@@ -4,7 +4,7 @@
 
   import { AddOutput } from './api/graphql/client.graphql';
 
-  import { outputModal as value } from './stores.js';
+  import { outputModal as value } from './stores';
 
   import { sanitizeLabel, sanitizeUrl, showError } from './util';
 
@@ -17,6 +17,13 @@
                  (v.multi && v.list !== "" && !invalidLine);
   }));
 
+  /**
+   * Sanitizes the given `list` of multiple labels and URLs.
+   *
+   * @param list string    List of comma-separated labels and URLs to sanitize.
+   *
+   * @returns string    Sanitized list.
+   */
   function sanitizeList(list) {
     if (list === '') return list;
     return list.trim().split(/\r\n|\r|\n/)
@@ -66,14 +73,20 @@
       v.list.split(/\r\n|\r|\n/)
         .forEach(line => {
           const vs = line.split(',');
-          let vars = {input_id: v.input_id, url: vs[vs.length - 1]};
+          let vars = {
+              input_id: v.input_id,
+              url: vs[vs.length - 1],
+          };
           if (vs.length > 1) {
             vars.label = vs[0];
           }
           submit.push(vars);
         });
     } else {
-      let vars = {input_id: v.input_id, url: sanitizeUrl(v.url)};
+      let vars = {
+          input_id: v.input_id,
+          url: sanitizeUrl(v.url),
+      };
       const label = sanitizeLabel(v.label);
       if (label !== '') {
         vars.label = label;

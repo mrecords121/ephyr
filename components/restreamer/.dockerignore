@@ -3,7 +3,5 @@ docs/
 
 public/
 
-*.graphql.schema.json
-
 node_modules/
 yarn-error.log

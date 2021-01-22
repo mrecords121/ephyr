@@ -1,21 +1,23 @@
-const path = require('path');
+import path from 'path';
+import webpack from 'webpack';
 
-const CopyPlugin = require('copy-webpack-plugin');
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const MinifyHtmlWebpackPlugin = require('minify-html-webpack-plugin');
+import CopyPlugin from 'copy-webpack-plugin';
+import MiniCssExtractPlugin from 'mini-css-extract-plugin';
+import MinifyHtmlWebpackPlugin from 'minify-html-webpack-plugin';
+import SveltePreprocess from 'svelte-preprocess';
 
-const mode = process.env.NODE_ENV || 'development';
-const is_prod = mode === 'production';
+const is_prod = (process.env.NODE_ENV === 'production');
+const mode = is_prod ? 'production' : 'development';
 
-module.exports = {
+const config: webpack.Configuration = {
   entry: {
-    bundle: ['./src/main.js'],
+    bundle: ['./src/main.ts'],
   },
   resolve: {
     alias: {
       svelte: path.resolve('node_modules', 'svelte'),
     },
-    extensions: ['.mjs', '.js', '.svelte'],
+    extensions: ['.mjs', '.js', '.ts', '.svelte'],
     mainFields: ['svelte', 'browser', 'module', 'main'],
   },
   output: {
@@ -29,11 +31,15 @@ module.exports = {
       use: {
         loader: 'svelte-loader',
         options: {
-          preprocess: require('svelte-preprocess')({}),
+          preprocess: SveltePreprocess({}),
           emitCss: true,
           hotReload: true,
         },
       },
+    }, {
+      test: /\.ts$/,
+      exclude: /node_modules/,
+      use: 'ts-loader',
     }, {
       test: /\.css$/,
       use: [
@@ -43,7 +49,7 @@ module.exports = {
         'css-loader',
       ],
     }, {
-      test: /\.(graphql|gql)$/,
+      test: /\.graphql$/,
       exclude: /node_modules/,
       use: 'graphql-tag/loader',
     }],
@@ -51,17 +57,20 @@ module.exports = {
   mode,
   plugins: [
     new MiniCssExtractPlugin({
-      filename: '[name].css'
+      filename: '[name].css',
     }),
     new CopyPlugin({
       patterns: [{from: 'static'}],
+    }),
+    new webpack.EnvironmentPlugin({
+      VERSION: process.env.CARGO_PKG_VERSION || process.env.npm_package_version,
     }),
   ],
   devtool: is_prod ? false : 'source-map',
 };
 
 if (is_prod) {
-  module.exports.plugins = (module.exports.plugins || []).concat([
+  config.plugins = (config.plugins || []).concat([
     new MinifyHtmlWebpackPlugin({
       afterBuild: true,
       src: 'public',
@@ -73,7 +82,9 @@ if (is_prod) {
         removeAttributeQuotes: true,
         removeComments: true,
         minifyJS: true,
-      }
+      },
     }),
   ]);
 }
+
+export default config;

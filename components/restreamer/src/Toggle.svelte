@@ -1,5 +1,5 @@
-<script lang="js">
-  export let id;
+<script lang="ts">
+  export let id: string;
   export let checked = false;
   export let classes = "";
   export let title = "";

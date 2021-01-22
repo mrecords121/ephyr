@@ -13,7 +13,7 @@
   import UIkit from 'uikit';
   import Icons from 'uikit/dist/js/uikit-icons';
 
-  import { inputModal } from './stores.js';
+  import { inputModal } from './stores';
 
   import InputModal from './InputModal.svelte';
   import OutputModal from './OutputModal.svelte';
@@ -84,14 +84,14 @@
       <PasswordModal current_hash="{$info.data.info.passwordHash}"
                      bind:visible={openPasswordModal}/>
     {:else if $info.error}
-      {showError($info.error.message)}
+      {showError($info.error.message) || ''}
     {/if}
 
     <a href="https://allatraunites.com" target="_blank"
        class="logo" title="Join us on allatraunites.com">
       <img src="logo.jpg" alt="Logo">
-      <h3>Creative Society </h3>
-      <small>Ephyr re-streamer 0.1.0-beta.2</small>
+      <h3>Creative Society</h3>
+      <small>Ephyr re-streamer {process.env.VERSION}</small>
     </a>
   </header>
 
@@ -105,7 +105,7 @@
       {/each}
     {/if}
     {#if $state.error}
-      {showError($state.error.message)}
+      {showError($state.error.message) || ''}
     {/if}
   </main>
 

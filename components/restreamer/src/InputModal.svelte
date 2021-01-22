@@ -7,7 +7,7 @@
 
   import { sanitizeLabel, sanitizeUrl, showError } from './util';
 
-  import { inputModal as value } from './stores.js';
+  import { inputModal as value } from './stores';
 
   const addPullInputMutation = mutation(AddPullInput);
   const addPushInputMutation = mutation(AddPushInput);
@@ -21,7 +21,7 @@
       submitable = (val !== "");
     } else {
       submitable = (val !== "") &&
-                   ((val !== v.prevValue) || (v.label !== v.prevLabel));
+                   ((val !== v.prev_value) || (v.label !== v.prev_label));
     }
   }));
 
@@ -34,18 +34,18 @@
   async function submit() {
     if (!submitable) return;
     const v = get(value);
-    let p = {variables: v.edit_id ? {id: v.edit_id} : {}};
+    let vars = v.edit_id ? {id: v.edit_id} : {};
     const label = sanitizeLabel(v.label);
     if (label !== '') {
-      p.variables.label = label;
+      vars.label = label;
     }
     try {
       if (v.is_pull) {
-        p.variables.url = sanitizeUrl(v.pull_url);
-        await addPullInputMutation(p);
+        vars.url = sanitizeUrl(v.pull_url);
+        await addPullInputMutation({variables: vars});
       } else {
-        p.variables.key = sanitizeUrl(v.push_key);
-        await addPushInputMutation(p);
+        vars.key = sanitizeUrl(v.push_key);
+        await addPushInputMutation({variables: vars});
       }
       value.close();
     } catch (e) {
