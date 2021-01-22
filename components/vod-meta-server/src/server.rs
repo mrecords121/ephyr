@@ -35,6 +35,8 @@ use crate::{
 ///
 /// If running has failed and could not be performed. The appropriate error
 /// is logged.
+///
+/// [VOD]: https://en.wikipedia.org/wiki/Video_on_demand
 #[actix_web::main]
 pub async fn run(opts: cli::Opts) -> Result<(), cli::Failure> {
     let request_max_size =

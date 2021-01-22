@@ -371,6 +371,9 @@ impl MutationsRoot {
         old: Option<String>,
         context: &Context,
     ) -> Result<bool, graphql::Error> {
+        static HASH_CFG: Lazy<argon2::Config<'static>> =
+            Lazy::new(argon2::Config::default);
+
         let mut current = context.state().password_hash.lock_mut();
 
         if let Some(hash) = &*current {
@@ -394,8 +397,6 @@ impl MutationsRoot {
             return Ok(false);
         }
 
-        static HASH_CFG: Lazy<argon2::Config<'static>> =
-            Lazy::new(argon2::Config::default);
         *current = new.map(|v| {
             argon2::hash_encoded(
                 v.as_bytes(),

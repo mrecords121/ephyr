@@ -98,11 +98,11 @@ FROM ossrs/srs:3 AS build-srs
 
 
 #
-# Stage 'dist' creates final Docker image to use in runtime.
+# Stage 'runtime' creates final Docker image to use in runtime.
 #
 
 # https://github.com/jrottenberg/ffmpeg/blob/master/docker-images/4.3/centos7/Dockerfile
-FROM jrottenberg/ffmpeg:4.3-centos7 AS dist
+FROM jrottenberg/ffmpeg:4.3-centos7 AS runtime
 
 COPY --from=build-ephyr /tmp/ephyr/target/release/ephyr-restreamer \
                         /usr/local/bin/ephyr-restreamer

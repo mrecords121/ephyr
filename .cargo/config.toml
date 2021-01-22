@@ -1,0 +1,2 @@
+[alias]
+lint = "clippy --all --all-features -- -D clippy::pedantic -D warnings"

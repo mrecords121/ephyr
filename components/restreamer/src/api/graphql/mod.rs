@@ -97,9 +97,10 @@ impl Error {
     #[inline]
     #[must_use]
     pub fn new<C: Into<Cow<'static, str>>>(code: C) -> Self {
-        let mut err = Self::default();
-        err.code = code.into();
-        err
+        Self {
+            code: code.into(),
+            ..Self::default()
+        }
     }
 
     /// Attaches given [`http::StatusCode`] to this [`Error`](struct@Error).

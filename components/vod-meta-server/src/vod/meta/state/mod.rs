@@ -339,7 +339,7 @@ impl Playlist {
             ..mapping::Set::default()
         };
 
-        if count < 1 || count > mapping::Set::MAX_DURATIONS_LEN {
+        if !(1..=mapping::Set::MAX_DURATIONS_LEN).contains(&count) {
             count = mapping::Set::MAX_DURATIONS_LEN;
         }
 
@@ -806,10 +806,10 @@ impl SegmentDuration {
     /// [`SegmentDuration`].
     ///
     /// Valid segment durations are between 5 and 30 seconds (inclusively).
+    #[inline]
     #[must_use]
     pub fn validate(dur: Duration) -> bool {
-        let secs = dur.as_secs();
-        secs >= 5 && secs <= 30
+        (5..=30).contains(&dur.as_secs())
     }
 
     /// Converts this [`SegmentDuration`] to a regular [`Duration`] value.

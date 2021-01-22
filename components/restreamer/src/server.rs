@@ -54,7 +54,8 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
     let mut restreamers =
         ffmpeg::RestreamersPool::new(ffmpeg_path, state.clone());
     State::on_change("spawn_restreamers", &state.restreams, move |restreams| {
-        future::ready(restreamers.apply(restreams))
+        restreamers.apply(&restreams);
+        future::ready(())
     });
 
     future::try_join(
@@ -94,7 +95,7 @@ pub mod client {
     };
 
     pub mod public_dir {
-        #![allow(unused_results)]
+        #![allow(clippy::must_use_candidate, unused_results)]
         #![doc(hidden)]
 
         include!(concat!(env!("OUT_DIR"), "/generated.rs"));
@@ -215,7 +216,7 @@ pub mod client {
             return Err(err().into());
         }
 
-        return Ok(req);
+        Ok(req)
     }
 }
 
@@ -321,7 +322,7 @@ pub mod callback {
         req: &api::srs::callback::Request,
         state: &State,
     ) -> Result<(), Error> {
-        if req.stream.as_ref().map(String::as_str) != Some("in") {
+        if req.stream.as_deref() != Some("in") {
             return Err(error::ErrorNotFound("Such `stream` doesn't exist"));
         }
 

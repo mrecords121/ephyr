@@ -502,16 +502,9 @@ impl AudioCaptureError {
             Self::ConnectionFailed(_)
             | Self::UnexpectedFinish
             | Self::UnexpectedC2sPacket => false,
-            Self::DecodingFailed(err) => match err {
-                E::CreateDecoder(_) | E::UnsupportedCodec(_) => true,
-                E::Decode { .. }
-                | E::Duplicate(_)
-                | E::GetPacketSample(_)
-                | E::QueueFull
-                | E::TooLate { .. }
-                | E::TooManySamples => false,
-                _ => false, // due to #[non_exhaustive]
-            },
+            Self::DecodingFailed(err) => {
+                matches!(err, E::CreateDecoder(_) | E::UnsupportedCodec(_))
+            }
         };
         if is_permanent {
             backoff::Error::Permanent(self)

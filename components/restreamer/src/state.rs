@@ -137,7 +137,7 @@ impl State {
 
         for r in &*restreams {
             if let Input::Pull(i) = &r.input {
-                if &src == &i.src && update_id != Some(r.id) {
+                if src == i.src && update_id != Some(r.id) {
                     return Some(false);
                 }
             }
@@ -169,7 +169,7 @@ impl State {
 
         for r in &*restreams {
             if let Input::Push(i) = &r.input {
-                if &name == &i.name && update_id != Some(r.id) {
+                if name == i.name && update_id != Some(r.id) {
                     return Some(false);
                 }
             }
@@ -208,7 +208,7 @@ impl State {
             r.label = label;
         } else {
             restreams.push(Restream {
-                id: InputId::new(),
+                id: InputId::random(),
                 label,
                 input,
                 outputs: vec![],
@@ -279,12 +279,12 @@ impl State {
         let outputs =
             &mut restreams.iter_mut().find(|r| r.id == input_id)?.outputs;
 
-        if outputs.iter_mut().find(|o| &o.dst == &output_dst).is_some() {
+        if outputs.iter_mut().any(|o| o.dst == output_dst) {
             return Some(false);
         }
 
         outputs.push(Output {
-            id: OutputId::new(),
+            id: OutputId::random(),
             dst: output_dst,
             label,
             enabled: false,
@@ -324,7 +324,7 @@ impl State {
         output_id: OutputId,
     ) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
-        let output = &mut restreams
+        let output = restreams
             .iter_mut()
             .find(|r| r.id == input_id)?
             .outputs
@@ -351,7 +351,7 @@ impl State {
         output_id: OutputId,
     ) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
-        let output = &mut restreams
+        let output = restreams
             .iter_mut()
             .find(|r| r.id == input_id)?
             .outputs
@@ -560,7 +560,7 @@ impl Input {
             Self::Pull(_) => {
                 app.starts_with("pull_") && app[5..].parse() == Ok(self.hash())
             }
-            Self::Push(i) => app == &i.name,
+            Self::Push(i) => app == i.name,
         }
     }
 }
@@ -583,7 +583,7 @@ impl PullInput {
     #[inline]
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
-        &self.src == &other.src
+        self.src == other.src
     }
 }
 
@@ -607,7 +607,7 @@ impl PushInput {
     #[inline]
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
-        &self.name == &other.name
+        self.name == other.name
     }
 }
 
@@ -641,7 +641,7 @@ impl Output {
     #[inline]
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
-        &self.dst == &other.dst
+        self.dst == other.dst
     }
 
     /// Calculates a unique hash of this [`Output`].
@@ -682,10 +682,10 @@ pub enum Status {
 pub struct InputId(Uuid);
 
 impl InputId {
-    /// Generates new random [`InputId`].
+    /// Generates a new random [`InputId`].
     #[inline]
     #[must_use]
-    pub fn new() -> Self {
+    pub fn random() -> Self {
         Self(Uuid::new_v4())
     }
 }
@@ -705,10 +705,10 @@ impl InputId {
 pub struct OutputId(Uuid);
 
 impl OutputId {
-    /// Generates new random [`OutputId`].
+    /// Generates a new random [`OutputId`].
     #[inline]
     #[must_use]
-    pub fn new() -> Self {
+    pub fn random() -> Self {
         Self(Uuid::new_v4())
     }
 }

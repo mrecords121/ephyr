@@ -46,3 +46,7 @@ url = { version = "2.1", features = ["serde"] }
 [dependencies.tokio]
     version = "0.2"
     features = ["fs", "rt-core", "sync"]
+
+[dev-dependencies.tokio]
+    version = "0.2"
+    features = ["fs", "macros", "rt-core", "sync"]

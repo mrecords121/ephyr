@@ -44,7 +44,6 @@ impl Server {
     /// If [SRS] configuration file fails to be created.
     ///
     /// [SRS]: https://github.com/ossrs/srs
-    #[must_use]
     pub async fn try_new<P: AsRef<Path>>(
         workdir: P,
         cfg: &Config,
@@ -247,10 +246,8 @@ impl From<slog::Level> for LogLevel {
     #[inline]
     fn from(lvl: slog::Level) -> Self {
         match lvl {
-            slog::Level::Critical => Self::Error,
-            slog::Level::Error => Self::Error,
-            slog::Level::Warning => Self::Warn,
-            slog::Level::Info => Self::Warn,
+            slog::Level::Critical | slog::Level::Error => Self::Error,
+            slog::Level::Warning | slog::Level::Info => Self::Warn,
             slog::Level::Debug => Self::Trace,
             slog::Level::Trace => Self::Info,
         }

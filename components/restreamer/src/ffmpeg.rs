@@ -58,14 +58,14 @@ impl RestreamersPool {
     /// according to the given [`Restream`]s.
     ///
     /// [FFmpeg]: https://ffmpeg.org
-    pub fn apply(&mut self, restreams: Vec<Restream>) {
+    pub fn apply(&mut self, restreams: &[Restream]) {
         if restreams.is_empty() {
             return;
         }
 
         let mut new = HashMap::with_capacity(self.pool.len() + 1);
 
-        for r in &restreams {
+        for r in restreams {
             if !r.enabled {
                 continue;
             }
@@ -176,7 +176,7 @@ impl Restreamer {
                         time::delay_for(Duration::from_secs(5)).await;
                         Self::set_status(Status::Online, key, &state);
                     });
-                    let _abort = DroppableAbortHandle(abort);
+                    let _abort_on_drop = DroppableAbortHandle(abort);
 
                     let process = cmd.spawn().map_err(|e| {
                         log::crit!("Cannot start FFmpeg re-streamer: {}", e)

@@ -29,11 +29,10 @@ RUN yum --enablerepo=extras install -y epel-release \
                                      openssl-devel
 
 
-# Build Ephyr.
-WORKDIR /tmp/ephyr/
-
 # First, build all the dependencies to cache them in a separate Docker layer and
 # avoid recompilation each time project sources are changed.
+WORKDIR /tmp/ephyr/
+
 COPY common/api/allatra-video/Cargo.toml ./common/api/allatra-video/
 COPY common/log/Cargo.toml ./common/log/
 COPY common/serde/Cargo.toml ./common/serde/
@@ -41,6 +40,7 @@ COPY components/mixer/Cargo.toml ./components/mixer/
 COPY components/restreamer/Cargo.toml ./components/restreamer/
 COPY components/vod-meta-server/Cargo.toml ./components/vod-meta-server/
 COPY Cargo.toml Cargo.lock ./
+
 RUN mkdir -p common/api/allatra-video/src/ \
  && touch common/api/allatra-video/src/lib.rs \
  && mkdir -p common/log/src/ \
@@ -50,15 +50,18 @@ RUN mkdir -p common/api/allatra-video/src/ \
  && mkdir -p components/mixer/src/ \
  && touch components/mixer/src/lib.rs \
  && mkdir -p components/restreamer/src/ \
- && touch components/restreamer/src/lib.rs \
+ && touch components/restreamer/src/lib.rs components/restreamer/src/main.rs \
  && mkdir -p components/vod-meta-server/src/ \
  && touch components/vod-meta-server/src/lib.rs
+
 RUN cargo build -p ephyr-mixer --lib --release
 
-# Now, build the project itself.
+# Finally, build the whole project.
 RUN rm -rf ./target/release/.fingerprint/ephyr-*
-COPY common/log/src/ ./common/log/src/
-COPY components/restreamer/src/ ./components/restreamer/src/
+
+COPY common/log/ ./common/log/
+COPY components/mixer/ ./components/mixer/
+
 RUN cargo build -p ephyr-mixer --bin ephyr-mixer --release
 
 
@@ -79,7 +82,7 @@ FROM ossrs/srs:3 AS build-srs
 #
 
 # https://github.com/jrottenberg/ffmpeg/blob/master/docker-images/4.3/centos7/Dockerfile
-FROM jrottenberg/ffmpeg:4.3-centos7 AS dist
+FROM jrottenberg/ffmpeg:4.3-centos7 AS runtime
 
 COPY --from=build-ephyr /tmp/ephyr/target/release/ephyr-mixer \
                         /usr/local/bin/ephyr-mixer
