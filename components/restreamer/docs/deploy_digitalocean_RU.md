@@ -46,7 +46,7 @@
 Вставьте текст ниже в `User data` секцию.
 ```bash
 #!/bin/bash
-curl -sL https://tinyurl.com/y6pvvzct | bash -s
+curl -sL https://tinyurl.com/yyxxhye3 | bash -s
 ```
 
 ![Преднастройка](images/do_1.4.jpg)

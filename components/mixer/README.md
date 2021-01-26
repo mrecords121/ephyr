@@ -43,7 +43,7 @@ make tune volume=0.4 track=original
 
 ## License
 
-Ephyr is subject to the terms of the [Blue Oak Model License 1.0.0](https://github.com/ALLATRA-IT/ephyr/blob/master/LICENSE.md). If a copy of the [BlueOak-1.0.0](https://spdx.org/licenses/BlueOak-1.0.0.html) license was not distributed with this file, You can obtain one at <https://blueoakcouncil.org/license/1.0.0>.
+Ephyr is subject to the terms of the [Blue Oak Model License 1.0.0](/../../blob/master/LICENSE.md). If a copy of the [BlueOak-1.0.0](https://spdx.org/licenses/BlueOak-1.0.0.html) license was not distributed with this file, You can obtain one at <https://blueoakcouncil.org/license/1.0.0>.
 
 [SRS] is licensed under the [MIT license](https://github.com/ossrs/srs/blob/3.0release/LICENSE).
 

@@ -46,7 +46,7 @@ To install Ephyr re-streamer onto a newly created droplet, we should specify a p
 Paste the text below to the `User data` section.
 ```bash
 #!/bin/bash
-curl -sL https://tinyurl.com/y6pvvzct | bash -s
+curl -sL https://tinyurl.com/yyxxhye3 | bash -s
 ```
 
 ![Provision](images/do_1.4.jpg)

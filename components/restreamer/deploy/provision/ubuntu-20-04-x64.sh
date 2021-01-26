@@ -20,7 +20,7 @@ After=podman.service
 [Service]
 Environment=EPHYR_CONTAINER_NAME=ephyr-restreamer
 Environment=EPHYR_IMAGE_NAME=allatra/ephyr
-Environment=EPHYR_IMAGE_TAG=restreamer-0.1.0-beta.2
+Environment=EPHYR_IMAGE_TAG=restreamer-0.1
 
 ExecStartPre=/usr/bin/mkdir -p /var/lib/${EPHYR_CONTAINER_NAME}/
 ExecStartPre=touch /var/lib/${EPHYR_CONTAINER_NAME}/srs.conf
