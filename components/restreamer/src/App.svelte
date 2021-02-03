@@ -25,13 +25,14 @@
   let isOnline = true;
 
   const wsClient = new SubscriptionClient(
-    //'ws://127.0.0.1/api',
-    'ws' +
-      (window.location.protocol === 'https:' ? 's' : '') +
-      '://' +
-      window.location.host +
-      window.location.pathname.replace(/\/?$/g, '') +
-      '/api',
+    !!process.env.WEBPACK_DEV_SERVER
+      ? 'ws://127.0.0.1/api'
+      : 'ws' +
+        (window.location.protocol === 'https:' ? 's' : '') +
+        '://' +
+        window.location.host +
+        window.location.pathname.replace(/\/?$/g, '') +
+        '/api',
     { reconnect: true }
   );
   wsClient.onConnected(() => {
