@@ -6,10 +6,22 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.1.1] · 2021-02-05
+[0.1.1]: /../../tree/restreamer-v0.1.1
+
+[Diff](/../../compare/restreamer-v0.1.0...restreamer-v0.1.1)
+
+### Fixed
+
+- Broken [GraphQL Playground] in debug mode ([3bcbfa07](/../../commit/3bcbfa073bdd13bb401d0f625509d4dea392f32e)).
+
+
+
+
 ## [0.1.0] · 2021-01-26
 [0.1.0]: /../../tree/restreamer-v0.1.0
 
-[Diff](/../../compare/v0.3.6..restreamer-v0.1.0)
+[Diff](/../../compare/v0.3.6...restreamer-v0.1.0)
 
 ### Implemented
 
@@ -64,6 +76,7 @@ All user visible changes to this project will be documented in this file. This p
 [DigitalOcean]: https://www.digitalocean.com
 [Docker]: https://www.docker.com
 [GraphQL]: https://www.graphql.com
+[GraphQL Playground]: https://github.com/graphql/graphql-playground
 [Hetzner Cloud]: https://www.hetzner.com/cloud
 [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 [Semantic Versioning 2.0.0]: https://semver.org
