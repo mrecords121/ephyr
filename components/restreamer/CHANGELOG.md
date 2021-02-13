@@ -15,7 +15,7 @@ All user visible changes to this project will be documented in this file. This p
 
 - Deployment:
     - Provision script for [Ubuntu] 20.04:
-        - Incorrect default registry pick up by Podman ([43bb1948](/../../commit/43bb1948297a6864affbf098498e4e9810358e0e)).
+        - Incorrect default registry pick up by [Podman] ([43bb1948](/../../commit/43bb1948297a6864affbf098498e4e9810358e0e)).
 
 
 
