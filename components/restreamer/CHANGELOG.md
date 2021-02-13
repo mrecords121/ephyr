@@ -6,6 +6,20 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.1.2] · 2021-02-13
+[0.1.2]: /../../tree/restreamer-v0.1.2
+
+[Diff](/../../compare/restreamer-v0.1.1...restreamer-v0.1.2)
+
+### Fixed
+
+- Deployment:
+    - Provision script for [Ubuntu] 20.04:
+        - Incorrect default registry pick up by Podman ([43bb1948](/../../commit/43bb1948297a6864affbf098498e4e9810358e0e)).
+
+
+
+
 ## [0.1.1] · 2021-02-05
 [0.1.1]: /../../tree/restreamer-v0.1.1
 
@@ -78,6 +92,7 @@ All user visible changes to this project will be documented in this file. This p
 [GraphQL]: https://www.graphql.com
 [GraphQL Playground]: https://github.com/graphql/graphql-playground
 [Hetzner Cloud]: https://www.hetzner.com/cloud
+[Podman]: https://podman.io
 [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 [Semantic Versioning 2.0.0]: https://semver.org
 [Ubuntu]: https://ubuntu.com

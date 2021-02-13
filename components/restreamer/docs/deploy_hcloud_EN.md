@@ -50,7 +50,7 @@ To install Ephyr re-streamer onto a newly created server, we should specify a pr
 Paste the text below to the `User data` section.
 ```bash
 #!/bin/bash
-curl -sL https://tinyurl.com/yyxxhye3 | bash -s
+curl -sL https://tinyurl.com/bck5u0nt | bash -s
 ```
 
 ![Provision](images/hcloud_1.4.jpg)
