@@ -62,11 +62,11 @@ impl Manager {
             .tempdir()?;
 
         let (tx, rx) = mpsc::unbounded_channel::<Url>();
-        let _ = tokio::spawn(Self::run_downloads(
+        drop(tokio::spawn(Self::run_downloads(
             rx,
             cache_dir.clone(),
             tmp_dir.path().to_owned(),
-        ));
+        )));
 
         Ok(Self {
             cache_dir,

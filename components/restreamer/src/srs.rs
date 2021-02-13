@@ -103,7 +103,7 @@ impl Server {
         srv.refresh(cfg).await?;
 
         // Start SRS server as a child process.
-        let _ = tokio::spawn(spawner);
+        drop(tokio::spawn(spawner));
 
         Ok(srv)
     }
@@ -174,7 +174,7 @@ impl Drop for ClientId {
     /// [SRS]: https://github.com/ossrs/srs
     fn drop(&mut self) {
         if let Some(&mut client_id) = Arc::get_mut(&mut self.0) {
-            let _ = tokio::spawn(
+            drop(tokio::spawn(
                 api::srs::Client::kickoff_client(client_id).map_err(move |e| {
                     log::warn!(
                         "Failed to kickoff client {} from SRS: {}",
@@ -182,7 +182,7 @@ impl Drop for ClientId {
                         e,
                     )
                 }),
-            );
+            ));
         }
     }
 }

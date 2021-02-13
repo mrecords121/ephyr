@@ -59,16 +59,16 @@ pub async fn run(opts: cli::Opts) -> Result<(), cli::Failure> {
             |e| log::error!("Failed to initialize vod::file::cache: {}", e),
         )?);
 
-    let _ = tokio::spawn(refill_state_with_cache_files(
+    drop(tokio::spawn(refill_state_with_cache_files(
         state.clone(),
         cache.clone(),
         Duration::from_secs(10),
-    ));
+    )));
 
-    let _ = tokio::spawn(refresh_initial_positions(
+    drop(tokio::spawn(refresh_initial_positions(
         state.clone(),
         Duration::from_secs(60),
-    ));
+    )));
 
     let auth_token_hash = AuthTokenHash(opts.auth_token_hash);
 

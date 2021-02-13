@@ -105,7 +105,7 @@ impl State {
         Fut: Future + Send + 'static,
         T: Clone + PartialEq + Send + Sync + 'static,
     {
-        let _ = tokio::spawn(
+        drop(tokio::spawn(
             AssertUnwindSafe(
                 val.signal_cloned().dedupe_cloned().to_stream().then(hook),
             )
@@ -119,7 +119,7 @@ impl State {
             })
             .map(|_| Ok(()))
             .forward(sink::drain()),
-        );
+        ));
     }
 
     /// Adds new [`Restream`] with [`PullInput`] to this [`State`].

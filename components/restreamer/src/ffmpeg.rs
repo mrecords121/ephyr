@@ -85,7 +85,7 @@ impl RestreamersPool {
                             .dst_url(&r.input.srs_url())
                             .run(key, self.state.clone())
                     });
-                let _ = new.insert(key, val);
+                drop(new.insert(key, val));
             }
 
             if r.input.status() != Status::Online {
@@ -108,7 +108,7 @@ impl RestreamersPool {
                             .dst_url(&o.dst)
                             .run(key, self.state.clone())
                     });
-                let _ = new.insert(key, val);
+                drop(new.insert(key, val));
             }
         }
 
@@ -182,7 +182,7 @@ impl Restreamer {
                         log::crit!("Cannot start FFmpeg re-streamer: {}", e)
                     })?;
 
-                    let _ = tokio::spawn(to_online);
+                    drop(tokio::spawn(to_online));
 
                     let out =
                         process.wait_with_output().await.map_err(|e| {
@@ -217,9 +217,9 @@ impl Restreamer {
         });
 
         // Start FFmpeg re-streamer as a child process.
-        let _ = tokio::spawn(spawner.map(move |_| {
+        drop(tokio::spawn(spawner.map(move |_| {
             Self::set_status(Status::Offline, key, &state_for_abort)
-        }));
+        })));
 
         DroppableAbortHandle(abort_handle)
     }

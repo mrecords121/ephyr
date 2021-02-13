@@ -222,12 +222,13 @@ impl AsyncRead for Input {
             for sample in &mut self.frame {
                 *sample = 0.0;
             }
-            let _ = self
-                .audio
-                .clone()
-                .lock()
-                .unwrap()
-                .fill_buffer(&mut self.frame);
+            drop(
+                self.audio
+                    .clone()
+                    .lock()
+                    .unwrap()
+                    .fill_buffer(&mut self.frame),
+            );
         }
 
         let cursor = self.cursor;
@@ -536,7 +537,7 @@ fn spawn_waiter(waiter: JoinHandle<()>) {
         }
     };
 
-    let _ = disconnects.insert(id, waiter);
+    drop(disconnects.insert(id, waiter));
 }
 
 /// [`tokio::spawn`]s disconnection of the given [`Connection`] and tracks its
@@ -554,27 +555,34 @@ fn spawn_disconnect(mut conn: Connection) {
         }
     };
 
-    let _ = disconnects.insert(
-        id,
-        tokio::spawn(
-            async move {
-                // First, we should check whether `Connection` is established
-                // at all.
-                let _ = conn.get_state()?;
+    drop(
+        disconnects.insert(
+            id,
+            tokio::spawn(
+                async move {
+                    // First, we should check whether `Connection` is
+                    // established at all.
+                    let _ = conn.get_state()?;
 
-                // Then initiate disconnection by sending an appropriate packet.
-                conn.disconnect(DisconnectOptions::default())?;
-                // And wait until it's done.
-                let _ = conn.events().map(Ok).forward(sink::drain()).await;
+                    // Then initiate disconnection by sending an appropriate
+                    // packet.
+                    conn.disconnect(DisconnectOptions::default())?;
+                    // And wait until it's done.
+                    let _ = conn.events().map(Ok).forward(sink::drain()).await;
 
-                Ok(())
-            }
-            .map(move |_: Result<_, tsclientlib::Error>| {
-                // Finally, we should remove this disconnect from the collection
-                // whenever it succeeds or errors. Otherwise, we could stuck
-                // on shutdown waiting eternally.
-                let _ = IN_PROGRESS_DISCONNECTS.lock().unwrap().remove(&id);
-            }),
+                    Ok(())
+                }
+                .map(
+                    move |_: Result<_, tsclientlib::Error>| {
+                        // Finally, we should remove this disconnect from the
+                        // collection whenever it succeeds or errors. Otherwise,
+                        // we could stuck on shutdown waiting eternally.
+                        drop(
+                            IN_PROGRESS_DISCONNECTS.lock().unwrap().remove(&id),
+                        );
+                    },
+                ),
+            ),
         ),
     );
 }
@@ -600,5 +608,5 @@ pub async fn finish_all_disconnects() {
             .collect::<Vec<_>>()
     };
 
-    let _ = future::join_all(disconnects).await;
+    drop(future::join_all(disconnects).await);
 }
