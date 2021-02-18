@@ -633,7 +633,11 @@ impl Input {
     Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
 )]
 pub struct PullInput {
-    /// URL of a live RTMP stream to be pulled.
+    /// URL of a live stream to be pulled from.
+    ///
+    /// At the moment only [RTMP] is supported.
+    ///
+    /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
     pub src: Url,
 
     /// `Status` of this `PullInput` indicating whether it performs pulling.
@@ -656,7 +660,7 @@ impl PullInput {
 )]
 pub struct PushInput {
     /// Name of a live RTMP stream to expose it with for receiving and
-    /// restreaming media traffic.
+    /// re-streaming media traffic.
     pub name: String,
 
     /// `Status` of this `PushInput` indicating whether it receives media
@@ -682,7 +686,12 @@ pub struct Output {
     /// Unique ID of this `Output`.
     pub id: OutputId,
 
-    /// URL to push a live RTMP stream to.
+    /// URL to push a live stream on to.
+    ///
+    /// At the moment only [RTMP] and [Icecast] are supported.
+    ///
+    /// [Icecast]: https://icecast.org
+    /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
     pub dst: Url,
 
     /// Optional label of this `Output`.
@@ -732,6 +741,10 @@ pub struct Mixin {
     pub id: MixinId,
 
     /// URL of the source to be mixed in.
+    ///
+    /// At the moment, only [TeamSpeak] is supported.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
     pub src: Url,
 
     /// Volume rate of this `Mixin`'s audio tracks to mix them with.

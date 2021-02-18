@@ -43,7 +43,7 @@
           },
           {
             "name": "dst",
-            "description": "URL to push a live RTMP stream to.",
+            "description": "URL to push a live stream on to.\n\nAt the moment only [RTMP] and [Icecast] are supported.\n\n[Icecast]: https://icecast.org\n[RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol",
             "args": [],
             "type": {
               "kind": "NON_NULL",
@@ -251,7 +251,7 @@
         "fields": [
           {
             "name": "src",
-            "description": "URL of a live RTMP stream to be pulled.",
+            "description": "URL of a live stream to be pulled from.\n\nAt the moment only [RTMP] is supported.\n\n[RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol",
             "args": [],
             "type": {
               "kind": "NON_NULL",
@@ -290,7 +290,7 @@
       {
         "kind": "OBJECT",
         "name": "Mixin",
-        "description": "Additional source for an `Output` to be mixed with before restreamed to the\ndestination.",
+        "description": "Additional source for an `Output` to be mixed with before re-streamed to the\ndestination.",
         "fields": [
           {
             "name": "id",
@@ -310,7 +310,7 @@
           },
           {
             "name": "src",
-            "description": "URL of the source to be mixed in.",
+            "description": "URL of the source to be mixed in.\n\nAt the moment, only [TeamSpeak] is supported.\n\n[TeamSpeak]: https://teamspeak.com",
             "args": [],
             "type": {
               "kind": "NON_NULL",
@@ -900,7 +900,7 @@
         "fields": [
           {
             "name": "name",
-            "description": "Name of a live RTMP stream to expose it with for receiving and\nrestreaming media traffic.",
+            "description": "Name of a live RTMP stream to expose it with for receiving and\nre-streaming media traffic.",
             "args": [],
             "type": {
               "kind": "NON_NULL",
@@ -1191,7 +1191,7 @@
               },
               {
                 "name": "dst",
-                "description": "RTMP URL to push media stream to.",
+                "description": "URL to push media stream onto.\n\nAt the moment only [RTMP] and [Icecast] are supported.\n\n[Icecast]: https://icecast.org\n[RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol",
                 "type": {
                   "kind": "NON_NULL",
                   "name": null,
@@ -1415,7 +1415,7 @@
             "args": [
               {
                 "name": "inputId",
-                "description": null,
+                "description": "ID of `Restream` of the tuned `Output`.",
                 "type": {
                   "kind": "NON_NULL",
                   "name": null,
@@ -1429,7 +1429,7 @@
               },
               {
                 "name": "outputId",
-                "description": null,
+                "description": "ID of the tuned `Output`.",
                 "type": {
                   "kind": "NON_NULL",
                   "name": null,
@@ -1443,7 +1443,7 @@
               },
               {
                 "name": "mixinId",
-                "description": null,
+                "description": "Optional ID of the tuned `Mixin`.\n\nIf set, then tunes the `Mixin` rather that the `Output`.",
                 "type": {
                   "kind": "SCALAR",
                   "name": "MixinId",
@@ -1480,7 +1480,7 @@
             "args": [
               {
                 "name": "inputId",
-                "description": null,
+                "description": "ID of `Restream` of the tuned `Mixin`.",
                 "type": {
                   "kind": "NON_NULL",
                   "name": null,
@@ -1494,7 +1494,7 @@
               },
               {
                 "name": "outputId",
-                "description": null,
+                "description": "ID of `Output` of the tuned `Mixin`.",
                 "type": {
                   "kind": "NON_NULL",
                   "name": null,
@@ -1508,7 +1508,7 @@
               },
               {
                 "name": "mixinId",
-                "description": null,
+                "description": "ID of the tuned `Mixin`.",
                 "type": {
                   "kind": "NON_NULL",
                   "name": null,
@@ -1522,7 +1522,7 @@
               },
               {
                 "name": "delay",
-                "description": null,
+                "description": "Number of milliseconds to delay the `Mixin` before being mixed in.",
                 "type": {
                   "kind": "NON_NULL",
                   "name": null,

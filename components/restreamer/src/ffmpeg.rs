@@ -476,7 +476,7 @@ impl CopyOutputRestreamer {
         srs_url: Url,
     ) -> Option<Self> {
         let downstream_url = match o.dst.scheme() {
-            "rtmp" | "rtmps" => o.dst.clone(),
+            "icecast" | "rtmp" | "rtmps" => o.dst.clone(),
             _ => unimplemented!(),
         };
         if !o.mixins.is_empty() {
@@ -523,10 +523,17 @@ impl CopyOutputRestreamer {
     ///
     /// [FFmpeg]: https://ffmpeg.org
     fn setup_ffmpeg(&self, cmd: &mut Command) {
-        let _ = cmd
-            .args(&["-i", self.srs_url.as_str()])
-            .args(&["-c", "copy"])
-            .args(&["-f", "flv", self.downstream_url.as_str()]);
+        let _ = cmd.args(&["-i", self.srs_url.as_str()]);
+        let _ = match self.downstream_url.scheme() {
+            "icecast" => cmd
+                .args(&["-c:a", "libmp3lame", "-b:a", "64k"])
+                .args(&["-f", "mp3", "-content_type", "audio/mpeg"]),
+
+            "rtmp" | "rtmps" => cmd.args(&["-c", "copy"]).args(&["-f", "flv"]),
+
+            _ => unimplemented!(),
+        }
+        .arg(self.downstream_url.as_str());
     }
 }
 
@@ -618,8 +625,8 @@ impl TeamspeakMixedOutputRestreamer {
         prev: Option<RestreamerKind>,
     ) -> Option<Self> {
         let downstream_url = match o.dst.scheme() {
-            "rtmp" | "rtmps" => o.dst.clone(),
-            _ => unimplemented!(),
+            "icecast" | "rtmp" | "rtmps" => o.dst.clone(),
+            _ => return None,
         };
 
         let mixin = o.mixins.first()?;
@@ -820,10 +827,21 @@ impl TeamspeakMixedOutputRestreamer {
                         .unwrap_or_default()
                 ),
             ])
-            .args(&["-map", "[out]", "-map", "0:v"])
-            .args(&["-max_muxing_queue_size", "50000000"])
-            .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"])
-            .args(&["-f", "flv", self.downstream_url.as_str()]);
+            .args(&["-map", "[out]"])
+            .args(&["-max_muxing_queue_size", "50000000"]);
+        let _ = match self.downstream_url.scheme() {
+            "icecast" => cmd
+                .args(&["-c:a", "libmp3lame", "-b:a", "64k"])
+                .args(&["-f", "mp3", "-content_type", "audio/mpeg"]),
+
+            "rtmp" | "rtmps" => cmd
+                .args(&["-map", "0:v"])
+                .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"])
+                .args(&["-f", "flv"]),
+
+            _ => unimplemented!(),
+        }
+        .arg(self.downstream_url.as_str());
     }
 
     /// Runs the given [FFmpeg] [`Command`] by feeding to its STDIN the captured

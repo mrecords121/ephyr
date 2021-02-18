@@ -6,6 +6,44 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
+## [0.2.0-alpha.1] · 2021-??-?? · To-be-done
+[0.2.0-alpha.1]: /../../tree/restreamer-v0.2.0-alpha.1
+
+[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-alpha.1)
+
+### Added
+
+- Web UI:
+    - Output:
+        - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
+        - Tuning volume rate of tracks ([77d25dd7], [#23]);
+        - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]).
+- GraphQL API:
+    - Types:
+        - `Mixin` object ([77d25dd7], [#23]);
+        - `MixinId`, `Volume` and `Delay` scalars ([77d25dd7], [#23]).
+    - Mutations:
+        - `tuneVolume` and `tuneDelay` ([77d25dd7], [#23]);
+        - `mix` argument to `addOutput` ([77d25dd7], [#23]).
+    - Queries:
+        - `Output.volume` and `Output.mixins` fields ([77d25dd7], [#23]).
+
+### Changed
+
+- Web UI:
+    - Output:
+        - Accept [Icecast] URL as destination ([rev]).
+- GraphQL API:
+    - Mutations:
+        - Allow [Icecast] URL in `dst` argument of `addOutput` ([rev]).
+
+[#23]: /../../issues/23
+[77d25dd7]: /../../commit/77d25dd739d4f05b319769eddd83c01bd3a490a4
+[rev]: /../../commit/full-rev
+
+
+
+
 ## [0.1.2] · 2021-02-13
 [0.1.2]: /../../tree/restreamer-v0.1.2
 
@@ -15,7 +53,9 @@ All user visible changes to this project will be documented in this file. This p
 
 - Deployment:
     - Provision script for [Ubuntu] 20.04:
-        - Incorrect default registry pick up by [Podman] ([43bb1948](/../../commit/43bb1948297a6864affbf098498e4e9810358e0e)).
+        - Incorrect default registry pick up by [Podman] ([43bb1948]).
+
+[43bb1948]: /../../commit/43bb1948297a6864affbf098498e4e9810358e0e
 
 
 
@@ -27,7 +67,9 @@ All user visible changes to this project will be documented in this file. This p
 
 ### Fixed
 
-- Broken [GraphQL Playground] in debug mode ([3bcbfa07](/../../commit/3bcbfa073bdd13bb401d0f625509d4dea392f32e)).
+- Broken [GraphQL Playground] in debug mode ([3bcbfa07]).
+
+[3bcbfa07]: /../../commit/3bcbfa073bdd13bb401d0f625509d4dea392f32e
 
 
 
@@ -92,7 +134,9 @@ All user visible changes to this project will be documented in this file. This p
 [GraphQL]: https://www.graphql.com
 [GraphQL Playground]: https://github.com/graphql/graphql-playground
 [Hetzner Cloud]: https://www.hetzner.com/cloud
+[Icecast]: https://icecast.org
 [Podman]: https://podman.io
 [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 [Semantic Versioning 2.0.0]: https://semver.org
+[TeamSpeak]: https://teamspeak.com 
 [Ubuntu]: https://ubuntu.com

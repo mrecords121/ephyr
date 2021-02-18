@@ -61,6 +61,16 @@ yarn doc
 
 
 
+## Update GraphQL schema
+
+To regenerate `client.graphql.schema.json` use:
+```bash
+make graphql.schema
+```
+
+
+
+
 ## DigitalOcean development
 
 It's possible to run a development build on [DigitalOcean] droplet easily:

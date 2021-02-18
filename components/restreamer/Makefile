@@ -236,6 +236,21 @@ docker.up: docker.down
 
 
 
+####################
+# GraphQL commands #
+####################
+
+# Generate GraphQL schema JSON from project sources.
+#
+# Usage:
+#	make graphql.schema
+
+graphql.schema:
+	cargo run --bin export_schema -- --api=client --out-dir=./
+
+
+
+
 ##################
 # .PHONY section #
 ##################
@@ -243,4 +258,5 @@ docker.up: docker.down
 .PHONY: down fmt lint up \
         cargo.fmt cargo.lint \
         do.down do.setup do.token.verify do.up \
-        docker.down docker.image docker.push docker.up
+        docker.down docker.image docker.push docker.up \
+        graphql.schema

@@ -70,7 +70,10 @@ impl MutationsRoot {
         if !matches!(src.scheme(), "rtmp" | "rtmps") {
             return Err(graphql::Error::new("INVALID_SRC_RTMP_URL")
                 .status(StatusCode::BAD_REQUEST)
-                .message("Provided `src` is invalid: non-RTMP scheme"));
+                .message(
+                    "Provided `src` is invalid: unknown scheme, allowed only: \
+                     rtmp://, rtmps://",
+                ));
         }
 
         if let Some(label) = &label {
@@ -205,7 +208,13 @@ impl MutationsRoot {
     /// Otherwise always returns `true`.
     #[graphql(arguments(
         input_id(description = "ID of `Restream` to add `Output` to."),
-        dst(description = "RTMP URL to push media stream to."),
+        dst(description = "\
+        URL to push media stream onto.\
+        \n\n\
+        At the moment only [RTMP] and [Icecast] are supported.\
+        \n\n\
+        [Icecast]: https://icecast.org\n\
+        [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol"),
         label(description = "Optional label for this `Output`."),
         mix(description = "Optional TeamSpeak URL to mix into this `Output`."),
     ))]
@@ -216,10 +225,13 @@ impl MutationsRoot {
         mix: Option<Url>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
-        if !matches!(dst.scheme(), "rtmp" | "rtmps") {
+        if !matches!(dst.scheme(), "icecast" | "rtmp" | "rtmps") {
             return Err(graphql::Error::new("INVALID_DST_RTMP_URL")
                 .status(StatusCode::BAD_REQUEST)
-                .message("Provided `dst` is invalid: non-RTMP scheme"));
+                .message(
+                    "Provided `dst` is invalid: unknown scheme, allowed only: \
+                     rtmp://, rtmps://, icecast://",
+                ));
         }
 
         if let Some(label) = &label {
@@ -236,7 +248,10 @@ impl MutationsRoot {
             if mix.scheme() != "ts" || mix.host().is_none() {
                 return Err(graphql::Error::new("INVALID_MIX_TS_URL")
                     .status(StatusCode::BAD_REQUEST)
-                    .message("Provided `mix` is invalid: non-TS scheme"));
+                    .message(
+                        "Provided `mix` is invalid: unknown scheme, allowed \
+                         only: ts://",
+                    ));
             }
         }
 
@@ -363,6 +378,15 @@ impl MutationsRoot {
     /// Returns `true` if a `Volume` rate has been changed, `false` if it has
     /// the same value already, and `null` if the specified `Output` or `Mixin`
     /// doesn't exist.
+    #[graphql(arguments(
+        input_id(description = "ID of `Restream` of the tuned `Output`."),
+        output_id(description = "ID of the tuned `Output`."),
+        mixin_id(description = "\
+        Optional ID of the tuned `Mixin`.\
+        \n\n\
+        If set, then tunes the `Mixin` rather that the `Output`."),
+        delay(description = "Volume rate in percents to be set."),
+    ))]
     fn tune_volume(
         input_id: InputId,
         output_id: OutputId,
@@ -383,6 +407,13 @@ impl MutationsRoot {
     /// Returns `true` if a `Delay` has been changed, `false` if it has the same
     /// value already, and `null` if the specified `Output` or `Mixin` doesn't
     /// exist.
+    #[graphql(arguments(
+        input_id(description = "ID of `Restream` of the tuned `Mixin`."),
+        output_id(description = "ID of `Output` of the tuned `Mixin`."),
+        mixin_id(description = "ID of the tuned `Mixin`."),
+        delay(description = "Number of milliseconds to delay the `Mixin` \
+                             before being mixed in."),
+    ))]
     fn tune_delay(
         input_id: InputId,
         output_id: OutputId,

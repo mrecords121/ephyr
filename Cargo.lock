@@ -1282,7 +1282,7 @@ dependencies = [
 
 [[package]]
 name = "ephyr-restreamer"
-version = "0.2.0-alpha.1"
+version = "0.2.0-alpha.1+dev"
 dependencies = [
  "actix-service",
  "actix-web",

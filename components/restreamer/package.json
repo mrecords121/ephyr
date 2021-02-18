@@ -1,6 +1,6 @@
 {
   "name": "ephyr-restreamer",
-  "version": "0.2.0-alpha.1",
+  "version": "0.2.0-alpha.1+dev",
   "private": true,
   "scripts": {
     "build": "svelte-check && webpack",
