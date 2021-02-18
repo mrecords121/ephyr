@@ -1,3 +1,5 @@
+.envrc
+
 deploy/
 docs/
 
@@ -5,3 +7,10 @@ public/
 
 node_modules/
 yarn-error.log
+
+Makefile
+
+*.md
+
+do.deploy.sh
+state.json

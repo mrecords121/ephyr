@@ -75,12 +75,16 @@ docker.down:
 docker-image-tag = $(if $(call eq,$(tag),),$(IMAGE_TAG),$(tag))
 
 docker.image:
+ifeq ($(docker-comp),restreamer)
+	@cd components/$(docker-comp)/ && make docker.image tag=$(tag)
+else
 	docker build --network=host --force-rm \
 		$(if $(call eq,$(no-cache),yes),--no-cache --pull,) \
 		--file=components/$(docker-comp)/Dockerfile \
 		-t $(IMAGE_NAME):$(docker-comp)$(if \
 			$(call eq,$(docker-image-tag),latest),,-$(docker-image-tag)) \
 		./
+endif
 
 
 # Push project Docker images to Container Registry.

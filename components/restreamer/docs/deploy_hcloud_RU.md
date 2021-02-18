@@ -50,7 +50,7 @@
 Вставьте текст ниже в `User data` секцию.
 ```bash
 #!/bin/bash
-curl -sL https://tinyurl.com/bck5u0nt | bash -s
+curl -sL https://raw.githubusercontent.com/ALLATRA-IT/ephyr/master/components/restreamer/deploy/provision/ubuntu-20-04-x64.sh | bash -s
 ```
 
 ![Преднастройка](images/hcloud_1.4.jpg)
