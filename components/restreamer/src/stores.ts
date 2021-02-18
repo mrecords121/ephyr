@@ -209,9 +209,14 @@ export class OutputModalState {
   input_id: string | null = null;
 
   /**
-   * Indicator whether the "Multiple" tab is active in the [`OutputModal`].
+   * Indicator whether the "Multiple" tab is active in the [[`OutputModal`]].
    */
   multi: boolean = false;
+
+  /**
+   * Indicator whether the mixing form is active in the [[`OutputModal`]].
+   */
+  mixing: boolean = false;
 
   /**
    * Label to be assigned to the added `Output`.
@@ -224,6 +229,12 @@ export class OutputModalState {
    * RTMP URL to restream a live RTMP stream to with the added `Output`.
    */
   url: string = '';
+
+  /**
+   * URL of a TeamSpeak channel to mix audio from with a live RTMP stream before
+   * outputting it.
+   */
+  mix_url: string = '';
 
   /**
    * List of multiple labels and RTMP URLs to be added in a comma-separated
@@ -256,6 +267,9 @@ export class OutputModal implements Writable<OutputModalState> {
   set(v: OutputModalState) {
     if (v.url !== '') {
       v.url = sanitizeUrl(v.url);
+    }
+    if (v.mix_url !== '') {
+      v.mix_url = sanitizeUrl(v.mix_url);
     }
     this.state.set(v);
   }
@@ -308,6 +322,16 @@ export class OutputModal implements Writable<OutputModalState> {
   }
 
   /**
+   * Toggles the mixing form of this [[`OutputModal`]].
+   */
+  toggleMixing() {
+    this.update((v) => {
+      v.mixing = !v.mixing;
+      return v;
+    });
+  }
+
+  /**
    * Sanitizes the current label value being input in this [[`OutputModal`]].
    */
   sanitizeLabel() {
@@ -327,6 +351,7 @@ export class OutputModal implements Writable<OutputModalState> {
       v.input_id = null;
       v.label = '';
       v.url = '';
+      v.mix_url = '';
       v.list = '';
       v.visible = false;
       return v;

@@ -14,9 +14,14 @@
   let invalidLine;
   onDestroy(
     value.subscribe((v) => {
-      submitable =
-        (!v.multi && v.url !== '') ||
-        (v.multi && v.list !== '' && !invalidLine);
+      if (v.multi) {
+        submitable = v.list !== '' && !invalidLine;
+      } else {
+        submitable = v.url !== '';
+        if (v.mixing) {
+          submitable = submitable && v.mix_url !== '';
+        }
+      }
     })
   );
 
@@ -98,6 +103,9 @@
       if (label !== '') {
         vars.label = label;
       }
+      if (v.mixing) {
+        vars.mix = v.mix_url;
+      }
       submit.push(vars);
     }
     if (submit.length < 1) return;
@@ -171,6 +179,27 @@
         <div class="uk-alert">
           Server will publish input RTMP stream to this address
         </div>
+
+        <fieldset class="mix-form" class:expanded={$value.mixing}>
+          <label
+            ><input
+              class="uk-checkbox"
+              type="checkbox"
+              on:change={() => value.toggleMixing()}
+            /> Mix with</label
+          >
+
+          <input
+            class="uk-input"
+            type="text"
+            bind:value={$value.mix_url}
+            placeholder="ts://<teamspeak-host>:<port>/<channel>?name=<name>"
+          />
+          <div class="uk-alert">
+            If name is not specified than the label value will be used, if any,
+            or a random generated one.
+          </div>
+        </fieldset>
       </fieldset>
 
       <fieldset class="multi-form">
@@ -238,4 +267,18 @@ label3,rtmp://3..."
         display: none
       .multi-form
         display: block
+
+    .mix-form
+      padding-left: 0
+      padding-right: 0
+      margin-bottom: 0
+
+      &:not(.expanded)
+        .uk-input, .uk-alert
+          display: none
+
+      .uk-input
+        margin-top: 4px
+      .uk-alert
+        margin-top: 8px
 </style>

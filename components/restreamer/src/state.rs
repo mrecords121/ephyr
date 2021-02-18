@@ -1,9 +1,12 @@
 //! Application state.
 
-use std::{future::Future, panic::AssertUnwindSafe, path::Path};
+use std::{
+    convert::TryInto, future::Future, panic::AssertUnwindSafe, path::Path,
+    time::Duration,
+};
 
 use anyhow::anyhow;
-use derive_more::{Display, From};
+use derive_more::{Display, From, Into};
 use ephyr_log::log;
 use futures::{
     future::TryFutureExt as _,
@@ -11,13 +14,15 @@ use futures::{
     stream::{StreamExt as _, TryStreamExt as _},
 };
 use futures_signals::signal::{Mutable, SignalExt as _};
-use juniper::{GraphQLEnum, GraphQLObject, GraphQLScalarValue, GraphQLUnion};
+use juniper::{
+    graphql_scalar, GraphQLEnum, GraphQLObject, GraphQLScalarValue,
+    GraphQLUnion, ParseScalarResult, ParseScalarValue, ScalarValue, Value,
+};
 use serde::{Deserialize, Serialize};
 use smart_default::SmartDefault;
 use tokio::{fs, io::AsyncReadExt as _};
 use url::Url;
 use uuid::Uuid;
-use xxhash::xxh3::xxh3_64;
 
 use crate::{display_panic, srs};
 
@@ -274,6 +279,7 @@ impl State {
         input_id: InputId,
         output_dst: Url,
         label: Option<String>,
+        mix_with: Option<Url>,
     ) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
         let outputs =
@@ -287,6 +293,17 @@ impl State {
             id: OutputId::random(),
             dst: output_dst,
             label,
+            volume: Volume::ORIGIN,
+            mixins: mix_with
+                .map(|url| {
+                    vec![Mixin {
+                        id: MixinId::random(),
+                        src: url,
+                        volume: Volume::ORIGIN,
+                        delay: Delay::default(),
+                    }]
+                })
+                .unwrap_or_default(),
             enabled: false,
             status: Status::Offline,
         });
@@ -410,6 +427,78 @@ impl State {
                 }),
         )
     }
+
+    /// Tunes a [`Volume`] rate of the specified [`Output`] or its [`Mixin`] in
+    /// this [`State`].
+    ///
+    /// Returns `true` if a [`Volume`] rate has been changed, or `false` if it
+    /// has the same value already.
+    /// Returns [`None`] if no [`Restream`] with `input_id` exists, or no
+    /// [`Output`] with `output_id` exist, or no [`Mixin`] with `mixin_id`
+    /// exists.
+    #[must_use]
+    pub fn tune_volume(
+        &self,
+        input_id: InputId,
+        output_id: OutputId,
+        mixin_id: Option<MixinId>,
+        volume: Volume,
+    ) -> Option<bool> {
+        let mut restreams = self.restreams.lock_mut();
+        let output = restreams
+            .iter_mut()
+            .find(|r| r.id == input_id)?
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == output_id)?;
+
+        let curr_volume = if let Some(id) = mixin_id {
+            &mut output.mixins.iter_mut().find(|m| m.id == id)?.volume
+        } else {
+            &mut output.volume
+        };
+
+        if *curr_volume == volume {
+            return Some(false);
+        }
+
+        *curr_volume = volume;
+        Some(true)
+    }
+
+    /// Tunes a [`Delay`] of the specified [`Mixin`] in this [`State`].
+    ///
+    /// Returns `true` if a [`Delay`] has been changed, or `false` if it has the
+    /// same value already.
+    /// Returns [`None`] if no [`Restream`] with `input_id` exists, or no
+    /// [`Output`] with `output_id` exist, or no [`Mixin`] with `mixin_id`
+    /// exists.
+    #[must_use]
+    pub fn tune_delay(
+        &self,
+        input_id: InputId,
+        output_id: OutputId,
+        mixin_id: MixinId,
+        delay: Delay,
+    ) -> Option<bool> {
+        let mut restreams = self.restreams.lock_mut();
+        let mixin = restreams
+            .iter_mut()
+            .find(|r| r.id == input_id)?
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == output_id)?
+            .mixins
+            .iter_mut()
+            .find(|m| m.id == mixin_id)?;
+
+        if mixin.delay == delay {
+            return Some(false);
+        }
+
+        mixin.delay = delay;
+        Some(true)
+    }
 }
 
 /// Restream of a live RTMP stream from one `Input` to many `Output`s.
@@ -441,6 +530,50 @@ pub struct Restream {
     #[graphql(skip)]
     #[serde(skip)]
     pub srs_publisher_id: Option<srs::ClientId>,
+}
+
+impl Restream {
+    /// Returns an URL of the remote server that this [`Restream`] receives a
+    /// live stream from, if any.
+    #[inline]
+    #[must_use]
+    pub fn upstream_url(&self) -> Option<&Url> {
+        if let Input::Pull(i) = &self.input {
+            Some(&i.src)
+        } else {
+            None
+        }
+    }
+
+    /// Returns an URL of the local [SRS] server that the received live stream
+    /// by this [`Restream`] may be pulled from.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[must_use]
+    pub fn srs_url(&self) -> Url {
+        Url::parse(&match &self.input {
+            Input::Pull(_) => {
+                format!("rtmp://127.0.0.1:1935/pull_{}/in", self.id)
+            }
+            Input::Push(i) => format!("rtmp://127.0.0.1:1935/{}/in", i.name),
+        })
+        .unwrap()
+    }
+
+    /// Checks whether the given `app` parameter of a [SRS] media stream is
+    /// related to this [`Restream::input`].
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[inline]
+    #[must_use]
+    pub fn uses_srs_app(&self, app: &str) -> bool {
+        match &self.input {
+            Input::Pull(_) => {
+                app.starts_with("pull_") && app[5..].parse() == Ok(self.id.0)
+            }
+            Input::Push(i) => app == i.name,
+        }
+    }
 }
 
 /// Source of a live RTMP stream for `Restream`.
@@ -491,76 +624,6 @@ impl Input {
             (Self::Pull(a), Self::Pull(b)) => a.is(b),
             (Self::Push(a), Self::Push(b)) => a.is(b),
             _ => false,
-        }
-    }
-
-    /// Calculates a unique hash of this [`Input`].
-    #[inline]
-    #[must_use]
-    pub fn hash(&self) -> u64 {
-        match self {
-            Self::Pull(i) => xxh3_64(i.src.as_ref().as_bytes()),
-            Self::Push(i) => xxh3_64(i.name.as_bytes()),
-        }
-    }
-
-    /// Returns an URL of the remote server that this [`Input`] receives a live
-    /// RTMP stream from, if any.
-    #[inline]
-    #[must_use]
-    pub fn upstream_url(&self) -> Option<&Url> {
-        if let Self::Pull(i) = self {
-            Some(&i.src)
-        } else {
-            None
-        }
-    }
-
-    /// Returns hash of an URL of the remote server that this [`Input`] receives
-    /// a live RTMP stream from, if any.
-    #[inline]
-    #[must_use]
-    pub fn upstream_url_hash(&self) -> Option<u64> {
-        self.upstream_url().map(|u| xxh3_64(u.as_ref().as_bytes()))
-    }
-
-    /// Returns an URL of the local [SRS] server that a received live RTMP
-    /// stream by this [`Input`] may be pulled from.
-    ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[must_use]
-    pub fn srs_url(&self) -> Url {
-        Url::parse(&match self {
-            Self::Pull(_) => {
-                format!("rtmp://127.0.0.1:1935/pull_{}/in", self.hash())
-            }
-            Self::Push(i) => format!("rtmp://127.0.0.1:1935/{}/in", i.name),
-        })
-        .unwrap()
-    }
-
-    /// Returns hash of an URL of the local [SRS] server that a received live
-    /// RTMP stream by this [`Input`] may be pulled from.
-    ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[inline]
-    #[must_use]
-    pub fn srs_url_hash(&self) -> u64 {
-        xxh3_64(self.srs_url().as_ref().as_bytes())
-    }
-
-    /// Checks whether the given `app` parameter of a [SRS] media stream is
-    /// related to this [`Input`].
-    ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[inline]
-    #[must_use]
-    pub fn uses_srs_app(&self, app: &str) -> bool {
-        match self {
-            Self::Pull(_) => {
-                app.starts_with("pull_") && app[5..].parse() == Ok(self.hash())
-            }
-            Self::Push(i) => app == i.name,
         }
     }
 }
@@ -626,6 +689,20 @@ pub struct Output {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
 
+    /// Volume rate of this `Output`'s audio tracks when mixed with
+    /// `Output.mixins`.
+    ///
+    /// Has no effect when there is no `Output.mixins`.
+    #[serde(default, skip_serializing_if = "Volume::is_origin")]
+    pub volume: Volume,
+
+    /// `Mixin`s to mix this `Output` with before restream to the destination.
+    ///
+    /// If empty, then no mixing is performed and restreaming is as cheap as
+    /// possible (just copying bytes "as is").
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mixins: Vec<Mixin>,
+
     /// Indicator whether this `Output` is enabled, so performs a live RTMP
     /// stream restream to destination.
     pub enabled: bool,
@@ -643,13 +720,30 @@ impl Output {
     pub fn is(&self, other: &Self) -> bool {
         self.dst == other.dst
     }
+}
 
-    /// Calculates a unique hash of this [`Output`].
-    #[inline]
-    #[must_use]
-    pub fn hash(&self) -> u64 {
-        xxh3_64(self.dst.as_ref().as_bytes())
-    }
+/// Additional source for an `Output` to be mixed with before re-streamed to the
+/// destination.
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
+pub struct Mixin {
+    /// Unique ID of this `Mixin`.
+    pub id: MixinId,
+
+    /// URL of the source to be mixed in.
+    pub src: Url,
+
+    /// Volume rate of this `Mixin`'s audio tracks to mix them with.
+    #[serde(default, skip_serializing_if = "Volume::is_origin")]
+    pub volume: Volume,
+
+    /// Delay that this `Mixin` should wait before mixed with an `Output`.
+    ///
+    /// Very useful to fix de-synchronization issues and correct timings between
+    /// `Mixin` and its `Output`.
+    #[serde(default, skip_serializing_if = "Delay::is_zero")]
+    pub delay: Delay,
 }
 
 /// Status indicating what's going on in `Input` or `Output`.
@@ -675,7 +769,9 @@ pub enum Status {
     Deserialize,
     Display,
     Eq,
+    From,
     GraphQLScalarValue,
+    Into,
     PartialEq,
     Serialize,
 )]
@@ -698,7 +794,9 @@ impl InputId {
     Deserialize,
     Display,
     Eq,
+    From,
     GraphQLScalarValue,
+    Into,
     PartialEq,
     Serialize,
 )]
@@ -710,5 +808,194 @@ impl OutputId {
     #[must_use]
     pub fn random() -> Self {
         Self(Uuid::new_v4())
+    }
+}
+
+/// ID of a `Mixin`.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Display,
+    Eq,
+    From,
+    GraphQLScalarValue,
+    Into,
+    PartialEq,
+    Serialize,
+)]
+pub struct MixinId(Uuid);
+
+impl MixinId {
+    /// Generates a new random [`MixinId`].
+    #[inline]
+    #[must_use]
+    pub fn random() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+/// Volume rate of an audio track in percents.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    SmartDefault,
+)]
+pub struct Volume(#[default(Self::ORIGIN.0)] u8);
+
+impl Volume {
+    /// Maximum possible value of a [`Volume`] rate.
+    pub const MAX: Volume = Volume(200);
+
+    /// Value of a [`Volume`] rate corresponding to the original one of an audio
+    /// track.
+    pub const ORIGIN: Volume = Volume(100);
+
+    /// Minimum possible value of a [`Volume`] rate. Actually, disables audio.
+    pub const OFF: Volume = Volume(0);
+
+    /// Creates a new [`Volume`] rate value if it satisfies the required
+    /// invariants:
+    /// - within [`Volume::OFF`] and [`Volume::MAX`] values.
+    #[must_use]
+    pub fn new<N: TryInto<u8>>(num: N) -> Option<Self> {
+        let num = num.try_into().ok()?;
+        if (Self::OFF.0..=Self::MAX.0).contains(&num) {
+            Some(Self(num))
+        } else {
+            None
+        }
+    }
+
+    /// Displays this [`Volume`] as a fraction of `1`, i.e. `100%` as `1`, `50%`
+    /// as `0.50`, and so on.
+    #[must_use]
+    pub fn display_as_fraction(self) -> String {
+        format!("{}.{:02}", self.0 / 100, self.0 % 100)
+    }
+
+    /// Indicates whether this [`Volume`] rate value corresponds is the
+    /// [`Volume::ORIGIN`]al one.
+    #[allow(clippy::trivially_copy_pass_by_ref)] // required for `serde`
+    #[inline]
+    #[must_use]
+    pub fn is_origin(&self) -> bool {
+        *self == Self::ORIGIN
+    }
+}
+
+/// Type a volume rate of audio track in percents.
+///
+/// It's values are always within range of `0` and `200` (inclusively).
+///
+/// `0` means disabled audio.
+#[graphql_scalar]
+impl<S> GraphQLScalar for Volume
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(i32::from(self.0))
+    }
+
+    fn from_input_value(v: &InputValue) -> Option<Volume> {
+        v.as_scalar()
+            .and_then(ScalarValue::as_int)
+            .and_then(Volume::new)
+    }
+
+    fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
+    }
+}
+
+/// Delay of a [`Mixin`] being mixed with an [`Output`].
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Default,
+    Eq,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+)]
+pub struct Delay(Duration);
+
+impl Delay {
+    /// Creates a new [`Delay`] out of the given milliseconds.
+    #[inline]
+    #[must_use]
+    pub fn from_millis<N: TryInto<u64>>(millis: N) -> Option<Self> {
+        millis
+            .try_into()
+            .ok()
+            .map(|m| Self(Duration::from_millis(m)))
+    }
+
+    /// Returns milliseconds of this [`Delay`].
+    #[inline]
+    #[must_use]
+    pub fn as_millis(&self) -> i32 {
+        self.0.as_millis().try_into().unwrap()
+    }
+
+    /// Indicates whether this [`Delay`] introduces no actual delay.
+    #[inline]
+    #[must_use]
+    pub fn is_zero(&self) -> bool {
+        self.0 == Duration::default()
+    }
+}
+
+/// Type of a `Mixin` delay in milliseconds.
+///
+/// Negative values are not allowed.
+#[graphql_scalar]
+impl<S> GraphQLScalar for Delay
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(self.as_millis())
+    }
+
+    fn from_input_value(v: &InputValue) -> Option<Delay> {
+        v.as_scalar()
+            .and_then(ScalarValue::as_int)
+            .and_then(Delay::from_millis)
+    }
+
+    fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
+    }
+}
+
+#[cfg(test)]
+mod volume_spec {
+    use super::Volume;
+
+    #[test]
+    fn displays_as_fraction() {
+        for (input, expected) in &[
+            (1, "0.01"),
+            (10, "0.10"),
+            (200, "2.00"),
+            (107, "1.07"),
+            (170, "1.70"),
+        ] {
+            let actual = Volume::new(*input).unwrap().display_as_fraction();
+            assert_eq!(&actual, *expected);
+        }
     }
 }

@@ -13,7 +13,7 @@ use url::Url;
 
 use crate::{
     api::graphql,
-    state::{InputId, OutputId, Restream},
+    state::{Delay, InputId, MixinId, OutputId, Restream, Volume},
 };
 
 use super::Context;
@@ -207,11 +207,13 @@ impl MutationsRoot {
         input_id(description = "ID of `Restream` to add `Output` to."),
         dst(description = "RTMP URL to push media stream to."),
         label(description = "Optional label for this `Output`."),
+        mix(description = "Optional TeamSpeak URL to mix into this `Output`."),
     ))]
     fn add_output(
         input_id: InputId,
         dst: Url,
         label: Option<String>,
+        mix: Option<Url>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
         if !matches!(dst.scheme(), "rtmp" | "rtmps") {
@@ -230,9 +232,17 @@ impl MutationsRoot {
             }
         }
 
+        if let Some(mix) = &mix {
+            if mix.scheme() != "ts" || mix.host().is_none() {
+                return Err(graphql::Error::new("INVALID_MIX_TS_URL")
+                    .status(StatusCode::BAD_REQUEST)
+                    .message("Provided `mix` is invalid: non-TS scheme"));
+            }
+        }
+
         context
             .state()
-            .add_new_output(input_id, dst, label)
+            .add_new_output(input_id, dst, label, mix)
             .map(|added| {
                 if added {
                     Ok(added)
@@ -344,6 +354,45 @@ impl MutationsRoot {
         context: &Context,
     ) -> Option<bool> {
         context.state().disable_all_outputs(input_id)
+    }
+
+    /// Tunes a `Volume` rate of the specified `Output` or one of its `Mixin`s.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if a `Volume` rate has been changed, `false` if it has
+    /// the same value already, and `null` if the specified `Output` or `Mixin`
+    /// doesn't exist.
+    fn tune_volume(
+        input_id: InputId,
+        output_id: OutputId,
+        mixin_id: Option<MixinId>,
+        volume: Volume,
+        context: &Context,
+    ) -> Option<bool> {
+        context
+            .state()
+            .tune_volume(input_id, output_id, mixin_id, volume)
+    }
+
+    /// Tunes a `Delay` before being mixed in of the specified `Mixin` in the
+    /// specified `Output`.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if a `Delay` has been changed, `false` if it has the same
+    /// value already, and `null` if the specified `Output` or `Mixin` doesn't
+    /// exist.
+    fn tune_delay(
+        input_id: InputId,
+        output_id: OutputId,
+        mixin_id: MixinId,
+        delay: Delay,
+        context: &Context,
+    ) -> Option<bool> {
+        context
+            .state()
+            .tune_delay(input_id, output_id, mixin_id, delay)
     }
 
     /// Sets or unsets the password to protect this GraphQL API with.

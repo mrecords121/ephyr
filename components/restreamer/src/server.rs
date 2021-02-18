@@ -8,7 +8,7 @@ use tokio::fs;
 
 use crate::{
     cli::{Failure, Opts},
-    ffmpeg, srs, State,
+    ffmpeg, srs, teamspeak, State,
 };
 
 /// Initializes and runs all application's HTTP servers.
@@ -62,8 +62,11 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
         self::client::run(&cfg, state.clone()),
         self::callback::run(&cfg, state),
     )
-    .await
-    .map(|_| ())
+    .await?;
+
+    teamspeak::finish_all_disconnects().await;
+
+    Ok(())
 }
 
 /// Client HTTP server responding to client requests.
@@ -298,7 +301,7 @@ pub mod callback {
         let restreams = state.restreams.get_cloned();
         let _ = restreams
             .iter()
-            .find(|r| r.enabled && r.input.uses_srs_app(&req.app))
+            .find(|r| r.enabled && r.uses_srs_app(&req.app))
             .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
         Ok(())
     }
@@ -329,7 +332,7 @@ pub mod callback {
         let mut restreams = state.restreams.lock_mut();
         let restream = restreams
             .iter_mut()
-            .find(|r| r.enabled && r.input.uses_srs_app(&req.app))
+            .find(|r| r.enabled && r.uses_srs_app(&req.app))
             .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
 
         if restream.input.is_pull() && !req.ip.is_loopback() {
@@ -364,11 +367,14 @@ pub mod callback {
         let mut restreams = state.restreams.lock_mut();
         let restream = restreams
             .iter_mut()
-            .find(|r| r.input.uses_srs_app(&req.app))
+            .find(|r| r.uses_srs_app(&req.app))
             .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
 
         restream.srs_publisher_id = None;
-        restream.input.set_status(Status::Offline);
+        // For `PullInput` `Status::Offline` is managed by its FFmpeg process.
+        if !restream.input.is_pull() {
+            restream.input.set_status(Status::Offline);
+        }
         Ok(())
     }
 }

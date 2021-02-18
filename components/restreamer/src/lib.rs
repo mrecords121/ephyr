@@ -28,6 +28,7 @@ pub mod ffmpeg;
 pub mod server;
 pub mod srs;
 pub mod state;
+pub mod teamspeak;
 
 use std::{any::Any, mem};
 

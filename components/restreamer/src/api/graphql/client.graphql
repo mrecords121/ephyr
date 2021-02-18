@@ -25,6 +25,13 @@ subscription State {
             enabled
             dst
             label
+            volume
+            mixins {
+                id
+                src
+                volume
+                delay
+            }
             status
         }
     }
@@ -50,8 +57,8 @@ mutation DisableInput($id: InputId!) {
     disableInput(id: $id)
 }
 
-mutation AddOutput($input_id: InputId!, $url: Url!, $label: String) {
-    addOutput(inputId: $input_id, dst: $url, label: $label)
+mutation AddOutput($input_id: InputId!, $url: Url!, $label: String, $mix: Url) {
+    addOutput(inputId: $input_id, dst: $url, label: $label, mix: $mix)
 }
 
 mutation RemoveOutput($input_id: InputId!, $output_id: OutputId!) {
@@ -72,6 +79,34 @@ mutation EnableAllOutputs($input_id: InputId!) {
 
 mutation DisableAllOutputs($input_id: InputId!) {
     disableAllOutputs(inputId: $input_id)
+}
+
+mutation TuneVolume(
+    $input_id: InputId!
+    $output_id: OutputId!
+    $mixin_id: MixinId
+    $volume: Volume!
+) {
+    tuneVolume(
+        inputId: $input_id
+        outputId: $output_id
+        mixinId: $mixin_id
+        volume: $volume
+    )
+}
+
+mutation TuneDelay(
+    $input_id: InputId!
+    $output_id: OutputId!
+    $mixin_id: MixinId!
+    $delay: Delay!
+) {
+    tuneDelay(
+        inputId: $input_id
+        outputId: $output_id
+        mixinId: $mixin_id
+        delay: $delay
+    )
 }
 
 mutation SetPassword($new: String, $old: String) {

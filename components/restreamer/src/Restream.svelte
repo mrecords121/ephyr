@@ -7,9 +7,6 @@
     DisableInput,
     EnableInput,
     RemoveInput,
-    DisableOutput,
-    EnableOutput,
-    RemoveOutput,
     DisableAllOutputs,
     EnableAllOutputs,
   } from './api/graphql/client.graphql';
@@ -18,16 +15,14 @@
 
   import { inputModal, outputModal } from './stores';
 
+  import Output from './Output.svelte';
   import Toggle from './Toggle.svelte';
 
   const disableInputMutation = mutation(DisableInput);
   const enableInputMutation = mutation(EnableInput);
   const removeInputMutation = mutation(RemoveInput);
   const disableAllOutputsMutation = mutation(DisableAllOutputs);
-  const disableOutputMutation = mutation(DisableOutput);
   const enableAllOutputsMutation = mutation(EnableAllOutputs);
-  const enableOutputMutation = mutation(EnableOutput);
-  const removeOutputMutation = mutation(RemoveOutput);
 
   export let public_host = 'localhost';
   export let value;
@@ -92,22 +87,6 @@
     outputModal.open(value.id);
   }
 
-  function toggleOutput(id) {
-    const vars = { input_id: value.id, output_id: id };
-    return async () => {
-      let output = value.outputs.find((o) => o.id === id);
-      try {
-        if (output && output.enabled) {
-          await disableOutputMutation({ variables: vars });
-        } else {
-          await enableOutputMutation({ variables: vars });
-        }
-      } catch (e) {
-        showError(e.message);
-      }
-    };
-  }
-
   async function toggleAllOutputs() {
     if (value.outputs.length < 1) return;
     try {
@@ -119,17 +98,6 @@
     } catch (e) {
       showError(e.message);
     }
-  }
-
-  function removeOutput(id) {
-    const vars = { variables: { input_id: value.id, output_id: id } };
-    return async () => {
-      try {
-        await removeOutputMutation(vars);
-      } catch (e) {
-        showError(e.message);
-      }
-    };
   }
 </script>
 
@@ -223,37 +191,12 @@
 
     {#if value.outputs && value.outputs.length > 0}
       <div class="uk-grid uk-grid-small" uk-grid>
-        {#each value.outputs as output (output)}
-          <div
-            class="uk-card uk-card-default uk-card-body uk-margin-left"
-            class:hidden={!showAll && !showFiltered[output.status]}
-          >
-            <button
-              type="button"
-              class="uk-close"
-              uk-close
-              on:click={removeOutput(output.id)}
-            />
-
-            {#if output.label}
-              <span class="label">{output.label}</span>
-            {/if}
-
-            <Toggle
-              id="output-toggle-{output.id}"
-              classes="small"
-              checked={output.enabled}
-              on:change={toggleOutput(output.id)}
-            />
-            {#if output.status === 'ONLINE'}
-              <i class="fas fa-circle uk-alert-success" />
-            {:else if output.status === 'INITIALIZING'}
-              <i class="fas fa-dot-circle uk-alert-warning" />
-            {:else}
-              <i class="far fa-dot-circle uk-alert-danger" />
-            {/if}
-            <span>{output.dst}</span>
-          </div>
+        {#each value.outputs as output}
+          <Output
+            input_id={value.id}
+            value={output}
+            hidden={!showAll && !showFiltered[output.status]}
+          />
         {/each}
       </div>
     {/if}
@@ -296,18 +239,9 @@
     .fa-arrow-down, .fa-arrow-right
       font-size: 14px
       cursor: help
-    .fa-circle, .fa-dot-circle
-      font-size: 10px
-      margin-top: -1px
 
     .uk-grid
       margin-top: 10px
-
-      .uk-card
-        margin-top: 15px !important
-
-      .uk-margin-left
-        margin-left: 15px !important
 
     .label
       position: absolute
@@ -317,26 +251,6 @@
       border-top-left-radius: 4px
       border-top-right-radius: 4px
       background-color: #f8f8f8
-
-    .uk-card
-      position: relative
-      padding: 6px
-      width: calc((100% - (15px * 2)) / 2)
-      min-width 250px
-      font-size: 13px
-      @media screen and (max-width: 600px)
-        width: 100%
-      &.hidden
-        display: none
-
-      .uk-close
-        margin-top: 3px
-
-      .label
-        top: -12px
-        padding: 0 6px
-        font-size: 13px
-        background-color: #fff
 
   .edit-input
     margin-left: 6px
