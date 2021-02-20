@@ -224,8 +224,14 @@ endef
 #
 # Usage:
 #	make docker.up [debug=(yes|no)] [background=(no|yes)]
+#	               [( [rebuild=no]
+#	                | rebuild=yes [tag=($(IMAGE_TAG)|<tag>)]
+#	                              [no-cache=(no|yes)] )]
 
 docker.up: docker.down
+ifeq ($(rebuild),yes)
+	@make docker.image tag=$(tag) no-cache=$(no-cache)
+endif
 	docker run --rm --name ephyr-restreamer-dev \
 	           $(if $(call eq,$(background),yes),-d,-it) \
 	           -p 80:80 -p 1935:1935 \

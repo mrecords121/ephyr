@@ -21,6 +21,7 @@ make image
 
 # and run it
 make up
+make up rebuild=yes  # or re-build and run
 
 # or in background
 make up background=yes
