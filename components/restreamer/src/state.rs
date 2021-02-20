@@ -862,11 +862,11 @@ impl MixinId {
     Serialize,
     SmartDefault,
 )]
-pub struct Volume(#[default(Self::ORIGIN.0)] u8);
+pub struct Volume(#[default(Self::ORIGIN.0)] u16);
 
 impl Volume {
     /// Maximum possible value of a [`Volume`] rate.
-    pub const MAX: Volume = Volume(200);
+    pub const MAX: Volume = Volume(1000);
 
     /// Value of a [`Volume`] rate corresponding to the original one of an audio
     /// track.
@@ -879,7 +879,7 @@ impl Volume {
     /// invariants:
     /// - within [`Volume::OFF`] and [`Volume::MAX`] values.
     #[must_use]
-    pub fn new<N: TryInto<u8>>(num: N) -> Option<Self> {
+    pub fn new<N: TryInto<u16>>(num: N) -> Option<Self> {
         let num = num.try_into().ok()?;
         if (Self::OFF.0..=Self::MAX.0).contains(&num) {
             Some(Self(num))
@@ -907,7 +907,7 @@ impl Volume {
 
 /// Type a volume rate of audio track in percents.
 ///
-/// It's values are always within range of `0` and `200` (inclusively).
+/// It's values are always within range of `0` and `1000` (inclusively).
 ///
 /// `0` means disabled audio.
 #[graphql_scalar]
@@ -1006,6 +1006,7 @@ mod volume_spec {
             (200, "2.00"),
             (107, "1.07"),
             (170, "1.70"),
+            (1000, "10.00"),
         ] {
             let actual = Volume::new(*input).unwrap().display_as_fraction();
             assert_eq!(&actual, *expected);

@@ -147,7 +147,7 @@
             class="uk-range"
             type="range"
             min="0"
-            max="200"
+            max="1000"
             step="1"
             bind:value={mix_volume}
             on:change={() => tuneVolume(value.mixins[0].id)}
