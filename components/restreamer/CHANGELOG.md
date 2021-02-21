@@ -15,18 +15,18 @@ All user visible changes to this project will be documented in this file. This p
 
 - Web UI:
     - Input:
-        - Optional backup endpoint for a push type ([rev]).
+        - Optional backup endpoint for a push type ([a3236808]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
         - Tuning volume rate of tracks ([77d25dd7], [#23]);
         - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]).
 - GraphQL API:
     - Types:
-        - `FailoverPushInput` object as `Input` union's variant ([rev]);
+        - `FailoverPushInput` object as `Input` union's variant ([a3236808]);
         - `Mixin` object ([77d25dd7], [#23]);
         - `MixinId`, `Volume` and `Delay` scalars ([77d25dd7], [#23]).
     - Mutations:
-        - `failover` argument to `addPushInput` ([rev]);
+        - `failover` argument to `addPushInput` ([a3236808]);
         - `tuneVolume` and `tuneDelay` ([77d25dd7], [#23]);
         - `mix` argument to `addOutput` ([77d25dd7], [#23]).
     - Queries:
@@ -44,7 +44,7 @@ All user visible changes to this project will be documented in this file. This p
 [#23]: /../../issues/23
 [5dabcfdc]: /../../commit/5dabcfdce2420fdd43a8f4c20c2eff497e884ac3
 [77d25dd7]: /../../commit/77d25dd739d4f05b319769eddd83c01bd3a490a4
-[rev]: /../../commit/full-rev
+[a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
 
 
 

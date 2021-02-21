@@ -317,11 +317,15 @@ impl State {
             volume: Volume::ORIGIN,
             mixins: mix_with
                 .map(|url| {
+                    let delay = (url.scheme() == "ts")
+                        .then(|| Delay::from_millis(3500))
+                        .flatten()
+                        .unwrap_or_default();
                     vec![Mixin {
                         id: MixinId::random(),
                         src: url,
                         volume: Volume::ORIGIN,
-                        delay: Delay::default(),
+                        delay,
                     }]
                 })
                 .unwrap_or_default(),
