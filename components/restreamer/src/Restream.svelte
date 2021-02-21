@@ -28,7 +28,10 @@
   export let value;
 
   $: isPull = value.input.__typename === 'PullInput';
+  $: isFailover = value.input.__typename === 'FailoverPushInput';
   $: allEnabled = value.outputs.every((o) => o.enabled);
+
+  $: mainStatus = isFailover ? value.input.mainStatus : value.input.status;
 
   $: onlineCount = value.outputs.filter((o) => o.status === 'ONLINE').length;
   $: initCount = value.outputs.filter((o) => o.status === 'INITIALIZING')
@@ -58,7 +61,8 @@
       value.id,
       isPull ? value.input.src : value.input.name,
       value.label,
-      isPull
+      isPull,
+      isFailover
     );
   }
 
@@ -158,9 +162,9 @@
     />
     <span>
       <span
-        class:uk-alert-danger={value.input.status === 'OFFLINE'}
-        class:uk-alert-warning={value.input.status === 'INITIALIZING'}
-        class:uk-alert-success={value.input.status === 'ONLINE'}
+        class:uk-alert-danger={mainStatus === 'OFFLINE'}
+        class:uk-alert-warning={mainStatus === 'INITIALIZING'}
+        class:uk-alert-success={mainStatus === 'ONLINE'}
       >
         {#key isPull}
           <span>
@@ -168,7 +172,9 @@
               class="fas"
               class:fa-arrow-down={isPull}
               class:fa-arrow-right={!isPull}
-              title="{isPull ? 'Pulls' : 'Accepts'} RTMP stream"
+              title="{isPull ? 'Pulls' : 'Accepts'}{isFailover
+                ? ' main'
+                : ''} RTMP stream"
             />
           </span>
         {/key}
@@ -177,7 +183,7 @@
         {#if isPull}
           {value.input.src}
         {:else}
-          rtmp://{public_host}/{value.input.name}/in
+          rtmp://{public_host}/{value.input.name}/{isFailover ? 'main' : 'in'}
         {/if}
       </span>
       <a
@@ -188,6 +194,43 @@
         <i class="far fa-edit" title="Edit input" />
       </a>
     </span>
+    {#if isFailover}
+      <div class="failover">
+        <span
+          class:uk-alert-danger={value.input.backupStatus === 'OFFLINE'}
+          class:uk-alert-warning={value.input.backupStatus === 'INITIALIZING'}
+          class:uk-alert-success={value.input.backupStatus === 'ONLINE'}
+        >
+          <i class="fas fa-arrow-right" title="Accepts backup RTMP stream" />
+        </span>
+        <span>rtmp://{public_host}/{value.input.name}/backup</span>
+        <span class="resulting">
+          {#if value.input.status === 'ONLINE'}
+            <span
+              ><i
+                class="fas fa-circle uk-alert-success"
+                title="Failover RTMP stream"
+              /></span
+            >
+          {:else if value.input.status === 'INITIALIZING'}
+            <span
+              ><i
+                class="fas fa-dot-circle uk-alert-warning"
+                title="Failover RTMP stream"
+              /></span
+            >
+          {:else}
+            <span
+              ><i
+                class="far fa-dot-circle uk-alert-danger"
+                title="Failover RTMP stream"
+              /></span
+            >
+          {/if}
+          <span>rtmp://{public_host}/{value.input.name}/in</span>
+        </span>
+      </div>
+    {/if}
 
     {#if value.outputs && value.outputs.length > 0}
       <div class="uk-grid uk-grid-small" uk-grid>
@@ -239,6 +282,16 @@
     .fa-arrow-down, .fa-arrow-right
       font-size: 14px
       cursor: help
+
+    .failover
+      padding-left: 45px
+
+      .resulting
+        margin-left: 15px
+
+        .fa-circle, .fa-dot-circle
+          font-size: 14px
+          cursor: help
 
     .uk-grid
       margin-top: 10px

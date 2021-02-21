@@ -22,7 +22,10 @@
         submitable = val !== '';
       } else {
         submitable =
-          val !== '' && (val !== v.prev_value || v.label !== v.prev_label);
+          val !== '' &&
+          (val !== v.prev_value ||
+            v.label !== v.prev_label ||
+            v.failover !== v.prev_failover);
       }
     })
   );
@@ -46,6 +49,7 @@
         vars.url = sanitizeUrl(v.pull_url);
         await addPullInputMutation({ variables: vars });
       } else {
+        vars.failover = v.failover;
         vars.key = sanitizeUrl(v.push_key);
         await addPushInputMutation({ variables: vars });
       }
@@ -107,6 +111,13 @@
               bind:value={$value.push_key}
             />/in</label
           >
+          <label class="backup"
+            ><input
+              class="uk-checkbox"
+              type="checkbox"
+              bind:checked={$value.failover}
+            /> with backup</label
+          >
           <div class="uk-alert">
             Server will await RTMP stream to be published onto this address
           </div>
@@ -146,7 +157,7 @@
       &.is-push
         display: block
 
-        input:not(.uk-form-small)
+        input:not(.uk-form-small):not(.uk-checkbox)
           display: inline
           width: auto
           margin-top: -5px
@@ -156,4 +167,7 @@
 
         label
           padding-left: 15px
+
+          &.backup
+            display: block
 </style>

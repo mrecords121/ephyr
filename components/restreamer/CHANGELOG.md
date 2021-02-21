@@ -6,23 +6,27 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
-## [0.2.0-alpha.1] · 2021-??-?? · To-be-done
-[0.2.0-alpha.1]: /../../tree/restreamer-v0.2.0-alpha.1
+## [0.2.0-alpha.2] · 2021-??-?? · To-be-done
+[0.2.0-alpha.2]: /../../tree/restreamer-v0.2.0-alpha.2
 
-[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-alpha.1)
+[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-alpha.2)
 
 ### Added
 
 - Web UI:
+    - Input:
+        - Optional backup endpoint for a push type ([rev]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
         - Tuning volume rate of tracks ([77d25dd7], [#23]);
         - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]).
 - GraphQL API:
     - Types:
+        - `FailoverPushInput` object as `Input` union's variant ([rev]);
         - `Mixin` object ([77d25dd7], [#23]);
         - `MixinId`, `Volume` and `Delay` scalars ([77d25dd7], [#23]).
     - Mutations:
+        - `failover` argument to `addPushInput` ([rev]);
         - `tuneVolume` and `tuneDelay` ([77d25dd7], [#23]);
         - `mix` argument to `addOutput` ([77d25dd7], [#23]).
     - Queries:
@@ -32,12 +36,13 @@ All user visible changes to this project will be documented in this file. This p
 
 - Web UI:
     - Output:
-        - Accept [Icecast] URL as destination ([rev]).
+        - Accept [Icecast] URL as destination ([5dabcfdc]).
 - GraphQL API:
     - Mutations:
-        - Allow [Icecast] URL in `dst` argument of `addOutput` ([rev]).
+        - Allow [Icecast] URL in `dst` argument of `addOutput` ([5dabcfdc]).
 
 [#23]: /../../issues/23
+[5dabcfdc]: /../../commit/5dabcfdce2420fdd43a8f4c20c2eff497e884ac3
 [77d25dd7]: /../../commit/77d25dd739d4f05b319769eddd83c01bd3a490a4
 [rev]: /../../commit/full-rev
 

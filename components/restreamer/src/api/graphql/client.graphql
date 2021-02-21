@@ -15,6 +15,12 @@ subscription State {
                 name
                 status
             }
+            ... on FailoverPushInput {
+                name
+                mainStatus
+                backupStatus
+                status
+            }
             ... on PullInput {
                 src
                 status
@@ -41,8 +47,13 @@ mutation AddPullInput($url: Url!, $label: String, $id: InputId) {
     addPullInput(src: $url, label: $label, id: $id)
 }
 
-mutation AddPushInput($key: String!, $label: String, $id: InputId) {
-    addPushInput(name: $key, label: $label, id: $id)
+mutation AddPushInput(
+    $key: String!
+    $label: String
+    $failover: Boolean!
+    $id: InputId
+) {
+    addPushInput(name: $key, label: $label, failover: $failover, id: $id)
 }
 
 mutation RemoveInput($id: InputId!) {

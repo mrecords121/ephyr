@@ -470,62 +470,78 @@
         "possibleTypes": null
       },
       {
-        "kind": "ENUM",
-        "name": "__TypeKind",
-        "description": "GraphQL type kind\n\nThe GraphQL specification defines a number of type kinds - the meta type of a type.",
-        "fields": null,
-        "inputFields": null,
-        "interfaces": null,
-        "enumValues": [
+        "kind": "OBJECT",
+        "name": "FailoverPushInput",
+        "description": "`Input` receiving a live RTMP stream from a remote client on two endpoints:\n- `/main` for receiving a main live RTMP stream, once it goes offline the\n  `Input` switches to `/backup`;\n- `/backup` for receiving a backup live RTMP stream, once `/main` is\n  restored the `Input` switches back to `/main`.",
+        "fields": [
           {
-            "name": "SCALAR",
-            "description": "## Scalar types\n\nScalar types appear as the leaf nodes of GraphQL queries. Strings, numbers, and booleans are the built in types, and while it's possible to define your own, it's relatively uncommon.",
+            "name": "name",
+            "description": "Name of a live RTMP stream to expose it with for receiving and\nre-streaming media traffic.",
+            "args": [],
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              }
+            },
             "isDeprecated": false,
             "deprecationReason": null
           },
           {
-            "name": "OBJECT",
-            "description": "## Object types\n\nThe most common type to be implemented by users. Objects have fields and can implement interfaces.",
+            "name": "mainStatus",
+            "description": "`Status` of a `/main` endpoint indicating whether it receives media\ntraffic.",
+            "args": [],
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "ENUM",
+                "name": "Status",
+                "ofType": null
+              }
+            },
             "isDeprecated": false,
             "deprecationReason": null
           },
           {
-            "name": "INTERFACE",
-            "description": "## Interface types\n\nInterface types are used to represent overlapping fields between multiple types, and can be queried for their concrete type.",
+            "name": "backupStatus",
+            "description": "`Status` of a `/backup` endpoint indicating whether it receives media\ntraffic.",
+            "args": [],
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "ENUM",
+                "name": "Status",
+                "ofType": null
+              }
+            },
             "isDeprecated": false,
             "deprecationReason": null
           },
           {
-            "name": "UNION",
-            "description": "## Union types\n\nUnions are similar to interfaces but can not contain any fields on their own.",
-            "isDeprecated": false,
-            "deprecationReason": null
-          },
-          {
-            "name": "ENUM",
-            "description": "## Enum types\n\nLike scalars, enum types appear as the leaf nodes of GraphQL queries.",
-            "isDeprecated": false,
-            "deprecationReason": null
-          },
-          {
-            "name": "INPUT_OBJECT",
-            "description": "## Input objects\n\nRepresents complex values provided in queries _into_ the system.",
-            "isDeprecated": false,
-            "deprecationReason": null
-          },
-          {
-            "name": "LIST",
-            "description": "## List types\n\nRepresent lists of other types. This library provides implementations for vectors and slices, but other Rust types can be extended to serve as GraphQL lists.",
-            "isDeprecated": false,
-            "deprecationReason": null
-          },
-          {
-            "name": "NON_NULL",
-            "description": "## Non-null types\n\nIn GraphQL, nullable types are the default. By putting a `!` after a type, it becomes non-nullable.",
+            "name": "status",
+            "description": "Overall `Status` of this `FailoverPushInput` indicating whether a\nreceived media traffic is available.",
+            "args": [],
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "ENUM",
+                "name": "Status",
+                "ofType": null
+              }
+            },
             "isDeprecated": false,
             "deprecationReason": null
           }
         ],
+        "inputFields": null,
+        "interfaces": [],
+        "enumValues": null,
         "possibleTypes": null
       },
       {
@@ -550,6 +566,11 @@
           {
             "kind": "OBJECT",
             "name": "PushInput",
+            "ofType": null
+          },
+          {
+            "kind": "OBJECT",
+            "name": "FailoverPushInput",
             "ofType": null
           },
           {
@@ -896,7 +917,7 @@
       {
         "kind": "OBJECT",
         "name": "PushInput",
-        "description": "`Input` receiving a live RTMP stream from a remote client.",
+        "description": "`Input` receiving a live RTMP stream from a remote client on an `/in`\nendpoint.",
         "fields": [
           {
             "name": "name",
@@ -994,7 +1015,7 @@
         "fields": [
           {
             "name": "addPullInput",
-            "description": "Adds new `Restream` with `PullInput`.\n\nIf `id` is specified, then tries to update parameters of the existent\n`Restream`.\n\n### Idempotency\n\nIdempotent if `id` is specified. Otherwise is non-idempotent, always\ncreates a new `Restream` and errors on the `src` duplicates.\n\n### Result\n\nReturns `null` if `Restream` with the given `id` doesn't exist.\nOtherwise always returns `true`.",
+            "description": "Adds a new `Restream` with a `PullInput`.\n\nIf `id` is specified, then tries to update parameters of the existent\n`Restream`.\n\n### Idempotency\n\nIdempotent if `id` is specified. Otherwise is non-idempotent, always\ncreates a new `Restream` and errors on the `src` duplicates.\n\n### Result\n\nReturns `null` if `Restream` with the given `id` doesn't exist.\nOtherwise always returns `true`.",
             "args": [
               {
                 "name": "src",
@@ -1041,7 +1062,7 @@
           },
           {
             "name": "addPushInput",
-            "description": "Adds new `Restream` with `PushInput`.\n\nIf `id` is specified, then tries to update parameters of the existent\n`Restream`.\n\n### Idempotency\n\nIdempotent if `id` is specified. Otherwise is non-idempotent, always\ncreates a new `Restream` and errors on the `name` duplicates.\n\n### Result\n\nReturns `null` if `Restream` with the given `id` doesn't exist.\nOtherwise always returns `true`.",
+            "description": "Adds a new `Restream` with a `PushInput` (or `FailoverPushInput`).\n\nIf `failover` is `true`, then uses a `FailoverPushInput` input instead\nof a regular `PushInput`.\n\nIf `id` is specified, then tries to update parameters of the existent\n`Restream`.\n\n### Idempotency\n\nIdempotent if `id` is specified. Otherwise is non-idempotent, always\ncreates a new `Restream` and errors on the `name` duplicates.\n\n### Result\n\nReturns `null` if `Restream` with the given `id` doesn't exist.\nOtherwise always returns `true`.",
             "args": [
               {
                 "name": "name",
@@ -1066,6 +1087,16 @@
                   "ofType": null
                 },
                 "defaultValue": null
+              },
+              {
+                "name": "failover",
+                "description": "Indicator whether a `FailoverPushInput` should be used instead of a regular `PushInput`.",
+                "type": {
+                  "kind": "SCALAR",
+                  "name": "Boolean",
+                  "ofType": null
+                },
+                "defaultValue": "false"
               },
               {
                 "name": "id",
@@ -1173,7 +1204,7 @@
           },
           {
             "name": "addOutput",
-            "description": "Adds new `Output` to the specified `Restream`.\n\n### Non-idempotent\n\nAlways creates a new `Output` and errors on the `dst` duplicates within\nthe specified `Restream`.\n\n### Result\n\nReturns `null` if `Restream` with the given `inputId` doesn't exist.\nOtherwise always returns `true`.",
+            "description": "Adds a new `Output` to the specified `Restream`.\n\n### Non-idempotent\n\nAlways creates a new `Output` and errors on the `dst` duplicates within\nthe specified `Restream`.\n\n### Result\n\nReturns `null` if `Restream` with the given `inputId` doesn't exist.\nOtherwise always returns `true`.",
             "args": [
               {
                 "name": "inputId",
@@ -1683,6 +1714,65 @@
         "inputFields": null,
         "interfaces": [],
         "enumValues": null,
+        "possibleTypes": null
+      },
+      {
+        "kind": "ENUM",
+        "name": "__TypeKind",
+        "description": "GraphQL type kind\n\nThe GraphQL specification defines a number of type kinds - the meta type of a type.",
+        "fields": null,
+        "inputFields": null,
+        "interfaces": null,
+        "enumValues": [
+          {
+            "name": "SCALAR",
+            "description": "## Scalar types\n\nScalar types appear as the leaf nodes of GraphQL queries. Strings, numbers, and booleans are the built in types, and while it's possible to define your own, it's relatively uncommon.",
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "OBJECT",
+            "description": "## Object types\n\nThe most common type to be implemented by users. Objects have fields and can implement interfaces.",
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "INTERFACE",
+            "description": "## Interface types\n\nInterface types are used to represent overlapping fields between multiple types, and can be queried for their concrete type.",
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "UNION",
+            "description": "## Union types\n\nUnions are similar to interfaces but can not contain any fields on their own.",
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "ENUM",
+            "description": "## Enum types\n\nLike scalars, enum types appear as the leaf nodes of GraphQL queries.",
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "INPUT_OBJECT",
+            "description": "## Input objects\n\nRepresents complex values provided in queries _into_ the system.",
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "LIST",
+            "description": "## List types\n\nRepresent lists of other types. This library provides implementations for vectors and slices, but other Rust types can be extended to serve as GraphQL lists.",
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "NON_NULL",
+            "description": "## Non-null types\n\nIn GraphQL, nullable types are the default. By putting a `!` after a type, it becomes non-nullable.",
+            "isDeprecated": false,
+            "deprecationReason": null
+          }
+        ],
         "possibleTypes": null
       },
       {

@@ -233,7 +233,7 @@ pub mod callback {
     use crate::{
         api,
         cli::{Failure, Opts},
-        state::{State, Status},
+        state::{Input, State, Status},
     };
 
     /// Runs HTTP server for exposing [SRS] [HTTP Callback API][1] on `/`
@@ -325,7 +325,8 @@ pub mod callback {
         req: &api::srs::callback::Request,
         state: &State,
     ) -> Result<(), Error> {
-        if req.stream.as_deref() != Some("in") {
+        let endpoint = req.stream.as_deref().unwrap_or_default();
+        if !matches!(endpoint, "in" | "main" | "backup") {
             return Err(error::ErrorNotFound("Such `stream` doesn't exist"));
         }
 
@@ -335,8 +336,43 @@ pub mod callback {
             .find(|r| r.enabled && r.uses_srs_app(&req.app))
             .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
 
+        if !restream.input.is_failover() && endpoint != "in" {
+            return Err(error::ErrorNotFound("Such `stream` doesn't exist"));
+        }
+
         if restream.input.is_pull() && !req.ip.is_loopback() {
             return Err(error::ErrorForbidden("`app` is allowed only locally"));
+        }
+
+        if let Input::FailoverPush(input) = &mut restream.input {
+            match endpoint {
+                "main" => {
+                    if input.main_srs_publisher_id.as_ref().map(|id| **id)
+                        != Some(req.client_id)
+                    {
+                        input.main_srs_publisher_id =
+                            Some(req.client_id.into());
+                    }
+                    input.main_status = Status::Online;
+                    return Ok(());
+                }
+                "backup" => {
+                    if input.backup_srs_publisher_id.as_ref().map(|id| **id)
+                        != Some(req.client_id)
+                    {
+                        input.backup_srs_publisher_id =
+                            Some(req.client_id.into());
+                    }
+                    input.backup_status = Status::Online;
+                    return Ok(());
+                }
+                "in" if !req.ip.is_loopback() => {
+                    return Err(error::ErrorForbidden(
+                        "`app` is allowed only locally",
+                    ));
+                }
+                _ => (),
+            }
         }
 
         if restream.srs_publisher_id.as_ref().map(|id| **id)
@@ -364,15 +400,41 @@ pub mod callback {
         req: &api::srs::callback::Request,
         state: &State,
     ) -> Result<(), Error> {
+        let endpoint = req.stream.as_deref().unwrap_or_default();
+
         let mut restreams = state.restreams.lock_mut();
         let restream = restreams
             .iter_mut()
             .find(|r| r.uses_srs_app(&req.app))
             .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
 
+        if restream.input.is_pull() {
+            // For `PullInput` `Status::Offline` is managed by its FFmpeg
+            // process.
+            restream.srs_publisher_id = None;
+            return Ok(());
+        }
+
+        if let Input::FailoverPush(input) = &mut restream.input {
+            match endpoint {
+                "main" => {
+                    input.main_srs_publisher_id = None;
+                    input.main_status = Status::Offline;
+                    return Ok(());
+                }
+                "backup" => {
+                    input.backup_srs_publisher_id = None;
+                    input.backup_status = Status::Offline;
+                    return Ok(());
+                }
+                _ => (),
+            }
+        }
+
         restream.srs_publisher_id = None;
-        // For `PullInput` `Status::Offline` is managed by its FFmpeg process.
-        if !restream.input.is_pull() {
+        // For `FailoverPushInput` `Status::Offline` is managed by its FFmpeg
+        // process.
+        if !restream.input.is_failover() {
             restream.input.set_status(Status::Offline);
         }
         Ok(())

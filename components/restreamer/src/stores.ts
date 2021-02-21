@@ -59,6 +59,19 @@ export class InputModalState {
   push_key: string = '';
 
   /**
+   * Indicator whether a local backup [SRS] endpoint is required to receive a
+   * live RTMP stream on in case of `FailoverPushInput`.
+   *
+   * [SRS]: https://github.com/ossrs/srs
+   */
+  failover: boolean = false;
+
+  /**
+   * Previous value of the `failover` indicator.
+   */
+  prev_failover: boolean | null = null;
+
+  /**
    * URL to pull a live RTMP stream from in case of `PullInput`.
    *
    * [SRS]: https://github.com/ossrs/srs
@@ -124,14 +137,22 @@ export class InputModal implements Writable<InputModalState> {
   /**
    * Opens this [[`InputModal`]] window for editing an existing `Input`.
    *
-   * @param id         ID of the `Input` being edited.
-   * @param val        Current value of `Input` (`push_key` or `pull_url`)
-   *                   before editing.
-   * @param label      Current label of `Input` before editing.
-   * @param is_pull    Indicator whether the `Input` being edited is a
-   *                   `PullInput`.
+   * @param id          ID of the `Input` being edited.
+   * @param val         Current value of `Input` (`push_key` or `pull_url`)
+   *                    before editing.
+   * @param label       Current label of `Input` before editing.
+   * @param is_pull     Indicator whether the `Input` being edited is a
+   *                    `PullInput`.
+   * @param failover    Indicator whether the `PushInput` should have a
+   *                    backup endpoint.
    */
-  openEdit(id: string, val: string, label: string, is_pull: boolean) {
+  openEdit(
+    id: string,
+    val: string,
+    label: string,
+    is_pull: boolean,
+    failover: boolean
+  ) {
     this.update((v) => {
       v.edit_id = id;
       v.prev_value = val;
@@ -141,6 +162,8 @@ export class InputModal implements Writable<InputModalState> {
       } else {
         v.push_key = sanitizeUrl(val);
       }
+      v.prev_failover = failover;
+      v.failover = failover;
       if (!!label) {
         v.prev_label = label;
         v.label = sanitizeLabel(label);
@@ -190,6 +213,7 @@ export class InputModal implements Writable<InputModalState> {
       v.edit_id = null;
       v.prev_value = null;
       v.prev_label = '';
+      v.prev_failover = null;
       v.label = '';
       v.push_key = '';
       v.pull_url = '';

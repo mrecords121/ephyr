@@ -127,7 +127,7 @@ impl State {
         ));
     }
 
-    /// Adds new [`Restream`] with [`PullInput`] to this [`State`].
+    /// Adds a new [`Restream`] with [`PullInput`] to this [`State`].
     ///
     /// If `update_id` is [`Some`] then updates an existing [`Restream`], if
     /// any. So, returns [`None`] if no [`Restream`] with `update_id` exists.
@@ -159,7 +159,11 @@ impl State {
         )
     }
 
-    /// Adds new [`Restream`] with [`PushInput`] to this [`State`].
+    /// Adds a new [`Restream`] with [`PushInput`] (or [`FailoverPushInput`]) to
+    /// this [`State`].
+    ///
+    /// If `failover` is `true`, then adds a [`FailoverPushInput`] intead of a
+    /// regular [`PushInput`].
     ///
     /// If `update_id` is [`Some`] then updates an existing [`Restream`], if
     /// any. So, returns [`None`] if no [`Restream`] with `update_id` exists.
@@ -167,6 +171,7 @@ impl State {
     pub fn add_push_input(
         &self,
         name: String,
+        failover: bool,
         label: Option<String>,
         update_id: Option<InputId>,
     ) -> Option<bool> {
@@ -182,16 +187,27 @@ impl State {
 
         Self::add_input_to(
             &mut *restreams,
-            Input::Push(PushInput {
-                name,
-                status: Status::Offline,
-            }),
+            if failover {
+                Input::FailoverPush(FailoverPushInput {
+                    name,
+                    main_status: Status::Offline,
+                    main_srs_publisher_id: None,
+                    backup_status: Status::Offline,
+                    backup_srs_publisher_id: None,
+                    status: Status::Offline,
+                })
+            } else {
+                Input::Push(PushInput {
+                    name,
+                    status: Status::Offline,
+                })
+            },
             label,
             update_id,
         )
     }
 
-    /// Adds new [`Restream`] with the given [`Input`] to this [`State`].
+    /// Adds a new [`Restream`] with the given [`Input`] to this [`State`].
     ///
     /// If `update_id` is [`Some`] then updates an existing [`Restream`], if
     /// any. So, returns [`None`] if no [`Restream`] with `update_id` exists.
@@ -206,6 +222,7 @@ impl State {
             if !r.input.is(&input) {
                 r.input = input;
                 r.srs_publisher_id = None;
+                // TODO: Remove when kicking playing clients is implemented?
                 for o in &mut r.outputs {
                     o.status = Status::Offline;
                 }
@@ -267,6 +284,10 @@ impl State {
 
         input.enabled = false;
         input.srs_publisher_id = None;
+        if let Input::FailoverPush(input) = &mut input.input {
+            input.main_srs_publisher_id = None;
+            input.backup_srs_publisher_id = None;
+        }
         Some(true)
     }
 
@@ -552,10 +573,13 @@ impl Restream {
     #[must_use]
     pub fn srs_url(&self) -> Url {
         Url::parse(&match &self.input {
+            Input::Push(i) => format!("rtmp://127.0.0.1:1935/{}/in", i.name),
+            Input::FailoverPush(i) => {
+                format!("rtmp://127.0.0.1:1935/{}/in", i.name)
+            }
             Input::Pull(_) => {
                 format!("rtmp://127.0.0.1:1935/pull_{}/in", self.id)
             }
-            Input::Push(i) => format!("rtmp://127.0.0.1:1935/{}/in", i.name),
         })
         .unwrap()
     }
@@ -568,10 +592,11 @@ impl Restream {
     #[must_use]
     pub fn uses_srs_app(&self, app: &str) -> bool {
         match &self.input {
+            Input::Push(i) => app == i.name,
+            Input::FailoverPush(i) => app == i.name,
             Input::Pull(_) => {
                 app.starts_with("pull_") && app[5..].parse() == Ok(self.id.0)
             }
-            Input::Push(i) => app == i.name,
         }
     }
 }
@@ -585,6 +610,10 @@ pub enum Input {
     /// Receiving a live RTMP stream from an external client.
     Push(PushInput),
 
+    /// Receiving a live RTMP stream from an external client with an additional
+    /// backup endpoint.
+    FailoverPush(FailoverPushInput),
+
     /// Pulling a live RTMP stream from a remote server.
     Pull(PullInput),
 }
@@ -597,13 +626,28 @@ impl Input {
         matches!(self, Input::Pull(_))
     }
 
-    /// Returns [`Status`] of this [`Input`].
+    /// Indicates whether this [`Input`] is a [`FailoverPushInput`].
     #[inline]
     #[must_use]
-    pub fn status(&self) -> Status {
+    pub fn is_failover(&self) -> bool {
+        matches!(self, Input::FailoverPush(_))
+    }
+
+    /// Indicates whether this [`Input`] has [`Status::Online`].
+    #[must_use]
+    pub fn is_online(&self) -> bool {
         match self {
-            Self::Pull(i) => i.status,
-            Self::Push(i) => i.status,
+            Self::Push(i) => i.status == Status::Online,
+            Self::FailoverPush(i) => {
+                // If `/in` endpoint goes offline, but there is still `/main`
+                // or `/backup` endpoint is online, then failover switch is
+                // happening at the moment, so we consider tha the whole `Input`
+                // is still online.
+                i.status == Status::Online
+                    || i.main_status == Status::Online
+                    || i.backup_status == Status::Online
+            }
+            Self::Pull(i) => i.status == Status::Online,
         }
     }
 
@@ -611,8 +655,9 @@ impl Input {
     #[inline]
     pub fn set_status(&mut self, new: Status) {
         match self {
-            Self::Pull(i) => i.status = new,
             Self::Push(i) => i.status = new,
+            Self::FailoverPush(i) => i.status = new,
+            Self::Pull(i) => i.status = new,
         }
     }
 
@@ -621,8 +666,9 @@ impl Input {
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Pull(a), Self::Pull(b)) => a.is(b),
             (Self::Push(a), Self::Push(b)) => a.is(b),
+            (Self::FailoverPush(a), Self::FailoverPush(b)) => a.is(b),
+            (Self::Pull(a), Self::Pull(b)) => a.is(b),
             _ => false,
         }
     }
@@ -646,7 +692,7 @@ pub struct PullInput {
 }
 
 impl PullInput {
-    /// Checks whether this [`PullInput`] is the same as `other` on.
+    /// Checks whether this [`PullInput`] is the same as the `other` one.
     #[inline]
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
@@ -654,7 +700,8 @@ impl PullInput {
     }
 }
 
-/// `Input` receiving a live RTMP stream from a remote client.
+/// `Input` receiving a live RTMP stream from a remote client on an `/in`
+/// endpoint.
 #[derive(
     Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
 )]
@@ -670,11 +717,96 @@ pub struct PushInput {
 }
 
 impl PushInput {
-    /// Checks whether this [`PushInput`] is the same as `other` on.
+    /// Checks whether this [`PushInput`] is the same as the `other` one.
     #[inline]
     #[must_use]
     pub fn is(&self, other: &Self) -> bool {
         self.name == other.name
+    }
+}
+
+/// `Input` receiving a live RTMP stream from a remote client on two endpoints:
+/// - `/main` for receiving a main live RTMP stream, once it goes offline the
+///   `Input` switches to `/backup`;
+/// - `/backup` for receiving a backup live RTMP stream, once `/main` is
+///   restored the `Input` switches back to `/main`.
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
+pub struct FailoverPushInput {
+    /// Name of a live RTMP stream to expose it with for receiving and
+    /// re-streaming media traffic.
+    pub name: String,
+
+    /// `Status` of a `/main` endpoint indicating whether it receives media
+    /// traffic.
+    #[serde(skip)]
+    pub main_status: Status,
+
+    /// ID of [SRS] client who publishes the ongoing live RTMP stream to
+    /// a `/main` endpoint of this [`FailoverPushInput`].
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[graphql(skip)]
+    #[serde(skip)]
+    pub main_srs_publisher_id: Option<srs::ClientId>,
+
+    /// `Status` of a `/backup` endpoint indicating whether it receives media
+    /// traffic.
+    #[serde(skip)]
+    pub backup_status: Status,
+
+    /// ID of [SRS] client who publishes the ongoing live RTMP stream to
+    /// a `/backup` endpoint of this [`FailoverPushInput`].
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[graphql(skip)]
+    #[serde(skip)]
+    pub backup_srs_publisher_id: Option<srs::ClientId>,
+
+    /// Overall `Status` of this `FailoverPushInput` indicating whether a
+    /// received media traffic is available.
+    #[serde(skip)]
+    pub status: Status,
+}
+
+impl FailoverPushInput {
+    /// Checks whether this [`FailoverPushInput`] is the same as the `other`
+    /// one.
+    #[inline]
+    #[must_use]
+    pub fn is(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+
+    /// Returns a local [SRS] URL of the currently active `/main` or `/backup`
+    /// endpoint.
+    ///
+    /// It returns `/backup` if it's online while `/main` is not, otherwise
+    /// returns `/main`.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[must_use]
+    pub fn from_url(&self) -> Url {
+        Url::parse(
+            &(if self.backup_status == Status::Online
+                && self.main_status != Status::Online
+            {
+                format!("rtmp://127.0.0.1:1935/{}/backup", self.name)
+            } else {
+                format!("rtmp://127.0.0.1:1935/{}/main", self.name)
+            }),
+        )
+        .unwrap()
+    }
+
+    /// Indicates whether this [`FailoverPushInput`] receives any media traffic
+    /// on its `/main` or `/backup` endpoint.
+    #[inline]
+    #[must_use]
+    pub fn has_traffic(&self) -> bool {
+        self.main_status == Status::Online
+            || self.backup_status == Status::Online
     }
 }
 

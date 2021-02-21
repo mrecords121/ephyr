@@ -39,7 +39,7 @@ pub struct MutationsRoot;
 
 #[graphql_object(name = "Mutations", context = Context)]
 impl MutationsRoot {
-    /// Adds new `Restream` with `PullInput`.
+    /// Adds a new `Restream` with a `PullInput`.
     ///
     /// If `id` is specified, then tries to update parameters of the existent
     /// `Restream`.
@@ -95,7 +95,10 @@ impl MutationsRoot {
         }
     }
 
-    /// Adds new `Restream` with `PushInput`.
+    /// Adds a new `Restream` with a `PushInput` (or `FailoverPushInput`).
+    ///
+    /// If `failover` is `true`, then uses a `FailoverPushInput` input instead
+    /// of a regular `PushInput`.
     ///
     /// If `id` is specified, then tries to update parameters of the existent
     /// `Restream`.
@@ -112,6 +115,11 @@ impl MutationsRoot {
     #[graphql(arguments(
         name(description = "Name of RTMP media stream used in its URL."),
         label(description = "Optional label for this `Restream`."),
+        failover(
+            description = "Indicator whether a `FailoverPushInput` should be \
+                           used instead of a regular `PushInput`.",
+            default = false,
+        ),
         id(
             description = "ID of `Restream` to be updated rather than creating \
                            a new one."
@@ -120,6 +128,7 @@ impl MutationsRoot {
     fn add_push_input(
         name: String,
         label: Option<String>,
+        failover: bool,
         id: Option<InputId>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
@@ -146,7 +155,7 @@ impl MutationsRoot {
             }
         }
 
-        match context.state().add_push_input(name, label, id) {
+        match context.state().add_push_input(name, failover, label, id) {
             None => Ok(None),
             Some(true) => Ok(Some(true)),
             Some(false) => Err(graphql::Error::new("DUPLICATE_INPUT_NAME")
@@ -195,7 +204,7 @@ impl MutationsRoot {
         context.state().disable_input(id)
     }
 
-    /// Adds new `Output` to the specified `Restream`.
+    /// Adds a new `Output` to the specified `Restream`.
     ///
     /// ### Non-idempotent
     ///

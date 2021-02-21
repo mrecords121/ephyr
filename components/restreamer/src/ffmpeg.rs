@@ -82,17 +82,17 @@ impl RestreamersPool {
                 .remove(&r.id.into())
                 .and_then(|mut p| (!p.needs_restart(r)).then(|| p))
                 .or_else(|| {
-                    PullInputRestreamer::new(r).map(|kind| {
+                    RestreamerKind::new_input(r).map(|kind| {
                         Restreamer::run(
                             self.ffmpeg_path.clone(),
-                            kind.into(),
+                            kind,
                             self.state.clone(),
                         )
                     })
                 })
                 .map(|p| drop(new.insert(r.id.into(), p)));
 
-            if r.input.status() != Status::Online {
+            if !r.input.is_online() {
                 continue;
             }
 
@@ -233,6 +233,7 @@ impl Restreamer {
     #[must_use]
     pub fn needs_restart(&mut self, actual: &state::Restream) -> bool {
         match &mut self.kind {
+            RestreamerKind::FailoverPushInput(i) => i.needs_restart(actual),
             RestreamerKind::PullInput(i) => i.needs_restart(actual),
             RestreamerKind::CopyOutput(o) => o.needs_restart(actual),
             RestreamerKind::TeamspeakMixedOutput(o) => o.needs_restart(actual),
@@ -246,6 +247,12 @@ impl Restreamer {
 /// [FFmpeg]: https://ffmpeg.org
 #[derive(Clone, Debug, From)]
 pub enum RestreamerKind {
+    /// Re-streaming of a live stream from [`FailoverPushInput`]'s `/main` or
+    /// `/backup` endpoint to its `/in` endpoint.
+    ///
+    /// [`FailoverPushInput`]: state::FailoverPushInput
+    FailoverPushInput(FailoverPushInputRestreamer),
+
     /// Re-streaming of a [`PullInput::src`] live stream to the correspondent
     /// [`Restream::srs_url`] endpoint.
     ///
@@ -273,6 +280,24 @@ pub enum RestreamerKind {
 }
 
 impl RestreamerKind {
+    /// Creates a new [FFmpeg] process re-streaming a live stream from some
+    /// source to the [`Restream::srs_url`] endpoint.
+    ///
+    /// Returns [`None`] if a [FFmpeg] re-streaming process must not be created
+    /// according to the given [`state::Output`].
+    ///
+    /// [`Restream::srs_url`]: state::Restream::srs_url
+    /// [FFmpeg]: https://ffmpeg.org
+    #[must_use]
+    pub fn new_input(r: &state::Restream) -> Option<Self> {
+        if !r.enabled {
+            return None;
+        }
+        PullInputRestreamer::new(r)
+            .map(Into::into)
+            .or_else(|| FailoverPushInputRestreamer::new(r).map(Into::into))
+    }
+
     /// Creates a new [FFmpeg] process re-streaming a live stream from the given
     /// `srs_url` to the given [`Output::dst`] endpoint.
     ///
@@ -308,6 +333,7 @@ impl RestreamerKind {
     #[inline]
     pub fn renew_status(&self, status: Status, actual: &State) {
         match self {
+            Self::FailoverPushInput(i) => i.renew_status(status, actual),
             Self::PullInput(i) => i.renew_status(status, actual),
             Self::CopyOutput(o) => o.renew_status(status, actual),
             Self::TeamspeakMixedOutput(o) => o.renew_status(status, actual),
@@ -324,6 +350,7 @@ impl RestreamerKind {
     #[inline]
     fn setup_ffmpeg(&self, cmd: &mut Command, state: &State) {
         match self {
+            Self::FailoverPushInput(i) => i.setup_ffmpeg(cmd),
             Self::PullInput(i) => i.setup_ffmpeg(cmd),
             Self::CopyOutput(o) => o.setup_ffmpeg(cmd),
             Self::TeamspeakMixedOutput(o) => o.setup_ffmpeg(cmd, state),
@@ -409,10 +436,13 @@ impl PullInputRestreamer {
     /// Checks whether this [`PullInputRestreamer`] process must be restarted,
     /// as cannot apply the new `actual` state on itself correctly, without
     /// interruptions.
-    #[inline]
     #[must_use]
     pub fn needs_restart(&self, actual: &state::Restream) -> bool {
-        Some(&self.upstream_url) != actual.upstream_url()
+        if actual.input.is_pull() {
+            Some(&self.upstream_url) != actual.upstream_url()
+        } else {
+            true
+        }
     }
 
     /// Renews [`Status`] of this [`PullInputRestreamer`] process in the
@@ -421,7 +451,8 @@ impl PullInputRestreamer {
         // `Status::Online` for `PullInput` is set by SRS HTTP Callback.
         if status != Status::Online {
             let _ = actual.restreams.lock_mut().iter_mut().find_map(|r| {
-                (r.id == self.input_id).then(|| r.input.set_status(status))
+                (r.id == self.input_id && r.input.is_pull())
+                    .then(|| r.input.set_status(status))
             });
         }
     }
@@ -435,6 +466,91 @@ impl PullInputRestreamer {
             .args(&["-i", self.upstream_url.as_str()])
             .args(&["-c", "copy"])
             .args(&["-f", "flv", self.srs_url.as_str()]);
+    }
+}
+
+/// Kind of a [FFmpeg] re-streaming process that re-streams a
+/// [`FailoverPushInput`]'s `/main` or `/backup` endpoint to its `/in` endpoint.
+///
+/// [`FailoverPushInput`]: state::FailoverPushInput
+/// [FFmpeg]: https://ffmpeg.org
+#[derive(Clone, Debug)]
+pub struct FailoverPushInputRestreamer {
+    /// ID of a [`state::Input`] this [`FailoverPushInputRestreamer`] process is
+    /// related to.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
+    input_id: InputId,
+
+    /// Local [SRS] [`Url`] of the `/main` or `/backup` endpoint of this
+    /// [`FailoverPushInputRestreamer`] process to re-stream a live stream from.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    from_srs_url: Url,
+
+    /// Local [SRS] [`Url`] of the `/in` endpoint of this
+    /// [`FailoverPushInputRestreamer`] process to re-stream a live stream onto.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    to_srs_url: Url,
+}
+
+impl FailoverPushInputRestreamer {
+    /// Creates a new [`FailoverPushInputRestreamer`] data.
+    ///
+    /// Returns [`None`] if a [`FailoverPushInputRestreamer`] process must not
+    /// be created according to the given [`state::Restream`].
+    #[must_use]
+    pub fn new(r: &state::Restream) -> Option<Self> {
+        if !r.enabled {
+            return None;
+        }
+        if let state::Input::FailoverPush(input) = &r.input {
+            input.has_traffic().then(|| Self {
+                input_id: r.id,
+                from_srs_url: input.from_url(),
+                to_srs_url: r.srs_url(),
+            })
+        } else {
+            None
+        }
+    }
+
+    /// Checks whether this [`FailoverPushInputRestreamer`] process must be
+    /// restarted, as cannot apply the new `actual` state on itself correctly,
+    /// without interruptions.
+    #[must_use]
+    pub fn needs_restart(&self, actual: &state::Restream) -> bool {
+        if let state::Input::FailoverPush(input) = &actual.input {
+            !input.has_traffic()
+                || self.from_srs_url != input.from_url()
+                || self.to_srs_url != actual.srs_url()
+        } else {
+            true
+        }
+    }
+
+    /// Renews [`Status`] of this [`FailoverPushInputRestreamer`] process in the
+    /// `actual` [`State`].
+    pub fn renew_status(&self, status: Status, actual: &State) {
+        // `Status::Online` for `FailoverPushInput` is set by SRS HTTP Callback.
+        if status != Status::Online {
+            let _ = actual.restreams.lock_mut().iter_mut().find_map(|r| {
+                (r.id == self.input_id && r.input.is_failover())
+                    .then(|| r.input.set_status(status))
+            });
+        }
+    }
+
+    /// Properly setups the given [FFmpeg] [`Command`] for this
+    /// [`FailoverPushInputRestreamer`] before running it.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
+    fn setup_ffmpeg(&self, cmd: &mut Command) {
+        let _ = cmd
+            .args(&["-i", self.from_srs_url.as_str()])
+            .args(&["-c", "copy"])
+            .args(&["-f", "flv", self.to_srs_url.as_str()]);
     }
 }
 
