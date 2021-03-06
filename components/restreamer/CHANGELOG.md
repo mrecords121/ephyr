@@ -6,49 +6,74 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
-## [0.2.0-alpha.2] · 2021-??-?? · To-be-done
-[0.2.0-alpha.2]: /../../tree/restreamer-v0.2.0-alpha.2
+## [0.2.0-alpha.3] · 2021-??-?? · To-be-done
+[0.2.0-alpha.3]: /../../tree/restreamer-v0.2.0-alpha.3
 
-[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-alpha.2)
+[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-alpha.3)
+
+### BC Breaks
+
+- Web UI:
+    - Input:
+        - Remove distinguishing between pull or push endpoint in add/edit modal window ([rev2]).
+- GraphQL API:
+    - Types:
+        - Rename root types to `Query`, `Mutation` and `Subscription` ([rev2]);
+        - Rework fields of `Restream` and `Input` objects ([rev2]);
+        - Remove `PushInput` and `PullInput` objects ([rev2]).
+    - Mutations:
+        - Replace `addPullInput` and `addPushInput` with `setRestream` ([rev2]);
+        - Rename `removeInput` to `removeRestream` an change its argument's type ([rev2]);
+        - Add `restreamId` argument to `enableInput` and `disableInput` ([rev2]);
+        - Replace `inputId` argument with `restreamId` in `addOutput`, `removeOutput`, `enableOutput`, `disableOutput`, `enableAllOutputs` and `disableAllOutputs` ([rev2]);
+        - Rename `outputId` argument to `id` in `removeOutput`, `enableOutput` and `disableOutput` ([rev2]);
+        - Use `OutputDstUrl` and `MixinSrcUrl` scalars instead of `Url` in `addOutput` ([rev2]);
+        - Use `Label` scalar instead of `String` in `addOutput` ([rev2]).
+    - Queries:
+        - Rename `restreams` to `allRestreams` ([rev2]).
+    - Subscriptions:
+        - Rename `restreams` to `allRestreams` ([rev2]).
 
 ### Added
 
 - Web UI:
     - Input:
-        - Optional backup endpoint for a push type ([a3236808]).
+        - Optional backup endpoint (push or pull) ([a3236808], [rev2]);
+        - Ability to export/import as JSON spec ([rev2]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
         - Tuning volume rate of tracks ([77d25dd7], [#23]);
-        - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]).
+        - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]); 
+        - [Icecast] URL as supported destination ([5dabcfdc]).
 - GraphQL API:
     - Types:
-        - `FailoverPushInput` object as `Input` union's variant ([a3236808]);
         - `Mixin` object ([77d25dd7], [#23]);
-        - `MixinId`, `Volume` and `Delay` scalars ([77d25dd7], [#23]).
+        - `MixinId`, `Volume` and `Delay` scalars ([77d25dd7], [#23]);
+        - `RestreamId` scalar ([rev2]);
+        - `Label` scalar ([rev2]);
+        - `InputSrcUrl`, `OutputDstUrl` and `MixinSrcUrl` scalars ([5dabcfdc], [rev2]);
+        - `RestreamKey` and `InputKey` scalars ([rev2]);
+        - `InputSrc` union with `RemoteInputSrc` and `FailoverInputSrc` variants ([rev2]).
     - Mutations:
-        - `failover` argument to `addPushInput` ([a3236808]);
+        - `enableRestream` and `disableRestream` ([rev2]);
         - `tuneVolume` and `tuneDelay` ([77d25dd7], [#23]);
-        - `mix` argument to `addOutput` ([77d25dd7], [#23]).
+        - `mix` argument to `addOutput` ([77d25dd7], [#23]);
+        - `import` ([rev2]).
     - Queries:
-        - `Output.volume` and `Output.mixins` fields ([77d25dd7], [#23]).
+        - `Output.volume` and `Output.mixins` fields ([77d25dd7], [#23]);
+        - `export` ([rev2]).
+- Spec (export/import):
+    - `v1` version ([rev2]).
 - Deployment:
     - Provision script for [Ubuntu] 20.04:
         - Optional [firewalld] installation via `WITH_FIREWALLD` env var ([rev]).
-
-### Changed
-
-- Web UI:
-    - Output:
-        - Accept [Icecast] URL as destination ([5dabcfdc]).
-- GraphQL API:
-    - Mutations:
-        - Allow [Icecast] URL in `dst` argument of `addOutput` ([5dabcfdc]).
 
 [#23]: /../../issues/23
 [5dabcfdc]: /../../commit/5dabcfdce2420fdd43a8f4c20c2eff497e884ac3
 [77d25dd7]: /../../commit/77d25dd739d4f05b319769eddd83c01bd3a490a4
 [a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
 [rev]: /../../commit/full-rev
+[rev2]: /../../commit/full-rev2
 
 
 

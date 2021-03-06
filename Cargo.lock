@@ -1282,7 +1282,7 @@ dependencies = [
 
 [[package]]
 name = "ephyr-restreamer"
-version = "0.2.0-alpha.2+dev"
+version = "0.2.0-alpha.3"
 dependencies = [
  "actix-service",
  "actix-web",
@@ -1298,6 +1298,7 @@ dependencies = [
  "futures-signals",
  "hex",
  "humantime",
+ "humantime-serde",
  "juniper",
  "juniper_actix",
  "juniper_graphql_ws",

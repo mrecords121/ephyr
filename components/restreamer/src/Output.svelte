@@ -5,56 +5,43 @@
     DisableOutput,
     EnableOutput,
     RemoveOutput,
-    TuneDelay,
     TuneVolume,
   } from './api/graphql/client.graphql';
 
   import { showError } from './util';
 
   import Toggle from './Toggle.svelte';
+  import Mixin from './Mixin.svelte';
 
   const disableOutputMutation = mutation(DisableOutput);
   const enableOutputMutation = mutation(EnableOutput);
   const removeOutputMutation = mutation(RemoveOutput);
-  const tuneDelayMutation = mutation(TuneDelay);
   const tuneVolumeMutation = mutation(TuneVolume);
 
   export let value;
-  export let input_id;
+  export let restream_id;
   export let hidden = false;
 
-  let orig_volume = 100;
-  let mix_volume = 100;
-  let mix_delay = 0;
-
+  let volume = 100;
   $: {
     // Trigger Svelte reactivity watching.
     value.volume = value.volume;
-    if (value.mixins.length > 0) {
-      value.mixins[0].volume = value.mixins[0].volume;
-      value.mixins[0].delay = value.mixins[0].delay;
-    }
-    // Move `orig_volume`, `mix_volume` and `mix_delay` to a separate function
-    // to omit triggering this block when they are changed, as we're only
-    // interested in `value` changes here.
-    justify_volumes_and_delay();
+    // Move `volume` to a separate function to omit triggering this block when
+    // it is changed, as we're only interested in `value` changes here.
+    update_volume();
   }
 
-  function justify_volumes_and_delay() {
-    orig_volume = value.volume;
-    if (value.mixins.length > 0) {
-      mix_volume = value.mixins[0].volume;
-      mix_delay = value.mixins[0].delay / 1000;
-    }
+  function update_volume() {
+    volume = value.volume;
   }
 
   async function toggle() {
-    const vars = { input_id: input_id, output_id: value.id };
+    const variables = { restream_id, output_id: value.id };
     try {
       if (value.enabled) {
-        await disableOutputMutation({ variables: vars });
+        await disableOutputMutation({ variables });
       } else {
-        await enableOutputMutation({ variables: vars });
+        await enableOutputMutation({ variables });
       }
     } catch (e) {
       showError(e.message);
@@ -62,38 +49,18 @@
   }
 
   async function remove() {
-    const vars = { input_id: input_id, output_id: value.id };
+    const variables = { restream_id, output_id: value.id };
     try {
-      await removeOutputMutation({ variables: vars });
+      await removeOutputMutation({ variables });
     } catch (e) {
       showError(e.message);
     }
   }
 
-  async function tuneDelay(mixin_id) {
-    const vars = {
-      input_id: input_id,
-      output_id: value.id,
-      mixin_id: mixin_id,
-      delay: Math.round(mix_delay * 1000),
-    };
+  async function tuneVolume() {
+    const variables = { restream_id, output_id: value.id, volume };
     try {
-      await tuneDelayMutation({ variables: vars });
-    } catch (e) {
-      showError(e.message);
-    }
-  }
-
-  async function tuneVolume(mixin_id) {
-    let vars = { input_id: input_id, output_id: value.id };
-    if (!!mixin_id) {
-      vars.mixin_id = mixin_id;
-      vars.volume = mix_volume;
-    } else {
-      vars.volume = orig_volume;
-    }
-    try {
-      await tuneVolumeMutation({ variables: vars });
+      await tuneVolumeMutation({ variables });
     } catch (e) {
       showError(e.message);
     }
@@ -132,41 +99,15 @@
           min="0"
           max="200"
           step="1"
-          bind:value={orig_volume}
-          on:change={() => tuneVolume(null)}
+          bind:value={volume}
+          on:change={tuneVolume}
         />
-        <span>{orig_volume}%</span>
+        <span>{volume}%</span>
       </div>
 
-      <div class="mixin">
-        <i class="fas fa-wave-square" title="Mixed audio" />
-        <span>{value.mixins[0].src}</span>
-        <div class="volume">
-          <i class="fas fa-volume-up" title="Volume" />
-          <input
-            class="uk-range"
-            type="range"
-            min="0"
-            max="1000"
-            step="1"
-            bind:value={mix_volume}
-            on:change={() => tuneVolume(value.mixins[0].id)}
-          />
-          <span>{mix_volume}%</span>
-        </div>
-        <div class="delay">
-          <i class="far fa-clock" title="Delay" />
-          <input
-            class="uk-input"
-            type="number"
-            min="0"
-            step="0.1"
-            bind:value={mix_delay}
-            on:change={() => tuneDelay(value.mixins[0].id)}
-          />
-          <span>s</span>
-        </div>
-      </div>
+      {#each value.mixins as mixin}
+        <Mixin {restream_id} output_id={value.id} value={mixin} />
+      {/each}
     {/if}
   </div>
 </template>
@@ -205,13 +146,9 @@
     font-size: 10px
     margin-top: -1px
 
-  .fa-volume-up, .fa-wave-square, .fa-clock
+  .fa-volume-up
     font-size: 10px
     color: #d9d9d9
-
-  .mixin
-    margin-top: 6px
-    padding-left: 34px
 
   .volume
     padding-left: 17px
@@ -227,16 +164,4 @@
       display: inline-block
       width: 70%
       margin-top: -1px
-
-  .delay
-    padding-left: 17px
-    font-size: 10px
-
-    .uk-input
-      height: auto
-      width: 40px
-      padding: 0
-      border: none
-      margin-top: -2px
-      text-align: right
 </style>

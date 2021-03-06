@@ -14,118 +14,156 @@ declare type Updater<T> = (value: T) => T;
 declare type Invalidator<T> = (value?: T) => void;
 
 /**
- * State of the modal window for adding and editing restreaming `Input`s.
+ * State of the modal window for adding and editing `Restream`s.
  */
-export class InputModalState {
+export class RestreamModalState {
   /**
-   * ID of `Input` being edited in the [[`InputModal`]] at the moment.
+   * ID of the `Restream` being edited in the [[`RestreamModal`]] at the moment.
    *
-   * If `null` then new `Input` is being added.
+   * If `null` then a new `Restream` is being added.
    */
   edit_id: string | null = null;
 
   /**
-   * Previous value of `Input` (`push_key` or `pull_url`) before it has been
-   * edited in the [[`InputModal`]].
-   */
-  prev_value: string | null = null;
-
-  /**
-   * Previous label of `Input` (`push_key` or `pull_url`) before it has been
-   * edited in the [[`InputModal`]].
+   * Key of a local [SRS] endpoint to serve a live stream on (and, optionally,
+   * receive onto).
    *
-   * Empty string means no label.
+   * [SRS]: https://github.com/ossrs/srs
    */
-  prev_label: string = '';
+  key: string = '';
 
   /**
-   * Label to be assigned to the added/edited `Input`.
+   * Previous value of `Restream`'s key before it has been edited in the
+   * [[`RestreamModal`]].
+   */
+  prev_key: string | null = null;
+
+  /**
+   * Label to be assigned to the added/edited `Restream`.
    *
    * Empty string means no label.
    */
   label: string = '';
 
   /**
-   * Indicator whether "Pull" tab is chosen in the [[`InputModal`]].
+   * Previous label of the `Restream` before it has been edited in the
+   * [[`RestreamModal`]].
+   *
+   * Empty string means no label.
+   */
+  prev_label: string | null = null;
+
+  /**
+   * Indicator whether the `Restream` should pull a live stream from a remote
+   * endpoint.
    */
   is_pull: boolean = false;
 
   /**
-   * Key of a local [SRS] endpoint to receive a live RTMP stream on in case of
-   * `PushInput`.
-   *
-   * [SRS]: https://github.com/ossrs/srs
+   * Previous value of the `is_pull` indicator before it has been edited in
+   * the [[`RestreamModal`]].
    */
-  push_key: string = '';
+  prev_is_pull: boolean | null = null;
 
   /**
-   * Indicator whether a local backup [SRS] endpoint is required to receive a
-   * live RTMP stream on in case of `FailoverPushInput`.
-   *
-   * [SRS]: https://github.com/ossrs/srs
-   */
-  failover: boolean = false;
-
-  /**
-   * Previous value of the `failover` indicator.
-   */
-  prev_failover: boolean | null = null;
-
-  /**
-   * URL to pull a live RTMP stream from in case of `PullInput`.
-   *
-   * [SRS]: https://github.com/ossrs/srs
+   * URL to pull a live stream from.
    */
   pull_url: string = '';
 
   /**
-   * Indicator whether the [[`InputModal`]] is visible (opened) at the moment.
+   * Previous pull URL of the `Restream` before it has been edited in the
+   * [[`RestreamModal`]].
+   */
+  prev_pull_url: string | null = null;
+
+  /**
+   * Indicator whether a local backup [SRS] endpoint is required to receive a
+   * live stream onto.
+   *
+   * [SRS]: https://github.com/ossrs/srs
+   */
+  with_backup: boolean = false;
+
+  /**
+   * Previous value of the `with_backup` indicator before it has been edited in
+   * the [[`RestreamModal`]].
+   */
+  prev_with_backup: boolean | null = null;
+
+  /**
+   * Indicator whether the `Restream` should pull a backup live stream from a
+   * remote endpoint.
+   */
+  backup_is_pull: boolean = false;
+
+  /**
+   * Previous value of the `backup_is_pull` indicator before it has been edited
+   * in the [[`RestreamModal`]].
+   */
+  prev_backup_is_pull: boolean | null = null;
+
+  /**
+   * URL to pull a backup live stream from.
+   */
+  backup_pull_url: string = '';
+
+  /**
+   * Previous backup pull URL of the `Restream` before it has been edited in the
+   * [[`RestreamModal`]].
+   */
+  prev_backup_pull_url: string | null = null;
+
+  /**
+   * Indicator whether the [[`RestreamModal`]] is visible (opened) at the
+   * moment.
    */
   visible: boolean = false;
 }
 
 /**
- * Shared reactive state of the modal window for adding and editing restreaming
- * `Input`s.
+ * Shared reactive state of the modal window for adding and editing `Restream`s.
  */
-export class InputModal implements Writable<InputModalState> {
-  private state: Writable<InputModalState> = writable(new InputModalState());
+export class RestreamModal implements Writable<RestreamModalState> {
+  private state: Writable<RestreamModalState> = writable(
+    new RestreamModalState()
+  );
 
   /** @inheritdoc */
   subscribe(
-    run: Subscriber<InputModalState>,
-    invalidate?: Invalidator<InputModalState>
+    run: Subscriber<RestreamModalState>,
+    invalidate?: Invalidator<RestreamModalState>
   ): Unsubscriber {
     return this.state.subscribe(run, invalidate);
   }
 
   /** @inheritdoc */
-  set(v: InputModalState) {
-    if (v.pull_url !== '') {
+  set(v: RestreamModalState) {
+    v.key = sanitizeUrl(v.key);
+    if (v.is_pull) {
       v.pull_url = sanitizeUrl(v.pull_url);
     }
-    if (v.push_key !== '') {
-      v.push_key = sanitizeUrl(v.push_key);
+    if (v.with_backup && v.backup_is_pull) {
+      v.backup_pull_url = sanitizeUrl(v.backup_pull_url);
     }
     this.state.set(v);
   }
 
   /** @inheritdoc */
-  update(updater: Updater<InputModalState>) {
+  update(updater: Updater<RestreamModalState>) {
     this.state.update(updater);
   }
 
   /**
-   * Retrieves and returns current [[`InputModalState`]].
+   * Retrieves and returns current [[`RestreamModalState`]].
    *
-   * @returns    Current value of [[`InputModalState`]].
+   * @returns    Current value of [[`RestreamModalState`]].
    */
-  get(): InputModalState {
+  get(): RestreamModalState {
     return get(this.state);
   }
 
   /**
-   * Opens this [[`InputModal`]] window for adding a new `Input`.
+   * Opens this [[`RestreamModal`]] window for adding a new `Restream`.
    */
   openAdd() {
     this.update((v) => {
@@ -135,88 +173,94 @@ export class InputModal implements Writable<InputModalState> {
   }
 
   /**
-   * Opens this [[`InputModal`]] window for editing an existing `Input`.
+   * Opens this [[`RestreamModal`]] window for editing an existing `Restream`.
    *
-   * @param id          ID of the `Input` being edited.
-   * @param val         Current value of `Input` (`push_key` or `pull_url`)
-   *                    before editing.
-   * @param label       Current label of `Input` before editing.
-   * @param is_pull     Indicator whether the `Input` being edited is a
-   *                    `PullInput`.
-   * @param failover    Indicator whether the `PushInput` should have a
-   *                    backup endpoint.
+   * @param id          ID of the `Restream` being edited.
+   * @param key         Current key of the `Restream` before editing.
+   * @param label       Current label of the `Restream` before editing.
+   * @param pull_url    Current pull URL of the `Restream` before editing.
+   * @param backup      Current backup pull URL of the `Restream` before
+   *                    editing.
    */
   openEdit(
     id: string,
-    val: string,
-    label: string,
-    is_pull: boolean,
-    failover: boolean
+    key: string,
+    label: string | null,
+    pull_url: string | null,
+    backup: string | boolean | null
   ) {
     this.update((v) => {
       v.edit_id = id;
-      v.prev_value = val;
-      v.is_pull = is_pull;
-      if (v.is_pull) {
-        v.pull_url = sanitizeUrl(val);
-      } else {
-        v.push_key = sanitizeUrl(val);
+
+      v.prev_key = sanitizeUrl(key);
+      v.key = v.prev_key;
+
+      v.prev_label = sanitizeLabel(label ?? '');
+      v.label = v.prev_label;
+
+      v.prev_is_pull = pull_url !== null;
+      v.is_pull = v.prev_is_pull;
+      if (pull_url !== null) {
+        v.prev_pull_url = sanitizeUrl(pull_url);
+        v.pull_url = v.prev_pull_url;
       }
-      v.prev_failover = failover;
-      v.failover = failover;
-      if (!!label) {
-        v.prev_label = label;
-        v.label = sanitizeLabel(label);
+
+      v.prev_with_backup = backup !== null;
+      v.with_backup = v.prev_with_backup;
+      if (backup !== null) {
+        v.prev_backup_is_pull = typeof backup === 'string';
+        v.backup_is_pull = v.prev_backup_is_pull;
+        if (typeof backup === 'string') {
+          v.prev_backup_pull_url = sanitizeUrl(backup);
+          v.backup_pull_url = v.prev_backup_pull_url;
+        }
       }
+
       v.visible = true;
       return v;
     });
   }
 
   /**
-   * Switches the current active tab of this [[`InputModal`]] to "Pull".
-   */
-  switchPull() {
-    this.update((v) => {
-      v.is_pull = true;
-      return v;
-    });
-  }
-
-  /**
-   * Switches the current active tab of this [[`InputModal`]] to "Push".
-   */
-  switchPush() {
-    this.update((v) => {
-      v.is_pull = false;
-      return v;
-    });
-  }
-
-  /**
-   * Sanitizes the current label value being input in this [[`InputModal`]].
+   * Sanitizes the current label value being input in this [[`RestreamModal`]].
    */
   sanitizeLabel() {
     this.update((v) => {
-      if (v.label !== '') {
-        v.label = sanitizeLabel(v.label);
-      }
+      v.label = sanitizeLabel(v.label);
       return v;
     });
   }
 
   /**
-   * Closes this [[`InputModal`]] window.
+   * Closes this [[`RestreamModal`]] window.
    */
   close() {
     this.update((v) => {
       v.edit_id = null;
-      v.prev_value = null;
-      v.prev_label = '';
-      v.prev_failover = null;
+
+      v.key = '';
+      v.prev_key = null;
+
       v.label = '';
-      v.push_key = '';
+      v.prev_label = null;
+
+      if (v.prev_is_pull !== null) {
+        v.is_pull = false;
+      }
+      v.prev_is_pull = null;
       v.pull_url = '';
+      v.prev_pull_url = null;
+
+      if (v.prev_with_backup !== null) {
+        v.with_backup = false;
+      }
+      v.prev_with_backup = null;
+      if (v.prev_backup_is_pull !== null) {
+        v.backup_is_pull = false;
+      }
+      v.backup_pull_url = '';
+      v.prev_backup_pull_url = null;
+
       v.visible = false;
       return v;
     });
@@ -224,13 +268,13 @@ export class InputModal implements Writable<InputModalState> {
 }
 
 /**
- * State of the modal window for adding restreaming `Output`s.
+ * State of the modal window for adding re-streaming `Output`s.
  */
 export class OutputModalState {
   /**
-   * ID of the `Input` to add new `Output` for.
+   * ID of the `Restream` to add new `Output` for.
    */
-  input_id: string | null = null;
+  restream_id: string | null = null;
 
   /**
    * Indicator whether the "Multiple" tab is active in the [[`OutputModal`]].
@@ -289,12 +333,8 @@ export class OutputModal implements Writable<OutputModalState> {
 
   /** @inheritdoc */
   set(v: OutputModalState) {
-    if (v.url !== '') {
-      v.url = sanitizeUrl(v.url);
-    }
-    if (v.mix_url !== '') {
-      v.mix_url = sanitizeUrl(v.mix_url);
-    }
+    v.url = sanitizeUrl(v.url);
+    v.mix_url = sanitizeUrl(v.mix_url);
     this.state.set(v);
   }
 
@@ -319,7 +359,7 @@ export class OutputModal implements Writable<OutputModalState> {
    */
   open(id: string) {
     this.update((v) => {
-      v.input_id = id;
+      v.restream_id = id;
       v.visible = true;
       return v;
     });
@@ -360,9 +400,7 @@ export class OutputModal implements Writable<OutputModalState> {
    */
   sanitizeLabel() {
     this.update((v) => {
-      if (v.label !== '') {
-        v.label = sanitizeLabel(v.label);
-      }
+      v.label = sanitizeLabel(v.label);
       return v;
     });
   }
@@ -372,7 +410,7 @@ export class OutputModal implements Writable<OutputModalState> {
    */
   close() {
     this.update((v) => {
-      v.input_id = null;
+      v.restream_id = null;
       v.label = '';
       v.url = '';
       v.mix_url = '';
@@ -384,11 +422,110 @@ export class OutputModal implements Writable<OutputModalState> {
 }
 
 /**
- * Global singleton instance of [[`InputModal`]] used by this application.
+ * State of the modal window for adding exporting/importing `Inputs`s.
  */
-export const inputModal = new InputModal();
+export class ExportModalState {
+  /**
+   * ID of the `Restream` to operate on.
+   *
+   * If `null` then operates on all defined `Restream`s.
+   */
+  restream_id: string | null = null;
+
+  /**
+   * Current JSON value of the operated `Input`'s spec.
+   */
+  spec: string = '';
+
+  /**
+   * Previous JSON value of the operated `Input`'s spec.
+   */
+  prev_spec: string = '';
+
+  /**
+   * Indicator whether the [[`ExportModalModal`]] is visible (opened) at the
+   * moment.
+   */
+  visible: boolean = false;
+}
 
 /**
- * Global singleton instance of [[`OutputModal`]] used by this application.
+ * Shared reactive state of the modal window for exporting/importing `Inputs`s.
+ */
+export class ExportModal implements Writable<ExportModalState> {
+  private state: Writable<ExportModalState> = writable(new ExportModalState());
+
+  /** @inheritdoc */
+  subscribe(
+    run: Subscriber<ExportModalState>,
+    invalidate?: Invalidator<ExportModalState>
+  ): Unsubscriber {
+    return this.state.subscribe(run, invalidate);
+  }
+
+  /** @inheritdoc */
+  set(v: ExportModalState) {
+    this.state.set(v);
+  }
+
+  /** @inheritdoc */
+  update(updater: Updater<ExportModalState>) {
+    this.state.update(updater);
+  }
+
+  /**
+   * Retrieves and returns current [[`ExportModalState`]].
+   *
+   * @returns    Current value of [[`ExportModalState`]].
+   */
+  get(): ExportModalState {
+    return get(this.state);
+  }
+
+  /**
+   * Opens this [[`ExportModal`]] window for exporting/importing a `Restream`.
+   *
+   * @param id      ID of the `Restream` to be exported/imported.
+   * @param spec    Current `Restream`'s spec received via GraphQL API.
+   */
+  async open(id: string | null, spec: string) {
+    this.update((v) => {
+      v.restream_id = id;
+      v.spec = spec;
+      v.prev_spec = spec;
+      v.visible = true;
+      return v;
+    });
+  }
+
+  /**
+   * Closes this [[`ExportModal`]] window.
+   */
+  close() {
+    this.update((v) => {
+      v.restream_id = null;
+      v.spec = '';
+      v.prev_spec = '';
+      v.visible = false;
+      return v;
+    });
+  }
+}
+
+/**
+ * Global singleton instance of an [[`RestreamModal`]] window used by this
+ * application.
+ */
+export const restreamModal = new RestreamModal();
+
+/**
+ * Global singleton instance of an [[`OutputModal`]] window used by this
+ * application.
  */
 export const outputModal = new OutputModal();
+
+/**
+ * Global singleton instance of an [[`ExportModal`]] window used by this
+ * application.
+ */
+export const exportModal = new ExportModal();

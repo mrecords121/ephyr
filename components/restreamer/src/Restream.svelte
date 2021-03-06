@@ -1,37 +1,33 @@
 <svelte:options immutable={true} />
 
 <script lang="js">
-  import { mutation } from 'svelte-apollo';
+  import { mutation, getClient } from 'svelte-apollo';
 
   import {
-    DisableInput,
-    EnableInput,
-    RemoveInput,
+    RemoveRestream,
     DisableAllOutputs,
     EnableAllOutputs,
+    ExportRestream,
   } from './api/graphql/client.graphql';
 
   import { showError } from './util';
 
-  import { inputModal, outputModal } from './stores';
+  import { restreamModal, outputModal, exportModal } from './stores';
 
+  import Input from './Input.svelte';
   import Output from './Output.svelte';
   import Toggle from './Toggle.svelte';
 
-  const disableInputMutation = mutation(DisableInput);
-  const enableInputMutation = mutation(EnableInput);
-  const removeInputMutation = mutation(RemoveInput);
+  const removeRestreamMutation = mutation(RemoveRestream);
   const disableAllOutputsMutation = mutation(DisableAllOutputs);
   const enableAllOutputsMutation = mutation(EnableAllOutputs);
+
+  const gqlClient = getClient();
 
   export let public_host = 'localhost';
   export let value;
 
-  $: isPull = value.input.__typename === 'PullInput';
-  $: isFailover = value.input.__typename === 'FailoverPushInput';
   $: allEnabled = value.outputs.every((o) => o.enabled);
-
-  $: mainStatus = isFailover ? value.input.mainStatus : value.input.status;
 
   $: onlineCount = value.outputs.filter((o) => o.status === 'ONLINE').length;
   $: initCount = value.outputs.filter((o) => o.status === 'INITIALIZING')
@@ -56,32 +52,33 @@
     OFFLINE: !showAll && (enabledBitmask & 4) === 4,
   };
 
-  function openEditInputModal() {
-    inputModal.openEdit(
-      value.id,
-      isPull ? value.input.src : value.input.name,
-      value.label,
-      isPull,
-      isFailover
-    );
-  }
+  function openEditRestreamModal() {
+    let pull_url = null;
+    let backup = null;
 
-  async function removeInput() {
-    try {
-      await removeInputMutation({ variables: { id: value.id } });
-    } catch (e) {
-      showError(e.message);
+    if (!!value.input.src && value.input.src.__typename === 'RemoteInputSrc') {
+      pull_url = value.input.src.url;
     }
+
+    if (
+      !!value.input.src &&
+      value.input.src.__typename === 'FailoverInputSrc'
+    ) {
+      backup = true;
+      if (!!value.input.src.inputs[0].src) {
+        pull_url = value.input.src.inputs[0].src.url;
+      }
+      if (!!value.input.src.inputs[1].src) {
+        backup = value.input.src.inputs[1].src.url;
+      }
+    }
+
+    restreamModal.openEdit(value.id, value.key, value.label, pull_url, backup);
   }
 
-  async function toggleInput() {
-    const vars = { variables: { id: value.id } };
+  async function removeRestream() {
     try {
-      if (value.enabled) {
-        await disableInputMutation(vars);
-      } else {
-        await enableInputMutation(vars);
-      }
+      await removeRestreamMutation({ variables: { id: value.id } });
     } catch (e) {
       showError(e.message);
     }
@@ -93,21 +90,45 @@
 
   async function toggleAllOutputs() {
     if (value.outputs.length < 1) return;
+    const variables = { restream_id: value.id };
     try {
       if (allEnabled) {
-        await disableAllOutputsMutation({ variables: { input_id: value.id } });
+        await disableAllOutputsMutation({ variables });
       } else {
-        await enableAllOutputsMutation({ variables: { input_id: value.id } });
+        await enableAllOutputsMutation({ variables });
       }
     } catch (e) {
       showError(e.message);
+    }
+  }
+
+  async function openExportModal() {
+    let resp;
+    try {
+      resp = await gqlClient.query({
+        query: ExportRestream,
+        variables: { id: value.id },
+        fetchPolicy: 'no-cache',
+      });
+    } catch (e) {
+      showError(e.message);
+      return;
+    }
+
+    if (!!resp.data && !!resp.data.export) {
+      exportModal.open(
+        value.id,
+        JSON.stringify(JSON.parse(resp.data.export), null, 2)
+      );
     }
   }
 </script>
 
 <template>
   <div class="uk-section uk-section-muted uk-section-xsmall">
-    <button type="button" class="uk-close" uk-close on:click={removeInput} />
+    <div class="left-buttons-area" />
+    <div class="right-buttons-area" />
+    <button type="button" class="uk-close" uk-close on:click={removeRestream} />
 
     <button
       class="uk-button uk-button-primary uk-button-small"
@@ -115,6 +136,15 @@
     >
       <i class="fas fa-plus" />&nbsp;<span>Output</span>
     </button>
+
+    <a
+      class="export-import"
+      href="/"
+      on:click|preventDefault={openExportModal}
+      title="Export/Import"
+    >
+      <i class="fas fa-share-square" />
+    </a>
 
     {#if !!value.label}
       <span class="label">{value.label}</span>
@@ -155,88 +185,35 @@
       </span>
     {/if}
 
-    <Toggle
-      id="input-toggle-{value.id}"
-      checked={value.enabled}
-      on:change={toggleInput}
+    <a
+      class="edit-input"
+      href="/"
+      on:click|preventDefault={openEditRestreamModal}
+    >
+      <i class="far fa-edit" title="Edit input" />
+    </a>
+    <Input
+      {public_host}
+      restream_id={value.id}
+      restream_key={value.key}
+      value={value.input}
     />
-    <span>
-      <span
-        class:uk-alert-danger={mainStatus === 'OFFLINE'}
-        class:uk-alert-warning={mainStatus === 'INITIALIZING'}
-        class:uk-alert-success={mainStatus === 'ONLINE'}
-      >
-        {#key isPull}
-          <span>
-            <i
-              class="fas"
-              class:fa-arrow-down={isPull}
-              class:fa-arrow-right={!isPull}
-              title="{isPull ? 'Pulls' : 'Accepts'}{isFailover
-                ? ' main'
-                : ''} RTMP stream"
-            />
-          </span>
-        {/key}
-      </span>
-      <span>
-        {#if isPull}
-          {value.input.src}
-        {:else}
-          rtmp://{public_host}/{value.input.name}/{isFailover ? 'main' : 'in'}
-        {/if}
-      </span>
-      <a
-        class="edit-input"
-        href="/"
-        on:click|preventDefault={openEditInputModal}
-      >
-        <i class="far fa-edit" title="Edit input" />
-      </a>
-    </span>
-    {#if isFailover}
-      <div class="failover">
-        <span
-          class:uk-alert-danger={value.input.backupStatus === 'OFFLINE'}
-          class:uk-alert-warning={value.input.backupStatus === 'INITIALIZING'}
-          class:uk-alert-success={value.input.backupStatus === 'ONLINE'}
-        >
-          <i class="fas fa-arrow-right" title="Accepts backup RTMP stream" />
-        </span>
-        <span>rtmp://{public_host}/{value.input.name}/backup</span>
-        <span class="resulting">
-          {#if value.input.status === 'ONLINE'}
-            <span
-              ><i
-                class="fas fa-circle uk-alert-success"
-                title="Failover RTMP stream"
-              /></span
-            >
-          {:else if value.input.status === 'INITIALIZING'}
-            <span
-              ><i
-                class="fas fa-dot-circle uk-alert-warning"
-                title="Failover RTMP stream"
-              /></span
-            >
-          {:else}
-            <span
-              ><i
-                class="far fa-dot-circle uk-alert-danger"
-                title="Failover RTMP stream"
-              /></span
-            >
-          {/if}
-          <span>rtmp://{public_host}/{value.input.name}/in</span>
-        </span>
-      </div>
+    {#if !!value.input.src && value.input.src.__typename === 'FailoverInputSrc'}
+      {#each value.input.src.inputs as input}
+        <Input
+          {public_host}
+          restream_id={value.id}
+          restream_key={value.key}
+          value={input}
+        />
+      {/each}
     {/if}
 
     {#if value.outputs && value.outputs.length > 0}
       <div class="uk-grid uk-grid-small" uk-grid>
         {#each value.outputs as output}
           <Output
-            input_id={value.id}
+            restream_id={value.id}
             value={output}
             hidden={!showAll && !showFiltered[output.status]}
           />
@@ -253,19 +230,23 @@
     padding-left: 10px
     padding-right: @padding-left
 
-    .uk-close
-      float: right
-      margin-top: 5px
+    &:hover
+      .uk-close, .uk-button-small
+      .edit-input, .export-import
+        opacity: 1
 
     .uk-button-small
       float: right
       font-size: 0.7rem
       margin-top: -2px
-      margin-right: 30px
+      opacity: 0
+      transition: opacity .3s ease
+      &:hover
+        opacity: 1
 
     .total
       float: right
-      margin-right: 30px
+      margin-right: 20px
       .count
         text-align: right
         margin-right: 2px
@@ -279,19 +260,37 @@
           color: inherit
           text-decoration: none
 
-    .fa-arrow-down, .fa-arrow-right
-      font-size: 14px
-      cursor: help
+    .edit-input, .export-import, .uk-close
+      position: absolute
+      opacity: 0
+      transition: opacity .3s ease
+      &:hover
+        opacity: 1
+    .edit-input, .export-import
+      color: #666
+      outline: none
+      &:hover
+        text-decoration: none
+        color: #444
+    .edit-input
+      left: -25px
+    .export-import
+      right: -25px
+    .uk-close
+      right: -21px
+      top: -15px
 
-    .failover
-      padding-left: 45px
-
-      .resulting
-        margin-left: 15px
-
-        .fa-circle, .fa-dot-circle
-          font-size: 14px
-          cursor: help
+    .left-buttons-area, .right-buttons-area
+      position: absolute
+      width: 34px
+    .left-buttons-area
+      right: 100%
+      top: 0
+      height: 100%
+    .right-buttons-area
+      left: 100%
+      top: -20px
+      height: calc(20px + 100%)
 
     .uk-grid
       margin-top: 10px
@@ -304,15 +303,4 @@
       border-top-left-radius: 4px
       border-top-right-radius: 4px
       background-color: #f8f8f8
-
-  .edit-input
-    margin-left: 6px
-    color: #666
-    opacity: 0
-    transition: opacity .3s ease
-    &:hover
-      color: #444
-  .uk-section:hover
-    .edit-input
-      opacity: 1
 </style>

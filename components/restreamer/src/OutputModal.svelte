@@ -86,7 +86,7 @@
       v.list.split(/\r\n|\r|\n/).forEach((line) => {
         const vs = line.split(',');
         let vars = {
-          input_id: v.input_id,
+          restream_id: v.restream_id,
           url: vs[vs.length - 1],
         };
         if (vs.length > 1) {
@@ -96,7 +96,7 @@
       });
     } else {
       let vars = {
-        input_id: v.input_id,
+        restream_id: v.restream_id,
         url: sanitizeUrl(v.url),
       };
       const label = sanitizeLabel(v.label);
@@ -112,12 +112,12 @@
 
     let failed = [];
     await Promise.all(
-      submit.map(async (vars) => {
+      submit.map(async (variables) => {
         try {
-          await addOutputMutation({ variables: vars });
+          await addOutputMutation({ variables });
         } catch (e) {
-          showError('Failed to add ' + vars.url + ':\n' + e.message);
-          failed.push(vars);
+          showError('Failed to add ' + variables.url + ':\n' + e.message);
+          failed.push(variables);
         }
       })
     );
@@ -177,7 +177,9 @@
           placeholder="rtmp://..."
         />
         <div class="uk-alert">
-          Server will publish input RTMP stream to this address
+          Server will publish the input live stream to this address.
+          <br />
+          Supported protocols: <code>rtmp://</code>, <code>icecast://</code>
         </div>
 
         <fieldset class="mix-form" class:expanded={$value.mixing}>
@@ -218,7 +220,9 @@ rtmp://2...
 label3,rtmp://3..."
         />
         <div class="uk-alert">
-          Server will publish input RTMP stream to these addresses
+          Server will publish the input live stream to these addresses.
+          <br />
+          Supported protocols: <code>rtmp://</code>, <code>icecast://</code>
         </div>
       </fieldset>
 

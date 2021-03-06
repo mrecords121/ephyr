@@ -1,6 +1,6 @@
 [package]
 name = "ephyr-restreamer"
-version = "0.2.0-alpha.2+dev"
+version = "0.2.0-alpha.3"
 edition = "2018"
 authors = ["Kai Ren <tyranron@gmail.com>"]
 publish = false
@@ -31,6 +31,7 @@ regex = "1.4"
 reqwest = { version = "0.10", features = ["json"], default-features = false }
 send_wrapper = { version = "0.5", default-features = false }
 serde = { version = "1.0", features = ["derive"] }
+serde_humantime = { version = "1.0", package = "humantime-serde" }
 serde_json = "1.0"
 smart-default = "0.6"
 structopt = "0.3"
@@ -38,7 +39,7 @@ url = { version = "2.1", features = ["serde"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 [dependencies.derive_more]
     version = "0.99.11"
-    features = ["display", "error", "from"]
+    features = ["deref", "display", "error", "from"]
     default-features = false
 [dependencies.tokio]
     version = "0.2"

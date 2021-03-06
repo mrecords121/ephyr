@@ -3,17 +3,21 @@
 //! [GraphQL]: https://graphql.com
 
 use actix_web::http::StatusCode;
+use anyhow::anyhow;
 use futures::stream::BoxStream;
 use futures_signals::signal::SignalExt as _;
 use juniper::{graphql_object, graphql_subscription, GraphQLObject, RootNode};
 use once_cell::sync::Lazy;
 use rand::Rng as _;
-use regex::Regex;
-use url::Url;
 
 use crate::{
     api::graphql,
-    state::{Delay, InputId, MixinId, OutputId, Restream, Volume},
+    spec,
+    state::{
+        Delay, InputId, InputKey, InputSrcUrl, Label, MixinId, MixinSrcUrl,
+        OutputDstUrl, OutputId, Restream, RestreamId, RestreamKey, Volume,
+    },
+    Spec,
 };
 
 use super::Context;
@@ -31,177 +35,244 @@ pub fn schema() -> Schema {
     Schema::new(QueriesRoot, MutationsRoot, SubscriptionsRoot)
 }
 
-/// Root of all [GraphQL mutations][1] in [`Schema`].
+/// Root of all [GraphQL mutations][1] in the [`Schema`].
 ///
 /// [1]: https://spec.graphql.org/June2018/#sec-Root-Operation-Types
 #[derive(Clone, Copy, Debug)]
 pub struct MutationsRoot;
 
-#[graphql_object(name = "Mutations", context = Context)]
+#[graphql_object(name = "Mutation", context = Context)]
 impl MutationsRoot {
-    /// Adds a new `Restream` with a `PullInput`.
+    /// Applies the specified JSON `spec` of `Restream`s to this server.
     ///
-    /// If `id` is specified, then tries to update parameters of the existent
-    /// `Restream`.
-    ///
-    /// ### Idempotency
-    ///
-    /// Idempotent if `id` is specified. Otherwise is non-idempotent, always
-    /// creates a new `Restream` and errors on the `src` duplicates.
+    /// If `replace` is `true` then replaces all the existing `Restream`s with
+    /// the one defined by the `spec`. Otherwise, merges the `spec` with
+    /// existing `Restream`s.
     ///
     /// ### Result
     ///
-    /// Returns `null` if `Restream` with the given `id` doesn't exist.
-    /// Otherwise always returns `true`.
+    /// Returns `null` if a `Restream` with the given `id` doesn't exist,
+    /// otherwise always returns `true`.
     #[graphql(arguments(
-        src(description = "RTMP URL to pull media stream from."),
-        label(description = "Optional label for this `Restream`."),
-        id(
-            description = "ID of `Restream` to be updated rather than creating \
-                           a new one."
-        ),
-    ))]
-    fn add_pull_input(
-        src: Url,
-        label: Option<String>,
-        id: Option<InputId>,
-        context: &Context,
-    ) -> Result<Option<bool>, graphql::Error> {
-        if !matches!(src.scheme(), "rtmp" | "rtmps") {
-            return Err(graphql::Error::new("INVALID_SRC_RTMP_URL")
-                .status(StatusCode::BAD_REQUEST)
-                .message(
-                    "Provided `src` is invalid: unknown scheme, allowed only: \
-                     rtmp://, rtmps://",
-                ));
-        }
-
-        if let Some(label) = &label {
-            if !LABEL_REGEX.is_match(label) {
-                return Err(graphql::Error::new("INVALID_INPUT_LABEL")
-                    .status(StatusCode::BAD_REQUEST)
-                    .message(
-                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,70}",
-                    ));
-            }
-        }
-
-        match context.state().add_pull_input(src, label, id) {
-            None => Ok(None),
-            Some(true) => Ok(Some(true)),
-            Some(false) => Err(graphql::Error::new("DUPLICATE_SRC_RTMP_URL")
-                .status(StatusCode::CONFLICT)
-                .message("Provided `src` is used already")),
-        }
-    }
-
-    /// Adds a new `Restream` with a `PushInput` (or `FailoverPushInput`).
-    ///
-    /// If `failover` is `true`, then uses a `FailoverPushInput` input instead
-    /// of a regular `PushInput`.
-    ///
-    /// If `id` is specified, then tries to update parameters of the existent
-    /// `Restream`.
-    ///
-    /// ### Idempotency
-    ///
-    /// Idempotent if `id` is specified. Otherwise is non-idempotent, always
-    /// creates a new `Restream` and errors on the `name` duplicates.
-    ///
-    /// ### Result
-    ///
-    /// Returns `null` if `Restream` with the given `id` doesn't exist.
-    /// Otherwise always returns `true`.
-    #[graphql(arguments(
-        name(description = "Name of RTMP media stream used in its URL."),
-        label(description = "Optional label for this `Restream`."),
-        failover(
-            description = "Indicator whether a `FailoverPushInput` should be \
-                           used instead of a regular `PushInput`.",
+        spec(description = "JSON spec obtained with `export` query."),
+        replace(
+            description = "Indicator whether the `spec` should replace \
+                           existing definitions.",
             default = false,
         ),
-        id(
-            description = "ID of `Restream` to be updated rather than creating \
-                           a new one."
-        ),
+        restream_id(description = "Optional ID of a concrete `Restream` \
+                                   to apply the `spec` to without touching \
+                                   other `Restream`s."),
     ))]
-    fn add_push_input(
-        name: String,
-        label: Option<String>,
-        failover: bool,
-        id: Option<InputId>,
+    fn import(
+        spec: String,
+        replace: bool,
+        restream_id: Option<RestreamId>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
-        static NAME_REGEX: Lazy<Regex> =
-            Lazy::new(|| Regex::new("^[a-z0-9_-]{1,20}$").unwrap());
-        if name.starts_with("pull_") {
-            return Err(graphql::Error::new("INVALID_INPUT_NAME")
-                .status(StatusCode::BAD_REQUEST)
-                .message("Provided `name` is invalid: starts with 'pull_'"));
-        }
-        if !NAME_REGEX.is_match(&name) {
-            return Err(graphql::Error::new("INVALID_INPUT_NAME")
-                .status(StatusCode::BAD_REQUEST)
-                .message("Provided `name` is invalid: not [a-z0-9_-]{1,20}"));
-        }
+        let spec = serde_json::from_str::<Spec>(&spec)?.into_v1();
 
-        if let Some(label) = &label {
-            if !LABEL_REGEX.is_match(label) {
-                return Err(graphql::Error::new("INVALID_INPUT_LABEL")
-                    .status(StatusCode::BAD_REQUEST)
-                    .message(
-                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,70}",
-                    ));
-            }
-        }
+        Ok(if let Some(id) = restream_id {
+            let spec = (spec.restreams.len() == 1)
+                .then(|| spec.restreams.into_iter().next())
+                .flatten()
+                .ok_or_else(|| {
+                    graphql::Error::new("INVALID_SPEC")
+                        .status(StatusCode::BAD_REQUEST)
+                        .message(
+                            "JSON spec should contain exactly one Restream",
+                        )
+                })?;
+            #[allow(clippy::find_map)] // due to moving `spec` inside closure
+            context
+                .state()
+                .restreams
+                .lock_mut()
+                .iter_mut()
+                .find(|r| r.id == id)
+                .map(|r| {
+                    r.apply(spec, replace);
+                    true
+                })
+        } else {
+            context.state().apply(spec, replace);
+            Some(true)
+        })
+    }
 
-        match context.state().add_push_input(name, failover, label, id) {
-            None => Ok(None),
-            Some(true) => Ok(Some(true)),
-            Some(false) => Err(graphql::Error::new("DUPLICATE_INPUT_NAME")
+    /// Sets a new `Restream` or updates an existing one (if `id` is specified).
+    ///
+    /// ### Idempotency
+    ///
+    /// Idempotent if `id` is specified. Otherwise is non-idempotent, always
+    /// creates a new `Restream` and errors on the `key` duplicates.
+    ///
+    /// ### Result
+    ///
+    /// Returns `null` if a `Restream` with the given `id` doesn't exist,
+    /// otherwise always returns `true`.
+    #[graphql(arguments(
+        key(description = "Unique key to set the `Restream` with."),
+        label(description = "Optional label to set the `Restream` with."),
+        src(description = "URL to pull a live stream from.\
+                           \n\n\
+                           If not specified then `Restream` will await for a \
+                           live stream being pushed to its endpoint."),
+        backup_src(
+            description = "URL to pull a live stream from for a backup \
+                           endpoint.\
+                           \n\n\
+                           If not specified then `Restream` will await for a \
+                           live stream being pushed to its backup endpoint.\
+                           \n\n\
+                           Has no effect if `withBackup` argument is not \
+                           `true`.",
+        ),
+        with_backup(
+            description = "Indicator whether the `Restream` should have a \
+                           backup endpoint for a live stream.",
+            default = false,
+        ),
+        id(description = "ID of the `Restream` to be updated rather than \
+                          creating a new one."),
+    ))]
+    fn set_restream(
+        key: RestreamKey,
+        label: Option<Label>,
+        src: Option<InputSrcUrl>,
+        backup_src: Option<InputSrcUrl>,
+        with_backup: bool,
+        id: Option<RestreamId>,
+        context: &Context,
+    ) -> Result<Option<bool>, graphql::Error> {
+        let input_src = if with_backup {
+            Some(spec::v1::InputSrc::FailoverInputs(vec![
+                spec::v1::Input {
+                    key: InputKey::new("main").unwrap(),
+                    src: src.map(spec::v1::InputSrc::RemoteUrl),
+                    enabled: true,
+                },
+                spec::v1::Input {
+                    key: InputKey::new("backup").unwrap(),
+                    src: backup_src.map(spec::v1::InputSrc::RemoteUrl),
+                    enabled: true,
+                },
+            ]))
+        } else {
+            src.map(spec::v1::InputSrc::RemoteUrl)
+        };
+
+        let spec = spec::v1::Restream {
+            key,
+            label,
+            input: spec::v1::Input {
+                key: InputKey::new("origin").unwrap(),
+                src: input_src,
+                enabled: true,
+            },
+            outputs: vec![],
+        };
+
+        #[allow(clippy::option_if_let_else)] // due to consuming `spec`
+        Ok(if let Some(id) = id {
+            context.state().edit_restream(id, spec)
+        } else {
+            context.state().add_restream(spec).map(Some)
+        }
+        .map_err(|e| {
+            graphql::Error::new("DUPLICATE_RESTREAM_KEY")
                 .status(StatusCode::CONFLICT)
-                .message("Provided `name` is used already")),
-        }
+                .message(&e)
+        })?
+        .map(|_| true))
     }
 
-    /// Removes `Restream` by its `id`.
+    /// Removes a `Restream` by its `id`.
     ///
     /// ### Result
     ///
-    /// Returns `true` if `Restream` with the given `id` has been removed, or
-    /// `false` if it doesn't exist.
-    #[graphql(arguments(id(description = "ID of `Restream` to be removed.")))]
-    fn remove_input(id: InputId, context: &Context) -> bool {
-        context.state().remove_input(id)
+    /// Returns `null` if `Restream` with the given `id` doesn't exist,
+    /// otherwise always returns `true`.
+    #[graphql(arguments(id(
+        description = "ID of the `Restream` to be removed."
+    )))]
+    fn remove_restream(id: RestreamId, context: &Context) -> Option<bool> {
+        context.state().remove_restream(id)?;
+        Some(true)
     }
 
-    /// Enables `Restream` by its `id`.
+    /// Enables a `Restream` by its `id`.
     ///
-    /// Enabled `Restream` starts accepting or pulling media traffic.
+    /// Enabled `Restream` is allowed to accept or pull a live stream.
     ///
     /// ### Result
     ///
-    /// Returns `true` if `Restream` with the given `id` has been enabled,
+    /// Returns `true` if a `Restream` with the given `id` has been enabled,
     /// `false` if it has been enabled already, and `null` if it doesn't exist.
-    #[graphql(arguments(id(description = "ID of `Restream` to be enabled.")))]
-    fn enable_input(id: InputId, context: &Context) -> Option<bool> {
-        context.state().enable_input(id)
+    #[graphql(arguments(id(
+        description = "ID of the `Restream` to be enabled."
+    )))]
+    fn enable_restream(id: RestreamId, context: &Context) -> Option<bool> {
+        context.state().enable_restream(id)
     }
 
-    /// Disables `Restream` by its `id`.
+    /// Disables a `Restream` by its `id`.
     ///
-    /// Disabled `Restream` stops and forbids accepting or pulling media
-    /// traffic.
+    /// Disabled `Restream` stops all on-going re-streaming processes and is not
+    /// allowed to accept or pull a live stream.
     ///
     /// ### Result
     ///
-    /// Returns `true` if `Restream` with the given `id` has been disabled,
+    /// Returns `true` if a `Restream` with the given `id` has been disabled,
     /// `false` if it has been disabled already, and `null` if it doesn't exist.
     #[graphql(arguments(id(
-        description = "ID of `Restream` to be disabled."
+        description = "ID of the `Restream` to be disabled."
     )))]
-    fn disable_input(id: InputId, context: &Context) -> Option<bool> {
-        context.state().disable_input(id)
+    fn disable_restream(id: RestreamId, context: &Context) -> Option<bool> {
+        context.state().disable_restream(id)
+    }
+
+    /// Enables an `Input` by its `id`.
+    ///
+    /// Enabled `Input` is allowed to accept or pull a live stream.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if an `Input` with the given `id` has been enabled,
+    /// `false` if it has been enabled already, and `null` if it doesn't exist.
+    #[graphql(arguments(
+        id(description = "ID of the `Input` to be enabled."),
+        restream_id(description = "ID of the `Restream` to enable the \
+                                   `Input` in."),
+    ))]
+    fn enable_input(
+        id: InputId,
+        restream_id: RestreamId,
+        context: &Context,
+    ) -> Option<bool> {
+        context.state().enable_input(id, restream_id)
+    }
+
+    /// Disables an `Input` by its `id`.
+    ///
+    /// Disabled `Input` stops all on-going re-streaming processes and is not
+    /// allowed to accept or pull a live stream.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if an `Input` with the given `id` has been disabled,
+    /// `false` if it has been disabled already, and `null` if it doesn't exist.
+    #[graphql(arguments(
+        id(description = "ID of the `Input` to be disabled."),
+        restream_id(description = "ID of the `Restream` to disable the \
+                                   `Input` in."),
+    ))]
+    fn disable_input(
+        id: InputId,
+        restream_id: RestreamId,
+        context: &Context,
+    ) -> Option<bool> {
+        context.state().disable_input(id, restream_id)
     }
 
     /// Adds a new `Output` to the specified `Restream`.
@@ -213,171 +284,163 @@ impl MutationsRoot {
     ///
     /// ### Result
     ///
-    /// Returns `null` if `Restream` with the given `inputId` doesn't exist.
+    /// Returns `null` if `Restream` with the given `restreamId` doesn't exist.
     /// Otherwise always returns `true`.
     #[graphql(arguments(
-        input_id(description = "ID of `Restream` to add `Output` to."),
-        dst(description = "\
-        URL to push media stream onto.\
-        \n\n\
-        At the moment only [RTMP] and [Icecast] are supported.\
-        \n\n\
-        [Icecast]: https://icecast.org\n\
-        [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol"),
-        label(description = "Optional label for this `Output`."),
+        restream_id(
+            description = "ID of the `Restream` to add a new `Output` \
+                           to."
+        ),
+        dst(description = "Destination URL to re-stream a live stream onto.\
+                           \n\n\
+                           At the moment only [RTMP] and [Icecast] are \
+                           supported.\
+                           \n\n\
+                           [Icecast]: https://icecast.org\n\
+                           [RTMP]: https://en.wikipedia.org/wiki/\
+                                   Real-Time_Messaging_Protocol"),
+        label(description = "Optional label to add a new `Output` with."),
         mix(description = "Optional TeamSpeak URL to mix into this `Output`."),
     ))]
     fn add_output(
-        input_id: InputId,
-        dst: Url,
-        label: Option<String>,
-        mix: Option<Url>,
+        restream_id: RestreamId,
+        dst: OutputDstUrl,
+        label: Option<Label>,
+        mix: Option<MixinSrcUrl>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
-        if !matches!(dst.scheme(), "icecast" | "rtmp" | "rtmps") {
-            return Err(graphql::Error::new("INVALID_DST_RTMP_URL")
-                .status(StatusCode::BAD_REQUEST)
-                .message(
-                    "Provided `dst` is invalid: unknown scheme, allowed only: \
-                     rtmp://, rtmps://, icecast://",
-                ));
-        }
+        let spec = spec::v1::Output {
+            dst,
+            label,
+            volume: Volume::ORIGIN,
+            mixins: mix
+                .map(|src| {
+                    let delay = (src.scheme() == "ts")
+                        .then(|| Delay::from_millis(3500))
+                        .flatten()
+                        .unwrap_or_default();
+                    vec![spec::v1::Mixin {
+                        src,
+                        volume: Volume::ORIGIN,
+                        delay,
+                    }]
+                })
+                .unwrap_or_default(),
+            enabled: false,
+        };
 
-        if let Some(label) = &label {
-            if !LABEL_REGEX.is_match(label) {
-                return Err(graphql::Error::new("INVALID_OUTPUT_LABEL")
-                    .status(StatusCode::BAD_REQUEST)
-                    .message(
-                        r"Provided label is invalid: not [^,\n\t\r\f\v]{1,70}",
-                    ));
-            }
-        }
-
-        if let Some(mix) = &mix {
-            if mix.scheme() != "ts" || mix.host().is_none() {
-                return Err(graphql::Error::new("INVALID_MIX_TS_URL")
-                    .status(StatusCode::BAD_REQUEST)
-                    .message(
-                        "Provided `mix` is invalid: unknown scheme, allowed \
-                         only: ts://",
-                    ));
-            }
-        }
-
-        context
+        Ok(context
             .state()
-            .add_new_output(input_id, dst, label, mix)
-            .map(|added| {
-                if added {
-                    Ok(added)
-                } else {
-                    Err(graphql::Error::new("DUPLICATE_DST_RTMP_URL")
-                        .status(StatusCode::CONFLICT)
-                        .message(
-                            "Provided `dst` is used already for this input",
-                        ))
-                }
-            })
-            .transpose()
+            .add_new_output(restream_id, spec)
+            .map_err(|e| {
+                graphql::Error::new("DUPLICATE_OUTPUT_URL")
+                    .status(StatusCode::CONFLICT)
+                    .message(&e)
+            })?
+            .map(|_| true))
     }
 
-    /// Removes `Output` by its ID from the specified `Restream`.
+    /// Removes an `Output` by its `id` from the specified `Restream`.
     ///
     /// ### Result
     ///
-    /// Returns `true` if `Output` with the given `id` has been removed,
-    /// `false` if it has been removed already, and `null` if the specified
-    /// `Restream` doesn't exist.
+    /// Returns `null` if the specified `Restream`/`Output` doesn't exist,
+    /// otherwise always returns `true`.
     #[graphql(arguments(
-        input_id(description = "ID of `Restream` to remove `Output` from."),
-        output_id(description = "ID of `Output` to be removed."),
+        id(description = "ID of the `Output` to be removed."),
+        restream_id(description = "ID of the `Restream` to remove the \
+                                   `Output` from."),
     ))]
     fn remove_output(
-        input_id: InputId,
-        output_id: OutputId,
+        id: OutputId,
+        restream_id: RestreamId,
         context: &Context,
     ) -> Option<bool> {
-        context.state().remove_output(input_id, output_id)
+        context.state().remove_output(id, restream_id).map(|_| true)
     }
 
-    /// Enables `Output` by its ID in the specified `Restream`.
+    /// Enables an `Output` by its `id` in the specified `Restream`.
     ///
-    /// Enabled `Output` starts pushing media traffic to its destination.
+    /// Enabled `Output` starts re-streaming a live stream to its destination.
     ///
     /// ### Result
     ///
-    /// Returns `true` if `Output` with the given `id` has been enabled,
+    /// Returns `true` if an `Output` with the given `id` has been enabled,
     /// `false` if it has been enabled already, and `null` if the specified
     /// `Restream`/`Output` doesn't exist.
     #[graphql(arguments(
-        input_id(description = "ID of `Restream` to enable `Output` in."),
-        output_id(description = "ID of `Output` to be enabled."),
+        id(description = "ID of the `Output` to be enabled."),
+        restream_id(description = "ID of the `Restream` to enable the \
+                                   `Output` in."),
     ))]
     fn enable_output(
-        input_id: InputId,
-        output_id: OutputId,
+        id: OutputId,
+        restream_id: RestreamId,
         context: &Context,
     ) -> Option<bool> {
-        context.state().enable_output(input_id, output_id)
+        context.state().enable_output(id, restream_id)
     }
 
-    /// Disables `Output` by its ID in the specified `Restream`.
+    /// Disables an `Output` by its `id` in the specified `Restream`.
     ///
-    /// Disabled `Output` stops pushing media traffic to its destination.
+    /// Disabled `Output` stops re-streaming a live stream to its destination.
     ///
     /// ### Result
     ///
-    /// Returns `true` if `Output` with the given `id` has been disabled,
+    /// Returns `true` if an `Output` with the given `id` has been disabled,
     /// `false` if it has been disabled already, and `null` if the specified
     /// `Restream`/`Output` doesn't exist.
     #[graphql(arguments(
-        input_id(description = "ID of `Restream` to disable `Output` in."),
-        output_id(description = "ID of `Output` to be disabled."),
+        id(description = "ID of the `Output` to be disabled."),
+        restream_id(description = "ID of the `Restream` to disable the \
+                                   `Output` in."),
     ))]
     fn disable_output(
-        input_id: InputId,
-        output_id: OutputId,
+        id: OutputId,
+        restream_id: RestreamId,
         context: &Context,
     ) -> Option<bool> {
-        context.state().disable_output(input_id, output_id)
+        context.state().disable_output(id, restream_id)
     }
 
     /// Enables all `Output`s in the specified `Restream`.
     ///
-    /// Enabled `Output`s start pushing media traffic to their destinations.
+    /// Enabled `Output`s start re-streaming a live stream to their
+    /// destinations.
     ///
     /// ### Result
     ///
-    /// Returns `true` if at least `Output`has been enabled, `false` if all
+    /// Returns `true` if at least one `Output` has been enabled, `false` if all
     /// `Output`s have been enabled already, and `null` if the specified
     /// `Restream` doesn't exist.
-    #[graphql(arguments(input_id(
-        description = "ID of `Restream` to enable all `Output`s in."
+    #[graphql(arguments(restream_id(
+        description = "ID of the `Restream` to enable all `Output`s in."
     )))]
     fn enable_all_outputs(
-        input_id: InputId,
+        restream_id: RestreamId,
         context: &Context,
     ) -> Option<bool> {
-        context.state().enable_all_outputs(input_id)
+        context.state().enable_all_outputs(restream_id)
     }
 
     /// Disables all `Output`s in the specified `Restream`.
     ///
-    /// Disabled `Output`s stop pushing media traffic to their destinations.
+    /// Disabled `Output`s stop re-streaming a live stream to their
+    /// destinations.
     ///
     /// ### Result
     ///
-    /// Returns `true` if at least `Output` has been disabled, `false` if all
-    /// `Output`s have been disabled already, and `null` if the specified
+    /// Returns `true` if at least one `Output` has been disabled, `false` if
+    /// all `Output`s have been disabled already, and `null` if the specified
     /// `Restream` doesn't exist.
-    #[graphql(arguments(input_id(
-        description = "ID of `Restream` to disable all `Output`s in."
+    #[graphql(arguments(restream_id(
+        description = "ID of the `Restream` to disable all `Output`s in."
     )))]
     fn disable_all_outputs(
-        input_id: InputId,
+        restream_id: RestreamId,
         context: &Context,
     ) -> Option<bool> {
-        context.state().disable_all_outputs(input_id)
+        context.state().disable_all_outputs(restream_id)
     }
 
     /// Tunes a `Volume` rate of the specified `Output` or one of its `Mixin`s.
@@ -385,19 +448,20 @@ impl MutationsRoot {
     /// ### Result
     ///
     /// Returns `true` if a `Volume` rate has been changed, `false` if it has
-    /// the same value already, and `null` if the specified `Output` or `Mixin`
+    /// the same value already, or `null` if the specified `Output` or `Mixin`
     /// doesn't exist.
     #[graphql(arguments(
-        input_id(description = "ID of `Restream` of the tuned `Output`."),
+        restream_id(description = "ID of the `Restream` to tune the \
+                                   `Output` in."),
         output_id(description = "ID of the tuned `Output`."),
-        mixin_id(description = "\
-        Optional ID of the tuned `Mixin`.\
-        \n\n\
-        If set, then tunes the `Mixin` rather that the `Output`."),
-        delay(description = "Volume rate in percents to be set."),
+        mixin_id(description = "Optional ID of the tuned `Mixin`.\
+                                \n\n\
+                                If set, then tunes the `Mixin` rather than \
+                                the `Output`."),
+        volume(description = "Volume rate in percents to be set."),
     ))]
     fn tune_volume(
-        input_id: InputId,
+        restream_id: RestreamId,
         output_id: OutputId,
         mixin_id: Option<MixinId>,
         volume: Volume,
@@ -405,26 +469,27 @@ impl MutationsRoot {
     ) -> Option<bool> {
         context
             .state()
-            .tune_volume(input_id, output_id, mixin_id, volume)
+            .tune_volume(restream_id, output_id, mixin_id, volume)
     }
 
-    /// Tunes a `Delay` before being mixed in of the specified `Mixin` in the
-    /// specified `Output`.
+    /// Tunes a `Delay` of the specified `Mixin` before mix it into its
+    /// `Output`.
     ///
     /// ### Result
     ///
     /// Returns `true` if a `Delay` has been changed, `false` if it has the same
-    /// value already, and `null` if the specified `Output` or `Mixin` doesn't
+    /// value already, or `null` if the specified `Output` or `Mixin` doesn't
     /// exist.
     #[graphql(arguments(
-        input_id(description = "ID of `Restream` of the tuned `Mixin`."),
-        output_id(description = "ID of `Output` of the tuned `Mixin`."),
+        restream_id(description = "ID of the `Restream` to tune the the \
+                                   `Mixin` in."),
+        output_id(description = "ID of the `Output` of the tuned `Mixin`."),
         mixin_id(description = "ID of the tuned `Mixin`."),
         delay(description = "Number of milliseconds to delay the `Mixin` \
-                             before being mixed in."),
+                             before mix it into its `Output`."),
     ))]
     fn tune_delay(
-        input_id: InputId,
+        restream_id: RestreamId,
         output_id: OutputId,
         mixin_id: MixinId,
         delay: Delay,
@@ -432,7 +497,7 @@ impl MutationsRoot {
     ) -> Option<bool> {
         context
             .state()
-            .tune_delay(input_id, output_id, mixin_id, delay)
+            .tune_delay(restream_id, output_id, mixin_id, delay)
     }
 
     /// Sets or unsets the password to protect this GraphQL API with.
@@ -498,21 +563,15 @@ impl MutationsRoot {
     }
 }
 
-/// Root of all [GraphQL subscriptions][1] in [`Schema`].
-///
-/// [1]: https://spec.graphql.org/June2018/#sec-Root-Operation-Types
-#[derive(Clone, Copy, Debug)]
-pub struct SubscriptionsRoot;
-
-/// Root of all [GraphQL queries][1] in [`Schema`].
+/// Root of all [GraphQL queries][1] in the [`Schema`].
 ///
 /// [1]: https://spec.graphql.org/June2018/#sec-Root-Operation-Types
 #[derive(Clone, Copy, Debug)]
 pub struct QueriesRoot;
 
-#[graphql_object(name = "Queries", context = Context)]
+#[graphql_object(name = "Query", context = Context)]
 impl QueriesRoot {
-    /// Returns current `Info` parameters of this server.
+    /// Returns the current `Info` parameters of this server.
     fn info(context: &Context) -> Info {
         Info {
             public_host: context.config().public_host.clone().unwrap(),
@@ -520,13 +579,53 @@ impl QueriesRoot {
         }
     }
 
-    /// Returns all `Restream`s happening on this server.
-    fn restreams(context: &Context) -> Vec<Restream> {
+    /// Returns all the `Restream`s happening on this server.
+    fn all_restreams(context: &Context) -> Vec<Restream> {
         context.state().restreams.get_cloned()
+    }
+
+    /// Returns `Restream`s happening on this server and identifiable by the
+    /// given `ids` in an exportable JSON format.
+    ///
+    /// If no `ids` specified, then returns all the `Restream`s happening on
+    /// this server at the moment.
+    #[graphql(arguments(ids(
+        description = "IDs of `Restream`s to be exported.\
+                       \n\n\
+                       If empty, then all the `Restream`s will be exported."
+        default = Vec::new(),
+    )))]
+    fn export(
+        ids: Vec<RestreamId>,
+        context: &Context,
+    ) -> Result<Option<String>, graphql::Error> {
+        let restreams = context
+            .state()
+            .restreams
+            .get_cloned()
+            .into_iter()
+            .filter_map(|r| {
+                (ids.is_empty() || ids.contains(&r.id)).then(|| r.export())
+            })
+            .collect::<Vec<_>>();
+        (!restreams.is_empty())
+            .then(|| {
+                let spec: Spec = spec::v1::Spec { restreams }.into();
+                serde_json::to_string(&spec).map_err(|e| {
+                    anyhow!("Failed to JSON-serialize spec: {}", e).into()
+                })
+            })
+            .transpose()
     }
 }
 
-#[graphql_subscription(name = "Subscriptions", context = Context)]
+/// Root of all [GraphQL subscriptions][1] in the [`Schema`].
+///
+/// [1]: https://spec.graphql.org/June2018/#sec-Root-Operation-Types
+#[derive(Clone, Copy, Debug)]
+pub struct SubscriptionsRoot;
+
+#[graphql_subscription(name = "Subscription", context = Context)]
 impl SubscriptionsRoot {
     /// Subscribes to updates of `Info` parameters of this server.
     async fn info(context: &Context) -> BoxStream<'static, Info> {
@@ -545,7 +644,9 @@ impl SubscriptionsRoot {
     }
 
     /// Subscribes to updates of all `Restream`s happening on this server.
-    async fn restreams(context: &Context) -> BoxStream<'static, Vec<Restream>> {
+    async fn all_restreams(
+        context: &Context,
+    ) -> BoxStream<'static, Vec<Restream>> {
         context
             .state()
             .restreams
@@ -556,14 +657,7 @@ impl SubscriptionsRoot {
     }
 }
 
-/// [`Regex`] for validating format of [`Restream::label`]/[`Output::label`].
-///
-/// [`Input::label`]: state::Input::label
-/// [`Output::label`]: state::Output::label
-static LABEL_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^[^,\n\t\r\f\v]{1,70}$").unwrap());
-
-/// Information about parameters that server operates with.
+/// Information about parameters that this server operates with.
 #[derive(Clone, Debug, GraphQLObject)]
 pub struct Info {
     /// Host that this server is reachable via in public.

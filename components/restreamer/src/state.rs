@@ -1,12 +1,12 @@
 //! Application state.
 
 use std::{
-    convert::TryInto, future::Future, panic::AssertUnwindSafe, path::Path,
-    time::Duration,
+    borrow::Cow, collections::HashSet, convert::TryInto, future::Future, mem,
+    panic::AssertUnwindSafe, path::Path, time::Duration,
 };
 
 use anyhow::anyhow;
-use derive_more::{Display, From, Into};
+use derive_more::{Deref, Display, From, Into};
 use ephyr_log::log;
 use futures::{
     future::TryFutureExt as _,
@@ -18,17 +18,19 @@ use juniper::{
     graphql_scalar, GraphQLEnum, GraphQLObject, GraphQLScalarValue,
     GraphQLUnion, ParseScalarResult, ParseScalarValue, ScalarValue, Value,
 };
-use serde::{Deserialize, Serialize};
+use once_cell::sync::Lazy;
+use regex::Regex;
+use serde::{de::Error as _, Deserialize, Deserializer, Serialize};
 use smart_default::SmartDefault;
 use tokio::{fs, io::AsyncReadExt as _};
 use url::Url;
 use uuid::Uuid;
 
-use crate::{display_panic, srs};
+use crate::{display_panic, serde::is_false, spec, srs, Spec};
 
-/// Reactive application state.
+/// Reactive application's state.
 ///
-/// Any changes to it automatically propagate to appropriate subscribers.
+/// Any changes to it automatically propagate to the appropriate subscribers.
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct State {
     /// [`argon2`] hash of password which protects access to this application's
@@ -40,7 +42,7 @@ pub struct State {
 }
 
 impl State {
-    /// Instantiates a new [`State`] reading it from a file (if any) and
+    /// Instantiates a new [`State`] reading it from a `file` (if any) and
     /// performing all the required inner subscriptions.
     ///
     /// # Errors
@@ -101,6 +103,59 @@ impl State {
         Ok(state)
     }
 
+    /// Applies the given [`Spec`] to this [`State`].
+    ///
+    /// If `replace` is `true` then all the [`Restream`]s, [`Restream::outputs`]
+    /// and [`Output::mixins`] will be replaced with new ones, otherwise new
+    /// ones will be merged with already existing ones.
+    pub fn apply(&self, new: spec::v1::Spec, replace: bool) {
+        let mut restreams = self.restreams.lock_mut();
+        if replace {
+            let mut olds = mem::replace(
+                &mut *restreams,
+                Vec::with_capacity(new.restreams.len()),
+            );
+            for new in new.restreams {
+                if let Some(mut old) = olds
+                    .iter()
+                    .enumerate()
+                    .find_map(|(n, o)| (o.key == new.key).then(|| n))
+                    .map(|n| olds.swap_remove(n))
+                {
+                    old.apply(new, replace);
+                    restreams.push(old);
+                } else {
+                    restreams.push(Restream::new(new));
+                }
+            }
+        } else {
+            for new in new.restreams {
+                if let Some(old) =
+                    restreams.iter_mut().find(|o| o.key == new.key)
+                {
+                    old.apply(new, replace);
+                } else {
+                    restreams.push(Restream::new(new));
+                }
+            }
+        }
+    }
+
+    /// Exports this [`State`] as a [`spec::v1::Spec`].
+    #[inline]
+    #[must_use]
+    pub fn export(&self) -> Spec {
+        spec::v1::Spec {
+            restreams: self
+                .restreams
+                .get_cloned()
+                .iter()
+                .map(Restream::export)
+                .collect(),
+        }
+        .into()
+    }
+
     /// Subscribes the specified `hook` to changes of the [`Mutable`] `val`ue.
     ///
     /// `name` is just a convenience for describing the `hook` in logs.
@@ -127,251 +182,193 @@ impl State {
         ));
     }
 
-    /// Adds a new [`Restream`] with [`PullInput`] to this [`State`].
+    /// Adds a new [`Restream`] by the given `spec` to this [`State`].
     ///
-    /// If `update_id` is [`Some`] then updates an existing [`Restream`], if
-    /// any. So, returns [`None`] if no [`Restream`] with `update_id` exists.
-    #[must_use]
-    pub fn add_pull_input(
-        &self,
-        src: Url,
-        label: Option<String>,
-        update_id: Option<InputId>,
-    ) -> Option<bool> {
+    /// # Errors
+    ///
+    /// If this [`State`] has a [`Restream`] with such `key` already.
+    pub fn add_restream(&self, spec: spec::v1::Restream) -> anyhow::Result<()> {
         let mut restreams = self.restreams.lock_mut();
 
-        for r in &*restreams {
-            if let Input::Pull(i) = &r.input {
-                if src == i.src && update_id != Some(r.id) {
-                    return Some(false);
-                }
-            }
+        if restreams.iter().any(|r| r.key == spec.key) {
+            return Err(anyhow!("Restream.key '{}' is used already", spec.key));
         }
 
-        Self::add_input_to(
-            &mut *restreams,
-            Input::Pull(PullInput {
-                src,
-                status: Status::Offline,
-            }),
-            label,
-            update_id,
-        )
+        restreams.push(Restream::new(spec));
+        Ok(())
     }
 
-    /// Adds a new [`Restream`] with [`PushInput`] (or [`FailoverPushInput`]) to
-    /// this [`State`].
+    /// Edits a [`Restream`] this [`State`] identified by the given `spec`.
     ///
-    /// If `failover` is `true`, then adds a [`FailoverPushInput`] intead of a
-    /// regular [`PushInput`].
+    /// Returns [`None`] if there is no [`Restream`] with such `key` in this
+    /// [`State`].
     ///
-    /// If `update_id` is [`Some`] then updates an existing [`Restream`], if
-    /// any. So, returns [`None`] if no [`Restream`] with `update_id` exists.
-    #[must_use]
-    pub fn add_push_input(
+    /// # Errors
+    ///
+    /// If this [`State`] has a [`Restream`] with such `key` already.
+    pub fn edit_restream(
         &self,
-        name: String,
-        failover: bool,
-        label: Option<String>,
-        update_id: Option<InputId>,
-    ) -> Option<bool> {
+        id: RestreamId,
+        spec: spec::v1::Restream,
+    ) -> anyhow::Result<Option<()>> {
         let mut restreams = self.restreams.lock_mut();
 
-        for r in &*restreams {
-            if let Input::Push(i) = &r.input {
-                if name == i.name && update_id != Some(r.id) {
-                    return Some(false);
-                }
-            }
+        if restreams.iter().any(|r| r.key == spec.key && r.id != id) {
+            return Err(anyhow!("Restream.key '{}' is used already", spec.key));
         }
 
-        Self::add_input_to(
-            &mut *restreams,
-            if failover {
-                Input::FailoverPush(FailoverPushInput {
-                    name,
-                    main_status: Status::Offline,
-                    main_srs_publisher_id: None,
-                    backup_status: Status::Offline,
-                    backup_srs_publisher_id: None,
-                    status: Status::Offline,
-                })
-            } else {
-                Input::Push(PushInput {
-                    name,
-                    status: Status::Offline,
-                })
-            },
-            label,
-            update_id,
-        )
+        #[allow(clippy::find_map)] // due to consuming `spec`
+        Ok(restreams
+            .iter_mut()
+            .find(|r| r.id == id)
+            .map(|r| r.apply(spec, false)))
     }
 
-    /// Adds a new [`Restream`] with the given [`Input`] to this [`State`].
+    /// Removes a [`Restream`] with the given `id` from this [`State`].
     ///
-    /// If `update_id` is [`Some`] then updates an existing [`Restream`], if
-    /// any. So, returns [`None`] if no [`Restream`] with `update_id` exists.
-    fn add_input_to(
-        restreams: &mut Vec<Restream>,
-        input: Input,
-        label: Option<String>,
-        update_id: Option<InputId>,
-    ) -> Option<bool> {
-        if let Some(id) = update_id {
-            let r = restreams.iter_mut().find(|r| r.id == id)?;
-            if !r.input.is(&input) {
-                r.input = input;
-                r.srs_publisher_id = None;
-                // TODO: Remove when kicking playing clients is implemented?
-                for o in &mut r.outputs {
-                    o.status = Status::Offline;
-                }
-            }
-            r.label = label;
-        } else {
-            restreams.push(Restream {
-                id: InputId::random(),
-                label,
-                input,
-                outputs: vec![],
-                enabled: true,
-                srs_publisher_id: None,
-            });
-        }
-        Some(true)
-    }
-
-    /// Removes [`Restream`] with the given `id` from this [`State`].
-    ///
-    /// Returns `true` if it has been removed, or `false` if doesn't exist.
-    #[must_use]
-    pub fn remove_input(&self, id: InputId) -> bool {
+    /// Returns [`None`] if there is no [`Restream`] with such `id` in this
+    /// [`State`].
+    #[allow(clippy::must_use_candidate)]
+    pub fn remove_restream(&self, id: RestreamId) -> Option<()> {
         let mut restreams = self.restreams.lock_mut();
         let prev_len = restreams.len();
         restreams.retain(|r| r.id != id);
-        restreams.len() != prev_len
+        (restreams.len() != prev_len).then(|| ())
     }
 
-    /// Enables [`Restream`] with the given `id` in this [`State`].
+    /// Enables a [`Restream`] with the given `id` in this [`State`].
     ///
     /// Returns `true` if it has been enabled, or `false` if it already has been
-    /// enabled.
+    /// enabled, or [`None`] if it doesn't exist.
     #[must_use]
-    pub fn enable_input(&self, id: InputId) -> Option<bool> {
-        let mut restreams = self.restreams.lock_mut();
-        let input = restreams.iter_mut().find(|r| r.id == id)?;
-
-        if input.enabled {
-            return Some(false);
-        }
-
-        input.enabled = true;
-        Some(true)
+    pub fn enable_restream(&self, id: RestreamId) -> Option<bool> {
+        self.restreams
+            .lock_mut()
+            .iter_mut()
+            .find_map(|r| (r.id == id).then(|| r.input.enable()))
     }
 
-    /// Disables [`Restream`] with the given `id` in this [`State`].
+    /// Disables a [`Restream`] with the given `id` in this [`State`].
     ///
     /// Returns `true` if it has been disabled, or `false` if it already has
-    /// been disabled.
+    /// been disabled, or [`None`] if it doesn't exist.
     #[must_use]
-    pub fn disable_input(&self, id: InputId) -> Option<bool> {
-        let mut restreams = self.restreams.lock_mut();
-        let input = restreams.iter_mut().find(|r| r.id == id)?;
-
-        if !input.enabled {
-            return Some(false);
-        }
-
-        input.enabled = false;
-        input.srs_publisher_id = None;
-        if let Input::FailoverPush(input) = &mut input.input {
-            input.main_srs_publisher_id = None;
-            input.backup_srs_publisher_id = None;
-        }
-        Some(true)
+    pub fn disable_restream(&self, id: RestreamId) -> Option<bool> {
+        self.restreams
+            .lock_mut()
+            .iter_mut()
+            .find_map(|r| (r.id == id).then(|| r.input.disable()))
     }
 
-    /// Adds new [`Output`] to the specified [`Restream`] of this [`State`].
+    /// Enables an [`Input`] with the given `id` in the specified [`Restream`]
+    /// of this [`State`].
     ///
-    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
+    /// Returns `true` if it has been enabled, or `false` if it already has been
+    /// enabled, or [`None`] if it doesn't exist.
     #[must_use]
+    pub fn enable_input(
+        &self,
+        id: InputId,
+        restream_id: RestreamId,
+    ) -> Option<bool> {
+        self.restreams
+            .lock_mut()
+            .iter_mut()
+            .find(|r| r.id == restream_id)?
+            .input
+            .find_mut(id)
+            .map(Input::enable)
+    }
+
+    /// Disables an [`Input`] with the given `id` in the specified [`Restream`]
+    /// of this [`State`].
+    ///
+    /// Returns `true` if it has been disabled, or `false` if it already has
+    /// been disabled, or [`None`] if it doesn't exist.
+    #[must_use]
+    pub fn disable_input(
+        &self,
+        id: InputId,
+        restream_id: RestreamId,
+    ) -> Option<bool> {
+        self.restreams
+            .lock_mut()
+            .iter_mut()
+            .find(|r| r.id == restream_id)?
+            .input
+            .find_mut(id)
+            .map(Input::disable)
+    }
+
+    /// Adds a new [`Output`] to the specified [`Restream`] of this [`State`].
+    ///
+    /// Returns [`None`] if there is no [`Restream`] with such `id` in this
+    /// [`State`].
+    ///
+    /// # Errors
+    ///
+    /// If the [`Restream`] has an [`Output`] with such `dst` already.
     pub fn add_new_output(
         &self,
-        input_id: InputId,
-        output_dst: Url,
-        label: Option<String>,
-        mix_with: Option<Url>,
-    ) -> Option<bool> {
+        restream_id: RestreamId,
+        spec: spec::v1::Output,
+    ) -> anyhow::Result<Option<()>> {
         let mut restreams = self.restreams.lock_mut();
-        let outputs =
-            &mut restreams.iter_mut().find(|r| r.id == input_id)?.outputs;
 
-        if outputs.iter_mut().any(|o| o.dst == output_dst) {
-            return Some(false);
+        let outputs = if let Some(r) =
+            restreams.iter_mut().find(|r| r.id == restream_id)
+        {
+            &mut r.outputs
+        } else {
+            return Ok(None);
+        };
+
+        if let Some(o) = outputs.iter().find(|o| o.dst == spec.dst) {
+            return Err(anyhow!("Output.dst '{}' is used already", o.dst));
         }
 
-        outputs.push(Output {
-            id: OutputId::random(),
-            dst: output_dst,
-            label,
-            volume: Volume::ORIGIN,
-            mixins: mix_with
-                .map(|url| {
-                    let delay = (url.scheme() == "ts")
-                        .then(|| Delay::from_millis(3500))
-                        .flatten()
-                        .unwrap_or_default();
-                    vec![Mixin {
-                        id: MixinId::random(),
-                        src: url,
-                        volume: Volume::ORIGIN,
-                        delay,
-                    }]
-                })
-                .unwrap_or_default(),
-            enabled: false,
-            status: Status::Offline,
-        });
-        Some(true)
+        outputs.push(Output::new(spec));
+        Ok(Some(()))
     }
 
-    /// Removes [`Output`] from the specified [`Restream`] of this [`State`].
+    /// Removes an [`Output`] with the given `id` from the specified
+    /// [`Restream`] of this [`State`].
     ///
-    /// Returns `true` if it has been removed, or `false` if doesn't exist.
-    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
+    /// Returns [`None`] if there is no [`Restream`] with such `restream_id` or
+    /// no [`Output`] with such `id` in this [`State`].
     #[must_use]
     pub fn remove_output(
         &self,
-        input_id: InputId,
-        output_id: OutputId,
-    ) -> Option<bool> {
+        id: OutputId,
+        restream_id: RestreamId,
+    ) -> Option<()> {
         let mut restreams = self.restreams.lock_mut();
         let outputs =
-            &mut restreams.iter_mut().find(|r| r.id == input_id)?.outputs;
+            &mut restreams.iter_mut().find(|r| r.id == restream_id)?.outputs;
 
         let prev_len = outputs.len();
-        outputs.retain(|o| o.id != output_id);
-        Some(outputs.len() != prev_len)
+        outputs.retain(|o| o.id != id);
+        (outputs.len() != prev_len).then(|| ())
     }
 
-    /// Enables [`Output`] in the specified [`Restream`] of this [`State`].
+    /// Enables an [`Output`] with the given `id` in the specified [`Restream`]
+    /// of this [`State`].
     ///
     /// Returns `true` if it has been enabled, or `false` if it already has been
-    /// enabled.
-    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
+    /// enabled, or [`None`] if it doesn't exist.
     #[must_use]
     pub fn enable_output(
         &self,
-        input_id: InputId,
-        output_id: OutputId,
+        id: OutputId,
+        restream_id: RestreamId,
     ) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
         let output = restreams
             .iter_mut()
-            .find(|r| r.id == input_id)?
+            .find(|r| r.id == restream_id)?
             .outputs
             .iter_mut()
-            .find(|o| o.id == output_id)?;
+            .find(|o| o.id == id)?;
 
         if output.enabled {
             return Some(false);
@@ -381,24 +378,24 @@ impl State {
         Some(true)
     }
 
-    /// Disables [`Output`] in the specified [`Restream`] of this [`State`].
+    /// Disables an [`Output`] with the given `id` in the specified [`Restream`]
+    /// of this [`State`].
     ///
     /// Returns `true` if it has been disabled, or `false` if it already has
-    /// been disabled.
-    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
+    /// been disabled, or [`None`] if it doesn't exist.
     #[must_use]
     pub fn disable_output(
         &self,
-        input_id: InputId,
-        output_id: OutputId,
+        id: OutputId,
+        restream_id: RestreamId,
     ) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
         let output = restreams
             .iter_mut()
-            .find(|r| r.id == input_id)?
+            .find(|r| r.id == restream_id)?
             .outputs
             .iter_mut()
-            .find(|o| o.id == output_id)?;
+            .find(|o| o.id == id)?;
 
         if !output.enabled {
             return Some(false);
@@ -410,16 +407,16 @@ impl State {
 
     /// Enables all [`Output`]s in the specified [`Restream`] of this [`State`].
     ///
-    /// Returns `true` if at least one has been enabled, or `false` if all of
-    /// them already have been enabled.
-    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
+    /// Returns `true` if at least one [`Output`] has been enabled, or `false`
+    /// if all of them already have been enabled, or [`None`] if no [`Restream`]
+    /// with such `restream_id` exists.
     #[must_use]
-    pub fn enable_all_outputs(&self, input_id: InputId) -> Option<bool> {
+    pub fn enable_all_outputs(&self, restream_id: RestreamId) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
         Some(
             restreams
                 .iter_mut()
-                .find(|r| r.id == input_id)?
+                .find(|r| r.id == restream_id)?
                 .outputs
                 .iter_mut()
                 .filter(|o| !o.enabled)
@@ -433,16 +430,16 @@ impl State {
     /// Disables all [`Output`]s in the specified [`Restream`] of this
     /// [`State`].
     ///
-    /// Returns `true` if at least one has been disabled, or `false` if all of
-    /// them already have been disabled.
-    /// Returns [`None`] if no [`Restream`] with `input_id` exists.
+    /// Returns `true` if at least one [`Output`] has been disabled, or `false`
+    /// if all of them already have been disabled, or [`None`] if no
+    /// [`Restream`] with such `restream_id` exists.
     #[must_use]
-    pub fn disable_all_outputs(&self, input_id: InputId) -> Option<bool> {
+    pub fn disable_all_outputs(&self, restream_id: RestreamId) -> Option<bool> {
         let mut restreams = self.restreams.lock_mut();
         Some(
             restreams
                 .iter_mut()
-                .find(|r| r.id == input_id)?
+                .find(|r| r.id == restream_id)?
                 .outputs
                 .iter_mut()
                 .filter(|o| o.enabled)
@@ -458,13 +455,12 @@ impl State {
     ///
     /// Returns `true` if a [`Volume`] rate has been changed, or `false` if it
     /// has the same value already.
-    /// Returns [`None`] if no [`Restream`] with `input_id` exists, or no
-    /// [`Output`] with `output_id` exist, or no [`Mixin`] with `mixin_id`
-    /// exists.
+    ///
+    /// Returns [`None`] if no such [`Restream`]/[`Output`]/[`Mixin`] exists.
     #[must_use]
     pub fn tune_volume(
         &self,
-        input_id: InputId,
+        restream_id: RestreamId,
         output_id: OutputId,
         mixin_id: Option<MixinId>,
         volume: Volume,
@@ -472,7 +468,7 @@ impl State {
         let mut restreams = self.restreams.lock_mut();
         let output = restreams
             .iter_mut()
-            .find(|r| r.id == input_id)?
+            .find(|r| r.id == restream_id)?
             .outputs
             .iter_mut()
             .find(|o| o.id == output_id)?;
@@ -495,13 +491,12 @@ impl State {
     ///
     /// Returns `true` if a [`Delay`] has been changed, or `false` if it has the
     /// same value already.
-    /// Returns [`None`] if no [`Restream`] with `input_id` exists, or no
-    /// [`Output`] with `output_id` exist, or no [`Mixin`] with `mixin_id`
-    /// exists.
+    ///
+    /// Returns [`None`] if no such [`Restream`]/[`Output`]/[`Mixin`] exists.
     #[must_use]
     pub fn tune_delay(
         &self,
-        input_id: InputId,
+        input_id: RestreamId,
         output_id: OutputId,
         mixin_id: MixinId,
         delay: Delay,
@@ -526,388 +521,469 @@ impl State {
     }
 }
 
-/// Restream of a live RTMP stream from one `Input` to many `Output`s.
+/// Re-stream of a live stream from one `Input` to many `Output`s.
 #[derive(
     Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
 )]
 pub struct Restream {
-    /// Unique ID of this `Restream`.
-    pub id: InputId,
+    /// Unique ID of this `Input`.
+    ///
+    /// Once assigned, it never changes.
+    pub id: RestreamId,
+
+    /// Unique key of this `Restream` identifying it, and used to form its
+    /// endpoints URLs.
+    pub key: RestreamKey,
 
     /// Optional label of this `Restream`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
+    pub label: Option<Label>,
 
-    /// `Input` that live RTMP stream is received from.
+    /// `Input` that a live stream is received from.
     pub input: Input,
 
-    /// `Output`s that live RTMP stream is restreamed to.
+    /// `Output`s that a live stream is re-streamed to.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub outputs: Vec<Output>,
+}
 
-    /// Indicator whether this `Restream` is enabled, so allows to receive a
-    /// live RTMP stream from `Input`.
+impl Restream {
+    /// Creates a new [`Restream`] out of the given [`spec::v1::Restream`].
+    #[inline]
+    #[must_use]
+    pub fn new(spec: spec::v1::Restream) -> Self {
+        Self {
+            id: RestreamId::random(),
+            key: spec.key,
+            label: spec.label,
+            input: Input::new(spec.input),
+            outputs: spec.outputs.into_iter().map(Output::new).collect(),
+        }
+    }
+
+    /// Applies the given [`spec::v1::Restream`] to this [`Restream`].
+    ///
+    /// If `replace` is `true` then all the [`Restream::outputs`] will be
+    /// replaced with new ones, otherwise new ones will be merged with already
+    /// existing [`Restream::outputs`].
+    pub fn apply(&mut self, new: spec::v1::Restream, replace: bool) {
+        self.key = new.key;
+        self.label = new.label;
+        self.input.apply(new.input);
+        if replace {
+            let mut olds = mem::replace(
+                &mut self.outputs,
+                Vec::with_capacity(new.outputs.len()),
+            );
+            for new in new.outputs {
+                if let Some(mut old) = olds
+                    .iter()
+                    .enumerate()
+                    .find_map(|(n, o)| (o.dst == new.dst).then(|| n))
+                    .map(|n| olds.swap_remove(n))
+                {
+                    old.apply(new, replace);
+                    self.outputs.push(old);
+                } else {
+                    self.outputs.push(Output::new(new));
+                }
+            }
+        } else {
+            for new in new.outputs {
+                if let Some(old) =
+                    self.outputs.iter_mut().find(|o| o.dst == new.dst)
+                {
+                    old.apply(new, replace);
+                } else {
+                    self.outputs.push(Output::new(new));
+                }
+            }
+        }
+    }
+
+    /// Exports this [`Restream`] as a [`spec::v1::Restream`].
+    #[inline]
+    #[must_use]
+    pub fn export(&self) -> spec::v1::Restream {
+        spec::v1::Restream {
+            key: self.key.clone(),
+            label: self.label.clone(),
+            input: self.input.export(),
+            outputs: self.outputs.iter().map(Output::export).collect(),
+        }
+    }
+
+    /// Returns an URL on a local [SRS] server of the endpoint representing a
+    /// main [`Input`] in this [`Restream`].
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[inline]
+    #[must_use]
+    pub fn main_input_rtmp_endpoint_url(&self) -> Url {
+        self.input.rtmp_endpoint_url(&self.key)
+    }
+}
+
+/// ID of a `Restream`.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Display,
+    Eq,
+    From,
+    GraphQLScalarValue,
+    Into,
+    PartialEq,
+    Serialize,
+)]
+pub struct RestreamId(Uuid);
+
+impl RestreamId {
+    /// Generates a new random [`RestreamId`].
+    #[inline]
+    #[must_use]
+    pub fn random() -> Self {
+        Self(Uuid::new_v4())
+    }
+}
+
+/// Key of a [`Restream`] identifying it, and used to form its endpoints URLs.
+#[derive(
+    Clone, Debug, Deref, Display, Eq, Hash, Into, PartialEq, Serialize,
+)]
+pub struct RestreamKey(String);
+
+impl RestreamKey {
+    /// Creates a new [`RestreamKey`] if the given value meets its invariants.
+    #[must_use]
+    pub fn new<'s, S: Into<Cow<'s, str>>>(val: S) -> Option<Self> {
+        static REGEX: Lazy<Regex> =
+            Lazy::new(|| Regex::new("^[a-z0-9_-]{1,20}$").unwrap());
+
+        let val = val.into();
+        (!val.is_empty() && REGEX.is_match(&val))
+            .then(|| Self(val.into_owned()))
+    }
+}
+
+impl<'de> Deserialize<'de> for RestreamKey {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(<Cow<'_, str>>::deserialize(deserializer)?)
+            .ok_or_else(|| D::Error::custom("Not a valid Restream.key"))
+    }
+}
+
+/// Type of `Restream`'s `key` identifying it, and used to form its endpoints
+/// URLs.
+///
+/// It should meet `[a-z0-9_-]{1,20}` format.
+#[graphql_scalar]
+impl<S> GraphQLScalar for RestreamKey
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(self.0.as_str().to_owned())
+    }
+
+    fn from_input_value(v: &InputValue) -> Option<Self> {
+        v.as_scalar()
+            .and_then(ScalarValue::as_str)
+            .and_then(Self::new)
+    }
+
+    fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
+    }
+}
+
+impl PartialEq<str> for RestreamKey {
+    #[inline]
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+/// Upstream source that a `Restream` receives a live stream from.
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
+pub struct Input {
+    /// Unique ID of this `Input`.
+    ///
+    /// Once assigned, it never changes.
+    pub id: InputId,
+
+    /// Key of this `Input` to expose its endpoint with for accepting and
+    /// serving a live stream.
+    pub key: InputKey,
+
+    /// Source to pull a live stream from.
+    ///
+    /// If specified, then this `Input` will pull a live stream from it (pull
+    /// kind), otherwise this `Input` will await a live stream to be pushed
+    /// (push kind).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub src: Option<InputSrc>,
+
+    /// Indicator whether this `Input` is enabled, so is allowed to receive a
+    /// live stream from its upstream sources.
+    #[serde(default, skip_serializing_if = "is_false")]
     pub enabled: bool,
 
-    /// ID of [SRS] client who publishes the ongoing live RTMP stream to
-    /// [`Input`].
+    /// `Status` of this `Input` indicating whether it actually serves a live
+    /// stream ready to be consumed by `Output`s.
+    #[serde(skip)]
+    pub status: Status,
+
+    /// ID of a [SRS] client who publishes a live stream to this [`Input`]
+    /// (either an external client or a local process).
     ///
     /// [SRS]: https://github.com/ossrs/srs
     #[graphql(skip)]
     #[serde(skip)]
     pub srs_publisher_id: Option<srs::ClientId>,
+
+    /// IDs of [SRS]s client who plays a live stream from this [`Input`] (either
+    /// an external client or a local process).
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[graphql(skip)]
+    #[serde(skip)]
+    pub srs_player_ids: HashSet<srs::ClientId>,
 }
 
-impl Restream {
-    /// Returns an URL of the remote server that this [`Restream`] receives a
-    /// live stream from, if any.
+impl Input {
+    /// Creates a new [`Input`] out of the given [`spec::v1::Input`].
     #[inline]
     #[must_use]
-    pub fn upstream_url(&self) -> Option<&Url> {
-        if let Input::Pull(i) = &self.input {
-            Some(&i.src)
+    pub fn new(spec: spec::v1::Input) -> Self {
+        Self {
+            id: InputId::random(),
+            key: spec.key,
+            src: spec.src.map(InputSrc::new),
+            enabled: spec.enabled,
+            status: Status::Offline,
+            srs_publisher_id: None,
+            srs_player_ids: HashSet::new(),
+        }
+    }
+
+    /// Applies the given [`spec::v1::Input`] to this [`Input`].
+    pub fn apply(&mut self, new: spec::v1::Input) {
+        if self.key != new.key
+            || !new.enabled
+            || (self.src.is_none() && new.src.is_some())
+            || (self.src.is_some() && new.src.is_none())
+        {
+            // SRS endpoint has changed, disabled, or push/pull type has been
+            // switched, so we should kick the publisher and all the players.
+            self.srs_publisher_id = None;
+            self.srs_player_ids.clear();
+        }
+
+        self.key = new.key;
+        // Temporary omit changing existing `enabled` value to avoid unexpected
+        // breakages of ongoing re-streams.
+        //self.enabled = new.enabled;
+
+        match (self.src.as_mut(), new.src) {
+            (Some(old), Some(new)) => old.apply(new),
+            (None, Some(new)) => self.src = Some(InputSrc::new(new)),
+            _ => self.src = None,
+        }
+    }
+
+    /// Exports this [`Input`] as a [`spec::v1::Input`].
+    #[inline]
+    #[must_use]
+    pub fn export(&self) -> spec::v1::Input {
+        spec::v1::Input {
+            key: self.key.clone(),
+            src: self.src.as_ref().map(InputSrc::export),
+            enabled: self.enabled,
+        }
+    }
+
+    /// Enables this [`Input`].
+    ///
+    /// Returns `false` if it has been enabled already.
+    #[must_use]
+    pub fn enable(&mut self) -> bool {
+        let mut changed = !self.enabled;
+
+        self.enabled = true;
+
+        if let Some(InputSrc::Failover(s)) = self.src.as_mut() {
+            for i in &mut s.inputs {
+                changed |= i.enable();
+            }
+        }
+
+        changed
+    }
+
+    /// Disables this [`Input`].
+    ///
+    /// Returns `false` if it has been disabled already.
+    #[must_use]
+    pub fn disable(&mut self) -> bool {
+        let mut changed = self.enabled;
+
+        self.enabled = false;
+        self.srs_publisher_id = None;
+        self.srs_player_ids.clear();
+
+        if let Some(InputSrc::Failover(s)) = self.src.as_mut() {
+            for i in &mut s.inputs {
+                changed |= i.disable();
+            }
+        }
+
+        changed
+    }
+
+    /// Lookups for an [`Input`] with the given `id` inside this [`Input`] or
+    /// its [`FailoverInputSrc::inputs`].
+    #[must_use]
+    pub fn find_mut(&mut self, id: InputId) -> Option<&mut Self> {
+        if self.id == id {
+            return Some(self);
+        }
+        if let Some(InputSrc::Failover(s)) = &mut self.src {
+            s.inputs.iter_mut().find_map(|i| i.find_mut(id))
         } else {
             None
         }
     }
 
-    /// Returns an URL of the local [SRS] server that the received live stream
-    /// by this [`Restream`] may be pulled from.
+    /// Returns an URL on a local [SRS] server of the endpoint representing this
+    /// [`Input`] in the given `restream`.
     ///
     /// [SRS]: https://github.com/ossrs/srs
     #[must_use]
-    pub fn srs_url(&self) -> Url {
-        Url::parse(&match &self.input {
-            Input::Push(i) => format!("rtmp://127.0.0.1:1935/{}/in", i.name),
-            Input::FailoverPush(i) => {
-                format!("rtmp://127.0.0.1:1935/{}/in", i.name)
-            }
-            Input::Pull(_) => {
-                format!("rtmp://127.0.0.1:1935/pull_{}/in", self.id)
-            }
-        })
-        .unwrap()
+    pub fn rtmp_endpoint_url(&self, restream: &RestreamKey) -> Url {
+        Url::parse(&format!("rtmp://127.0.0.1:1935/{}/{}", restream, self.key))
+            .unwrap()
     }
 
-    /// Checks whether the given `app` parameter of a [SRS] media stream is
-    /// related to this [`Restream::input`].
-    ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[inline]
+    /// Indicates whether this [`Input`] is ready to serve a live stream for
+    /// [`Output`]s.
     #[must_use]
-    pub fn uses_srs_app(&self, app: &str) -> bool {
-        match &self.input {
-            Input::Push(i) => app == i.name,
-            Input::FailoverPush(i) => app == i.name,
-            Input::Pull(_) => {
-                app.starts_with("pull_") && app[5..].parse() == Ok(self.id.0)
+    pub fn is_ready_to_serve(&self) -> bool {
+        let mut is_online = self.status == Status::Online;
+
+        if !is_online {
+            if let Some(InputSrc::Failover(s)) = &self.src {
+                is_online = s.inputs.iter().any(|i| i.status == Status::Online);
             }
         }
+
+        is_online
     }
 }
 
-/// Source of a live RTMP stream for `Restream`.
+/// Source to pull a live stream by an `Input` from.
 #[derive(
     Clone, Debug, Deserialize, Eq, From, GraphQLUnion, PartialEq, Serialize,
 )]
 #[serde(rename_all = "lowercase")]
-pub enum Input {
-    /// Receiving a live RTMP stream from an external client.
-    Push(PushInput),
+pub enum InputSrc {
+    /// Remote endpoint.
+    Remote(RemoteInputSrc),
 
-    /// Receiving a live RTMP stream from an external client with an additional
-    /// backup endpoint.
-    FailoverPush(FailoverPushInput),
-
-    /// Pulling a live RTMP stream from a remote server.
-    Pull(PullInput),
+    /// Multiple local endpoints forming a failover source.
+    Failover(FailoverInputSrc),
 }
 
-impl Input {
-    /// Indicates whether this [`Input`] is a [`PullInput`].
+impl InputSrc {
+    /// Creates a new [`InputSrc`] out of the given [`spec::v1::InputSrc`].
     #[inline]
     #[must_use]
-    pub fn is_pull(&self) -> bool {
-        matches!(self, Input::Pull(_))
-    }
-
-    /// Indicates whether this [`Input`] is a [`FailoverPushInput`].
-    #[inline]
-    #[must_use]
-    pub fn is_failover(&self) -> bool {
-        matches!(self, Input::FailoverPush(_))
-    }
-
-    /// Indicates whether this [`Input`] has [`Status::Online`].
-    #[must_use]
-    pub fn is_online(&self) -> bool {
-        match self {
-            Self::Push(i) => i.status == Status::Online,
-            Self::FailoverPush(i) => {
-                // If `/in` endpoint goes offline, but there is still `/main`
-                // or `/backup` endpoint is online, then failover switch is
-                // happening at the moment, so we consider tha the whole `Input`
-                // is still online.
-                i.status == Status::Online
-                    || i.main_status == Status::Online
-                    || i.backup_status == Status::Online
+    pub fn new(spec: spec::v1::InputSrc) -> Self {
+        match spec {
+            spec::v1::InputSrc::RemoteUrl(url) => {
+                Self::Remote(RemoteInputSrc { url })
             }
-            Self::Pull(i) => i.status == Status::Online,
+            spec::v1::InputSrc::FailoverInputs(inputs) => {
+                Self::Failover(FailoverInputSrc {
+                    inputs: inputs.into_iter().map(Input::new).collect(),
+                })
+            }
         }
     }
 
-    /// Sets a `new` [`Status`] of this [`Input`].
+    /// Applies the given [`spec::v1::InputSrc`] to this [`InputSrc`].
+    ///
+    /// Replaces all the [`FailoverInputSrc::inputs`] with new ones.
+    pub fn apply(&mut self, new: spec::v1::InputSrc) {
+        match (self, new) {
+            (Self::Remote(old), spec::v1::InputSrc::RemoteUrl(new_url)) => {
+                old.url = new_url
+            }
+            (Self::Failover(src), spec::v1::InputSrc::FailoverInputs(news)) => {
+                let mut olds = mem::replace(
+                    &mut src.inputs,
+                    Vec::with_capacity(news.len()),
+                );
+                for new in news {
+                    if let Some(mut old) = olds
+                        .iter()
+                        .enumerate()
+                        .find_map(|(n, o)| (o.key == new.key).then(|| n))
+                        .map(|n| olds.swap_remove(n))
+                    {
+                        old.apply(new);
+                        src.inputs.push(old);
+                    } else {
+                        src.inputs.push(Input::new(new));
+                    }
+                }
+            }
+            (old, new) => *old = Self::new(new),
+        }
+    }
+
+    /// Exports this [`InputSrc`] as a [`spec::v1::InputSrc`].
     #[inline]
-    pub fn set_status(&mut self, new: Status) {
+    #[must_use]
+    pub fn export(&self) -> spec::v1::InputSrc {
         match self {
-            Self::Push(i) => i.status = new,
-            Self::FailoverPush(i) => i.status = new,
-            Self::Pull(i) => i.status = new,
-        }
-    }
-
-    /// Checks whether this [`Input`] is the same as `other` one.
-    #[inline]
-    #[must_use]
-    pub fn is(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Push(a), Self::Push(b)) => a.is(b),
-            (Self::FailoverPush(a), Self::FailoverPush(b)) => a.is(b),
-            (Self::Pull(a), Self::Pull(b)) => a.is(b),
-            _ => false,
+            Self::Remote(i) => spec::v1::InputSrc::RemoteUrl(i.url.clone()),
+            Self::Failover(src) => spec::v1::InputSrc::FailoverInputs(
+                src.inputs.iter().map(Input::export).collect(),
+            ),
         }
     }
 }
 
-/// `Input` pulling a live RTMP stream from a remote server.
+/// Remote upstream source to pull a live stream by an `Input` from.
 #[derive(
     Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
 )]
-pub struct PullInput {
-    /// URL of a live stream to be pulled from.
-    ///
-    /// At the moment only [RTMP] is supported.
-    ///
-    /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
-    pub src: Url,
-
-    /// `Status` of this `PullInput` indicating whether it performs pulling.
-    #[serde(skip)]
-    pub status: Status,
+pub struct RemoteInputSrc {
+    /// URL of this `RemoteInputSrc`.
+    pub url: InputSrcUrl,
 }
 
-impl PullInput {
-    /// Checks whether this [`PullInput`] is the same as the `other` one.
-    #[inline]
-    #[must_use]
-    pub fn is(&self, other: &Self) -> bool {
-        self.src == other.src
-    }
-}
-
-/// `Input` receiving a live RTMP stream from a remote client on an `/in`
-/// endpoint.
+/// Failover source of multiple `Input`s to pull a live stream by an `Input`
+/// from.
 #[derive(
     Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
 )]
-pub struct PushInput {
-    /// Name of a live RTMP stream to expose it with for receiving and
-    /// re-streaming media traffic.
-    pub name: String,
-
-    /// `Status` of this `PushInput` indicating whether it receives media
-    /// traffic.
-    #[serde(skip)]
-    pub status: Status,
-}
-
-impl PushInput {
-    /// Checks whether this [`PushInput`] is the same as the `other` one.
-    #[inline]
-    #[must_use]
-    pub fn is(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-/// `Input` receiving a live RTMP stream from a remote client on two endpoints:
-/// - `/main` for receiving a main live RTMP stream, once it goes offline the
-///   `Input` switches to `/backup`;
-/// - `/backup` for receiving a backup live RTMP stream, once `/main` is
-///   restored the `Input` switches back to `/main`.
-#[derive(
-    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
-)]
-pub struct FailoverPushInput {
-    /// Name of a live RTMP stream to expose it with for receiving and
-    /// re-streaming media traffic.
-    pub name: String,
-
-    /// `Status` of a `/main` endpoint indicating whether it receives media
-    /// traffic.
-    #[serde(skip)]
-    pub main_status: Status,
-
-    /// ID of [SRS] client who publishes the ongoing live RTMP stream to
-    /// a `/main` endpoint of this [`FailoverPushInput`].
+pub struct FailoverInputSrc {
+    /// `Input`s forming this `FailoverInputSrc`.
     ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[graphql(skip)]
-    #[serde(skip)]
-    pub main_srs_publisher_id: Option<srs::ClientId>,
-
-    /// `Status` of a `/backup` endpoint indicating whether it receives media
-    /// traffic.
-    #[serde(skip)]
-    pub backup_status: Status,
-
-    /// ID of [SRS] client who publishes the ongoing live RTMP stream to
-    /// a `/backup` endpoint of this [`FailoverPushInput`].
-    ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[graphql(skip)]
-    #[serde(skip)]
-    pub backup_srs_publisher_id: Option<srs::ClientId>,
-
-    /// Overall `Status` of this `FailoverPushInput` indicating whether a
-    /// received media traffic is available.
-    #[serde(skip)]
-    pub status: Status,
-}
-
-impl FailoverPushInput {
-    /// Checks whether this [`FailoverPushInput`] is the same as the `other`
-    /// one.
-    #[inline]
-    #[must_use]
-    pub fn is(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-
-    /// Returns a local [SRS] URL of the currently active `/main` or `/backup`
-    /// endpoint.
-    ///
-    /// It returns `/backup` if it's online while `/main` is not, otherwise
-    /// returns `/main`.
-    ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[must_use]
-    pub fn from_url(&self) -> Url {
-        Url::parse(
-            &(if self.backup_status == Status::Online
-                && self.main_status != Status::Online
-            {
-                format!("rtmp://127.0.0.1:1935/{}/backup", self.name)
-            } else {
-                format!("rtmp://127.0.0.1:1935/{}/main", self.name)
-            }),
-        )
-        .unwrap()
-    }
-
-    /// Indicates whether this [`FailoverPushInput`] receives any media traffic
-    /// on its `/main` or `/backup` endpoint.
-    #[inline]
-    #[must_use]
-    pub fn has_traffic(&self) -> bool {
-        self.main_status == Status::Online
-            || self.backup_status == Status::Online
-    }
-}
-
-/// Destination that `Restream` should restream a live RTMP stream to.
-#[derive(
-    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
-)]
-pub struct Output {
-    /// Unique ID of this `Output`.
-    pub id: OutputId,
-
-    /// URL to push a live stream on to.
-    ///
-    /// At the moment only [RTMP] and [Icecast] are supported.
-    ///
-    /// [Icecast]: https://icecast.org
-    /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
-    pub dst: Url,
-
-    /// Optional label of this `Output`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub label: Option<String>,
-
-    /// Volume rate of this `Output`'s audio tracks when mixed with
-    /// `Output.mixins`.
-    ///
-    /// Has no effect when there is no `Output.mixins`.
-    #[serde(default, skip_serializing_if = "Volume::is_origin")]
-    pub volume: Volume,
-
-    /// `Mixin`s to mix this `Output` with before restream to the destination.
-    ///
-    /// If empty, then no mixing is performed and restreaming is as cheap as
-    /// possible (just copying bytes "as is").
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub mixins: Vec<Mixin>,
-
-    /// Indicator whether this `Output` is enabled, so performs a live RTMP
-    /// stream restream to destination.
-    pub enabled: bool,
-
-    /// `Status` of this `Output` indicating whether it pushes media traffic to
-    /// destination.
-    #[serde(skip)]
-    pub status: Status,
-}
-
-impl Output {
-    /// Checks whether this [`Output`] is the same as `other` on.
-    #[inline]
-    #[must_use]
-    pub fn is(&self, other: &Self) -> bool {
-        self.dst == other.dst
-    }
-}
-
-/// Additional source for an `Output` to be mixed with before re-streamed to the
-/// destination.
-#[derive(
-    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
-)]
-pub struct Mixin {
-    /// Unique ID of this `Mixin`.
-    pub id: MixinId,
-
-    /// URL of the source to be mixed in.
-    ///
-    /// At the moment, only [TeamSpeak] is supported.
-    ///
-    /// [TeamSpeak]: https://teamspeak.com
-    pub src: Url,
-
-    /// Volume rate of this `Mixin`'s audio tracks to mix them with.
-    #[serde(default, skip_serializing_if = "Volume::is_origin")]
-    pub volume: Volume,
-
-    /// Delay that this `Mixin` should wait before mixed with an `Output`.
-    ///
-    /// Very useful to fix de-synchronization issues and correct timings between
-    /// `Mixin` and its `Output`.
-    #[serde(default, skip_serializing_if = "Delay::is_zero")]
-    pub delay: Delay,
-}
-
-/// Status indicating what's going on in `Input` or `Output`.
-#[derive(Clone, Copy, Debug, Eq, GraphQLEnum, PartialEq, SmartDefault)]
-pub enum Status {
-    /// Inactive, no operations are performed and no media traffic is allowed.
-    #[default]
-    Offline,
-
-    /// Initializing, media traffic is allowed, but not yet flows as expected.
-    Initializing,
-
-    /// Active, all operations are performing successfully and media traffic
-    /// flows as expected.
-    Online,
+    /// Failover is implemented by attempting to pull the first `Input` falling
+    /// back to the second one, and so on. Once the first source is restored,
+    /// we pool from it once again.
+    pub inputs: Vec<Input>,
 }
 
 /// ID of an `Input`.
@@ -932,6 +1008,244 @@ impl InputId {
     #[must_use]
     pub fn random() -> Self {
         Self(Uuid::new_v4())
+    }
+}
+
+/// Key of an [`Input`] used to form its endpoint URL.
+#[derive(
+    Clone, Debug, Deref, Display, Eq, Hash, Into, PartialEq, Serialize,
+)]
+pub struct InputKey(String);
+
+impl InputKey {
+    /// Creates a new [`InputKey`] if the given value meets its invariants.
+    #[must_use]
+    pub fn new<'s, S: Into<Cow<'s, str>>>(val: S) -> Option<Self> {
+        static REGEX: Lazy<Regex> =
+            Lazy::new(|| Regex::new("^[a-z0-9_-]{1,20}$").unwrap());
+
+        let val = val.into();
+        (!val.is_empty() && REGEX.is_match(&val))
+            .then(|| Self(val.into_owned()))
+    }
+}
+
+impl<'de> Deserialize<'de> for InputKey {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(<Cow<'_, str>>::deserialize(deserializer)?)
+            .ok_or_else(|| D::Error::custom("Not a valid Input.key"))
+    }
+}
+
+/// Type of `Input`'s `key` used to form its endpoint URL.
+///
+/// It should meet `[a-z0-9_-]{1,20}` format.
+#[graphql_scalar]
+impl<S> GraphQLScalar for InputKey
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(self.0.as_str().to_owned())
+    }
+
+    fn from_input_value(v: &InputValue) -> Option<Self> {
+        v.as_scalar()
+            .and_then(ScalarValue::as_str)
+            .and_then(Self::new)
+    }
+
+    fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
+    }
+}
+
+impl PartialEq<str> for InputKey {
+    #[inline]
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other
+    }
+}
+
+/// [`Url`] of a [`RemoteInputSrc`].
+///
+/// Only [RTMP] URLs are allowed at the moment.
+///
+/// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
+#[derive(
+    Clone, Debug, Deref, Display, Eq, Hash, Into, PartialEq, Serialize,
+)]
+pub struct InputSrcUrl(Url);
+
+impl InputSrcUrl {
+    /// Creates a new [`InputSrcUrl`] if the given [`Url`] is suitable for that.
+    #[inline]
+    #[must_use]
+    pub fn new(url: Url) -> Option<Self> {
+        (matches!(url.scheme(), "rtmp" | "rtmps") && url.host().is_some())
+            .then(|| Self(url))
+    }
+}
+
+impl<'de> Deserialize<'de> for InputSrcUrl {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(Url::deserialize(deserializer)?)
+            .ok_or_else(|| D::Error::custom("Not a valid RemoteInputSrc.url"))
+    }
+}
+
+/// Type of a `RemoteInputSrc.url`.
+///
+/// Only [RTMP] URLs are allowed at the moment.
+///
+/// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
+#[graphql_scalar]
+impl<S> GraphQLScalar for InputSrcUrl
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(self.0.as_str().to_owned())
+    }
+
+    fn from_input_value(v: &InputValue) -> Option<Self> {
+        v.as_scalar()
+            .and_then(ScalarValue::as_str)
+            .and_then(|s| Url::parse(s).ok())
+            .and_then(Self::new)
+    }
+
+    fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
+    }
+}
+
+/// Downstream destination that a `Restream` re-streams a live stream to.
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
+pub struct Output {
+    /// Unique ID of this `Output`.
+    ///
+    /// Once assigned, it never changes.
+    pub id: OutputId,
+
+    /// Downstream URL to re-stream a live stream onto.
+    ///
+    /// At the moment only [RTMP] and [Icecast] are supported.
+    ///
+    /// [Icecast]: https://icecast.org
+    /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
+    pub dst: OutputDstUrl,
+
+    /// Optional label of this `Output`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<Label>,
+
+    /// Volume rate of this `Output`'s audio tracks when mixed with
+    /// `Output.mixins`.
+    ///
+    /// Has no effect when there is no `Output.mixins`.
+    #[serde(default, skip_serializing_if = "Volume::is_origin")]
+    pub volume: Volume,
+
+    /// `Mixin`s to mix this `Output` with before re-streaming it to its
+    /// downstream destination.
+    ///
+    /// If empty, then no mixing is performed and re-streaming is as cheap as
+    /// possible (just copies bytes "as is").
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mixins: Vec<Mixin>,
+
+    /// Indicator whether this `Output` is enabled, so is allowed to perform a
+    /// live stream re-streaming to its downstream destination.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub enabled: bool,
+
+    /// `Status` of this `Output` indicating whether it actually re-streams a
+    /// live stream to its downstream destination.
+    #[serde(skip)]
+    pub status: Status,
+}
+
+impl Output {
+    /// Creates a new [`Output`] out of the given [`spec::v1::Output`].
+    #[inline]
+    #[must_use]
+    pub fn new(spec: spec::v1::Output) -> Self {
+        Self {
+            id: OutputId::random(),
+            dst: spec.dst,
+            label: spec.label,
+            volume: spec.volume,
+            mixins: spec.mixins.into_iter().map(Mixin::new).collect(),
+            enabled: spec.enabled,
+            status: Status::Offline,
+        }
+    }
+
+    /// Applies the given [`spec::v1::Output`] to this [`Output`].
+    ///
+    /// If `replace` is `true` then all the [`Output::mixins`] will be replaced
+    /// with new ones, otherwise new ones will be merged with already existing
+    /// [`Output::mixins`].
+    pub fn apply(&mut self, new: spec::v1::Output, replace: bool) {
+        self.dst = new.dst;
+        self.label = new.label;
+        self.volume = new.volume;
+        // Temporary omit changing existing `enabled` value to avoid unexpected
+        // breakages of ongoing re-streams.
+        //self.enabled = new.enabled;
+        if replace {
+            let mut olds = mem::replace(
+                &mut self.mixins,
+                Vec::with_capacity(new.mixins.len()),
+            );
+            for new in new.mixins {
+                if let Some(mut old) = olds
+                    .iter()
+                    .enumerate()
+                    .find_map(|(n, o)| (o.src == new.src).then(|| n))
+                    .map(|n| olds.swap_remove(n))
+                {
+                    old.apply(new);
+                    self.mixins.push(old);
+                } else {
+                    self.mixins.push(Mixin::new(new));
+                }
+            }
+        } else {
+            for new in new.mixins {
+                if let Some(old) =
+                    self.mixins.iter_mut().find(|o| o.src == new.src)
+                {
+                    old.apply(new);
+                } else {
+                    self.mixins.push(Mixin::new(new));
+                }
+            }
+        }
+    }
+
+    /// Exports this [`Output`] as a [`spec::v1::Output`].
+    #[inline]
+    #[must_use]
+    pub fn export(&self) -> spec::v1::Output {
+        spec::v1::Output {
+            dst: self.dst.clone(),
+            label: self.label.clone(),
+            volume: self.volume,
+            mixins: self.mixins.iter().map(Mixin::export).collect(),
+            enabled: self.enabled,
+        }
     }
 }
 
@@ -960,6 +1274,136 @@ impl OutputId {
     }
 }
 
+/// [`Url`] of an [`Output::dst`].
+///
+/// Only [RTMP] and [Icecast] URLs are allowed at the moment.
+///
+/// [Icecast]: https://icecast.org
+/// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
+#[derive(
+    Clone, Debug, Deref, Display, Eq, Hash, Into, PartialEq, Serialize,
+)]
+pub struct OutputDstUrl(Url);
+
+impl OutputDstUrl {
+    /// Creates a new [`OutputDstUrl`] if the given [`Url`] is suitable for
+    /// that.
+    #[inline]
+    #[must_use]
+    pub fn new(url: Url) -> Option<Self> {
+        (matches!(url.scheme(), "icecast" | "rtmp" | "rtmps")
+            && url.host().is_some())
+        .then(|| Self(url))
+    }
+}
+
+impl<'de> Deserialize<'de> for OutputDstUrl {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(Url::deserialize(deserializer)?)
+            .ok_or_else(|| D::Error::custom("Not a valid Output.dst URL"))
+    }
+}
+
+/// Type of an `Output.dst` URL.
+///
+/// Only [RTMP] and [Icecast] URLs are allowed at the moment.
+///
+/// [Icecast]: https://icecast.org
+/// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
+#[graphql_scalar]
+impl<S> GraphQLScalar for OutputDstUrl
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(self.0.as_str().to_owned())
+    }
+
+    fn from_input_value(v: &InputValue) -> Option<Self> {
+        v.as_scalar()
+            .and_then(ScalarValue::as_str)
+            .and_then(|s| Url::parse(s).ok())
+            .and_then(Self::new)
+    }
+
+    fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
+    }
+}
+
+/// Additional source for an `Output` to be mixed with before re-streaming to
+/// the destination.
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
+pub struct Mixin {
+    /// Unique ID of this `Mixin`.
+    ///
+    /// Once assigned, it never changes.
+    pub id: MixinId,
+
+    /// URL of the source to be mixed with an `Output`.
+    ///
+    /// At the moment, only [TeamSpeak] is supported.
+    ///
+    /// [TeamSpeak]: https://teamspeak.com
+    pub src: MixinSrcUrl,
+
+    /// Volume rate of this `Mixin`'s audio tracks to mix them with.
+    #[serde(default, skip_serializing_if = "Volume::is_origin")]
+    pub volume: Volume,
+
+    /// Delay that this `Mixin` should wait before being mixed with an `Output`.
+    ///
+    /// Very useful to fix de-synchronization issues and correct timings between
+    /// a `Mixin` and its `Output`.
+    #[serde(default, skip_serializing_if = "Delay::is_zero")]
+    pub delay: Delay,
+
+    /// `Status` of this `Mixin` indicating whether it provides an actual media
+    /// stream to be mixed with its `Output`.
+    #[serde(skip)]
+    pub status: Status,
+}
+
+impl Mixin {
+    /// Creates a new [`Mixin`] out of the given [`spec::v1::Mixin`].
+    #[inline]
+    #[must_use]
+    pub fn new(spec: spec::v1::Mixin) -> Self {
+        Self {
+            id: MixinId::random(),
+            src: spec.src,
+            volume: spec.volume,
+            delay: spec.delay,
+            status: Status::Offline,
+        }
+    }
+
+    /// Applies the given [`spec::v1::Mixin`] to this [`Mixin`].
+    #[inline]
+    pub fn apply(&mut self, new: spec::v1::Mixin) {
+        self.src = new.src;
+        self.volume = new.volume;
+        self.delay = new.delay;
+    }
+
+    /// Exports this [`Mixin`] as a [`spec::v1::Mixin`].
+    #[inline]
+    #[must_use]
+    pub fn export(&self) -> spec::v1::Mixin {
+        spec::v1::Mixin {
+            src: self.src.clone(),
+            volume: self.volume,
+            delay: self.delay,
+        }
+    }
+}
+
 /// ID of a `Mixin`.
 #[derive(
     Clone,
@@ -982,6 +1426,128 @@ impl MixinId {
     #[must_use]
     pub fn random() -> Self {
         Self(Uuid::new_v4())
+    }
+}
+
+/// [`Url`] of a [`Mixin::src`].
+///
+/// Only [TeamSpeak] URLs are allowed at the moment.
+///
+/// [TeamSpeak]: https://teamspeak.com
+#[derive(
+    Clone, Debug, Deref, Display, Eq, Hash, Into, PartialEq, Serialize,
+)]
+pub struct MixinSrcUrl(Url);
+
+impl MixinSrcUrl {
+    /// Creates a new [`MixinSrcUrl`] if the given [`Url`] is suitable for that.
+    #[inline]
+    #[must_use]
+    pub fn new(url: Url) -> Option<Self> {
+        (url.scheme() == "ts" && url.host().is_some()).then(|| Self(url))
+    }
+}
+
+impl<'de> Deserialize<'de> for MixinSrcUrl {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(Url::deserialize(deserializer)?)
+            .ok_or_else(|| D::Error::custom("Not a valid Mixin.src URL"))
+    }
+}
+
+/// Type of a `Mixin.src` URL.
+///
+/// Only [TeamSpeak] URLs are allowed at the moment.
+///
+/// [TeamSpeak]: https://teamspeak.com
+#[graphql_scalar]
+impl<S> GraphQLScalar for MixinSrcUrl
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(self.0.as_str().to_owned())
+    }
+
+    fn from_input_value(v: &InputValue) -> Option<Self> {
+        v.as_scalar()
+            .and_then(ScalarValue::as_str)
+            .and_then(|s| Url::parse(s).ok())
+            .and_then(Self::new)
+    }
+
+    fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
+    }
+}
+
+/// Status indicating availability of an `Input`, `Output`, or a `Mixin`.
+#[derive(Clone, Copy, Debug, Eq, GraphQLEnum, PartialEq, SmartDefault)]
+pub enum Status {
+    /// Inactive, no operations are performed and no media traffic is flowed.
+    #[default]
+    Offline,
+
+    /// Initializing, media traffic doesn't yet flow as expected.
+    Initializing,
+
+    /// Active, all operations are performing successfully and media traffic
+    /// flows as expected.
+    Online,
+}
+
+/// Label of a [`Restream`] or an [`Output`].
+#[derive(Clone, Debug, Deref, Display, Eq, Into, PartialEq, Serialize)]
+pub struct Label(String);
+
+impl Label {
+    /// Creates a new [`Label`] if the given value meets its invariants.
+    #[must_use]
+    pub fn new<'s, S: Into<Cow<'s, str>>>(val: S) -> Option<Self> {
+        static REGEX: Lazy<Regex> =
+            Lazy::new(|| Regex::new(r"^[^,\n\t\r\f\v]{1,70}$").unwrap());
+
+        let val = val.into();
+        (!val.is_empty() && REGEX.is_match(&val))
+            .then(|| Self(val.into_owned()))
+    }
+}
+
+impl<'de> Deserialize<'de> for Label {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::new(<Cow<'_, str>>::deserialize(deserializer)?)
+            .ok_or_else(|| D::Error::custom("Not a valid Label"))
+    }
+}
+
+/// Type of a `Restream` or an `Output` label.
+///
+/// It should meet `[^,\n\t\r\f\v]{1,70}` format.
+#[graphql_scalar]
+impl<S> GraphQLScalar for Label
+where
+    S: ScalarValue,
+{
+    fn resolve(&self) -> Value {
+        Value::scalar(self.0.as_str().to_owned())
+    }
+
+    fn from_input_value(v: &InputValue) -> Option<Self> {
+        v.as_scalar()
+            .and_then(ScalarValue::as_str)
+            .and_then(Self::new)
+    }
+
+    fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
+        <String as ParseScalarValue<S>>::from_str(value)
     }
 }
 
@@ -1055,10 +1621,10 @@ where
         Value::scalar(i32::from(self.0))
     }
 
-    fn from_input_value(v: &InputValue) -> Option<Volume> {
+    fn from_input_value(v: &InputValue) -> Option<Self> {
         v.as_scalar()
             .and_then(ScalarValue::as_int)
-            .and_then(Volume::new)
+            .and_then(Self::new)
     }
 
     fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
@@ -1079,7 +1645,7 @@ where
     PartialOrd,
     Serialize,
 )]
-pub struct Delay(Duration);
+pub struct Delay(#[serde(with = "serde_humantime")] Duration);
 
 impl Delay {
     /// Creates a new [`Delay`] out of the given milliseconds.
@@ -1119,10 +1685,10 @@ where
         Value::scalar(self.as_millis())
     }
 
-    fn from_input_value(v: &InputValue) -> Option<Delay> {
+    fn from_input_value(v: &InputValue) -> Option<Self> {
         v.as_scalar()
             .and_then(ScalarValue::as_int)
-            .and_then(Delay::from_millis)
+            .and_then(Self::from_millis)
     }
 
     fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {

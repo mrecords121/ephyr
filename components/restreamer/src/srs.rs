@@ -3,6 +3,7 @@
 //! [SRS]: https://github.com/ossrs/srs
 
 use std::{
+    borrow::Borrow,
     ops::Deref,
     panic::AssertUnwindSafe,
     path::{Path, PathBuf},
@@ -148,7 +149,7 @@ impl Drop for ServerProcess {
 /// server.
 ///
 /// [SRS]: https://github.com/ossrs/srs
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub struct ClientId(Arc<u32>);
 
 impl From<u32> for ClientId {
@@ -164,6 +165,13 @@ impl Deref for ClientId {
     #[inline]
     fn deref(&self) -> &Self::Target {
         &*self.0
+    }
+}
+
+impl Borrow<u32> for ClientId {
+    #[inline]
+    fn borrow(&self) -> &u32 {
+        &*self
     }
 }
 

@@ -6,18 +6,23 @@
   import { onDestroy } from 'svelte';
   import { setClient, subscribe } from 'svelte-apollo';
 
-  import { Info, State } from './api/graphql/client.graphql';
+  import {
+    ExportAllRestreams,
+    Info,
+    State,
+  } from './api/graphql/client.graphql';
 
   import { showError } from './util';
 
   import UIkit from 'uikit';
   import Icons from 'uikit/dist/js/uikit-icons';
 
-  import { inputModal } from './stores';
+  import { restreamModal, exportModal } from './stores';
 
-  import InputModal from './InputModal.svelte';
+  import RestreamModal from './RestreamModal.svelte';
   import OutputModal from './OutputModal.svelte';
   import PasswordModal from './PasswordModal.svelte';
+  import ExportModal from './ExportModal.svelte';
   import Restream from './Restream.svelte';
 
   UIkit.use(Icons);
@@ -66,6 +71,26 @@
   );
 
   let openPasswordModal = false;
+
+  async function openExportModal() {
+    let resp;
+    try {
+      resp = await gqlClient.query({
+        query: ExportAllRestreams,
+        fetchPolicy: 'no-cache',
+      });
+    } catch (e) {
+      showError(e.message);
+      return;
+    }
+
+    if (!!resp.data && !!resp.data.export) {
+      exportModal.open(
+        null,
+        JSON.stringify(JSON.parse(resp.data.export), null, 2)
+      );
+    }
+  }
 </script>
 
 <template>
@@ -73,7 +98,7 @@
     {#if isOnline && $info.data}
       <button
         class="uk-button uk-button-primary"
-        on:click={() => inputModal.openAdd()}
+        on:click={() => restreamModal.openAdd()}
       >
         <i class="fas fa-plus" />&nbsp;<span>Input</span>
       </button>
@@ -91,8 +116,19 @@
           />
         </a>
       {/key}
-      <InputModal public_host={$info.data.info.publicHost} />
+      <RestreamModal public_host={$info.data.info.publicHost} />
       <OutputModal />
+      {#if isOnline && $state.data}
+        <ExportModal full_state={$state.data.allRestreams} />
+        <a
+          class="export-import-all"
+          href="/"
+          on:click|preventDefault={openExportModal}
+          title="Export/Import all"
+        >
+          <i class="fas fa-share-square" />
+        </a>
+      {/if}
       <PasswordModal
         current_hash={$info.data.info.passwordHash}
         bind:visible={openPasswordModal}
@@ -117,7 +153,7 @@
     {#if !isOnline || $state.loading}
       <div class="uk-alert uk-alert-warning loading">Loading...</div>
     {:else if isOnline && $state.data && $info.data}
-      {#each $state.data.restreams as restream}
+      {#each $state.data.allRestreams as restream}
         <Restream public_host={$info.data.info.publicHost} value={restream} />
       {/each}
     {/if}
@@ -141,7 +177,12 @@
   h2, h3
     color: #666
 
+  .uk-container
+    padding-left: 34px !important
+    padding-right: @padding-left
+
   header
+    position: relative
     padding: 10px
     height: $header_height - 2 * @padding
 
@@ -181,6 +222,22 @@
         bottom: -6px
         left: 68px
         color: #999
+
+    .export-import-all
+      position: absolute
+      top: 18px
+      right: 9px
+      opacity: 0
+      transition: opacity .3s ease
+      color: #666
+      outline: none
+      &:hover
+        text-decoration: none
+        color: #444
+        opacity: 1
+    &:hover
+      .export-import-all
+        opacity: 1
 
   main
     min-height: "calc(100vh - %s)" % ($header_height + $footer_height)
