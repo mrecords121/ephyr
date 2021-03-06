@@ -15,31 +15,31 @@ All user visible changes to this project will be documented in this file. This p
 
 - Web UI:
     - Input:
-        - Remove distinguishing between pull or push endpoint in add/edit modal window ([rev2]).
+        - Remove distinguishing between pull or push endpoint in add/edit modal window ([9e1ac1c7]).
 - GraphQL API:
     - Types:
-        - Rename root types to `Query`, `Mutation` and `Subscription` ([rev2]);
-        - Rework fields of `Restream` and `Input` objects ([rev2]);
-        - Remove `PushInput` and `PullInput` objects ([rev2]).
+        - Rename root types to `Query`, `Mutation` and `Subscription` ([9e1ac1c7]);
+        - Rework fields of `Restream` and `Input` objects ([9e1ac1c7]);
+        - Remove `PushInput` and `PullInput` objects ([9e1ac1c7]).
     - Mutations:
-        - Replace `addPullInput` and `addPushInput` with `setRestream` ([rev2]);
-        - Rename `removeInput` to `removeRestream` an change its argument's type ([rev2]);
-        - Add `restreamId` argument to `enableInput` and `disableInput` ([rev2]);
-        - Replace `inputId` argument with `restreamId` in `addOutput`, `removeOutput`, `enableOutput`, `disableOutput`, `enableAllOutputs` and `disableAllOutputs` ([rev2]);
-        - Rename `outputId` argument to `id` in `removeOutput`, `enableOutput` and `disableOutput` ([rev2]);
-        - Use `OutputDstUrl` and `MixinSrcUrl` scalars instead of `Url` in `addOutput` ([rev2]);
-        - Use `Label` scalar instead of `String` in `addOutput` ([rev2]).
+        - Replace `addPullInput` and `addPushInput` with `setRestream` ([9e1ac1c7]);
+        - Rename `removeInput` to `removeRestream` an change its argument's type ([9e1ac1c7]);
+        - Add `restreamId` argument to `enableInput` and `disableInput` ([9e1ac1c7]);
+        - Replace `inputId` argument with `restreamId` in `addOutput`, `removeOutput`, `enableOutput`, `disableOutput`, `enableAllOutputs` and `disableAllOutputs` ([9e1ac1c7]);
+        - Rename `outputId` argument to `id` in `removeOutput`, `enableOutput` and `disableOutput` ([9e1ac1c7]);
+        - Use `OutputDstUrl` and `MixinSrcUrl` scalars instead of `Url` in `addOutput` ([9e1ac1c7]);
+        - Use `Label` scalar instead of `String` in `addOutput` ([9e1ac1c7]).
     - Queries:
-        - Rename `restreams` to `allRestreams` ([rev2]).
+        - Rename `restreams` to `allRestreams` ([9e1ac1c7]).
     - Subscriptions:
-        - Rename `restreams` to `allRestreams` ([rev2]).
+        - Rename `restreams` to `allRestreams` ([9e1ac1c7]).
 
 ### Added
 
 - Web UI:
     - Input:
-        - Optional backup endpoint (push or pull) ([a3236808], [rev2]);
-        - Ability to export/import as JSON spec ([rev2]).
+        - Optional backup endpoint (push or pull) ([a3236808], [9e1ac1c7]);
+        - Ability to export/import as JSON spec ([9e1ac1c7]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
         - Tuning volume rate of tracks ([77d25dd7], [#23]);
@@ -49,31 +49,31 @@ All user visible changes to this project will be documented in this file. This p
     - Types:
         - `Mixin` object ([77d25dd7], [#23]);
         - `MixinId`, `Volume` and `Delay` scalars ([77d25dd7], [#23]);
-        - `RestreamId` scalar ([rev2]);
-        - `Label` scalar ([rev2]);
-        - `InputSrcUrl`, `OutputDstUrl` and `MixinSrcUrl` scalars ([5dabcfdc], [rev2]);
-        - `RestreamKey` and `InputKey` scalars ([rev2]);
-        - `InputSrc` union with `RemoteInputSrc` and `FailoverInputSrc` variants ([rev2]).
+        - `RestreamId` scalar ([9e1ac1c7]);
+        - `Label` scalar ([9e1ac1c7]);
+        - `InputSrcUrl`, `OutputDstUrl` and `MixinSrcUrl` scalars ([5dabcfdc], [9e1ac1c7]);
+        - `RestreamKey` and `InputKey` scalars ([9e1ac1c7]);
+        - `InputSrc` union with `RemoteInputSrc` and `FailoverInputSrc` variants ([9e1ac1c7]).
     - Mutations:
-        - `enableRestream` and `disableRestream` ([rev2]);
+        - `enableRestream` and `disableRestream` ([9e1ac1c7]);
         - `tuneVolume` and `tuneDelay` ([77d25dd7], [#23]);
         - `mix` argument to `addOutput` ([77d25dd7], [#23]);
-        - `import` ([rev2]).
+        - `import` ([9e1ac1c7]).
     - Queries:
         - `Output.volume` and `Output.mixins` fields ([77d25dd7], [#23]);
-        - `export` ([rev2]).
+        - `export` ([9e1ac1c7]).
 - Spec (export/import):
-    - `v1` version ([rev2]).
+    - `v1` version ([9e1ac1c7]).
 - Deployment:
     - Provision script for [Ubuntu] 20.04:
-        - Optional [firewalld] installation via `WITH_FIREWALLD` env var ([rev]).
+        - Optional [firewalld] installation via `WITH_FIREWALLD` env var ([bbccc004]).
 
 [#23]: /../../issues/23
 [5dabcfdc]: /../../commit/5dabcfdce2420fdd43a8f4c20c2eff497e884ac3
 [77d25dd7]: /../../commit/77d25dd739d4f05b319769eddd83c01bd3a490a4
 [a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
-[rev]: /../../commit/full-rev
-[rev2]: /../../commit/full-rev2
+[bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
+[9e1ac1c7]: /../../commit/9e1ac1c7e576c22f6234777bf01d054adb9fe5db
 
 
 
