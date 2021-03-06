@@ -839,18 +839,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "config"
-version = "0.10.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b076e143e1d9538dde65da30f8481c2a6c44040edb8e02b9bf1351edb92ce3"
-dependencies = [
- "lazy_static",
- "nom 5.1.2",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "const-random"
 version = "0.1.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1250,34 +1238,6 @@ dependencies = [
  "slog-scope",
  "slog-stdlog",
  "slog-term",
-]
-
-[[package]]
-name = "ephyr-mixer"
-version = "0.4.0"
-dependencies = [
- "anyhow",
- "backoff",
- "byteorder",
- "config",
- "derive_more",
- "ephyr-log",
- "futures",
- "hex",
- "humantime",
- "humantime-serde",
- "once_cell",
- "rand 0.7.3",
- "rust_decimal",
- "serde",
- "serde_json",
- "smart-default",
- "structopt",
- "tokio",
- "tsclientlib",
- "tsproto-packets",
- "url",
- "validator",
 ]
 
 [[package]]
@@ -1817,12 +1777,6 @@ dependencies = [
  "unicode-bidi",
  "unicode-normalization",
 ]
-
-[[package]]
-name = "if_chain"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f7280c75fb2e2fc47080ec80ccc481376923acb04501957fc38f935c3de5088"
 
 [[package]]
 name = "indexmap"
@@ -2980,16 +2934,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust_decimal"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5c739ba050709eae138f053356d27ff818d71fe54ce5a8d9f4c7a660bfb6684"
-dependencies = [
- "num-traits 0.2.14",
- "serde",
-]
-
-[[package]]
 name = "rustc-demangle"
 version = "0.1.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3998,45 +3942,6 @@ dependencies = [
  "getrandom 0.2.1",
  "serde",
 ]
-
-[[package]]
-name = "validator"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4effc922f18d14f3daf201b1d13c61e5ef62f5975e7d18df381f67badd76cfcd"
-dependencies = [
- "idna",
- "lazy_static",
- "regex",
- "serde",
- "serde_derive",
- "serde_json",
- "url",
- "validator_derive",
- "validator_types",
-]
-
-[[package]]
-name = "validator_derive"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15529099583e8ce2b070ab6a637454a1b42c7146e6daee4a6817a82bee33bd41"
-dependencies = [
- "if_chain",
- "lazy_static",
- "proc-macro-error",
- "proc-macro2",
- "quote 1.0.8",
- "regex",
- "syn 1.0.60",
- "validator_types",
-]
-
-[[package]]
-name = "validator_types"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "add324da7950ac1f76b1c16ce8b5406147953d5d6a2ac1c5da93785f2cfc738b"
 
 [[package]]
 name = "vcpkg"

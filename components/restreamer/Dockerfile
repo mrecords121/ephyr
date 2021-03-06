@@ -41,7 +41,6 @@ WORKDIR /tmp/ephyr/
 COPY common/api/allatra-video/Cargo.toml ./common/api/allatra-video/
 COPY common/log/Cargo.toml ./common/log/
 COPY common/serde/Cargo.toml ./common/serde/
-COPY components/mixer/Cargo.toml ./components/mixer/
 COPY components/restreamer/Cargo.toml ./components/restreamer/
 COPY components/vod-meta-server/Cargo.toml ./components/vod-meta-server/
 COPY Cargo.toml Cargo.lock ./
@@ -52,8 +51,6 @@ RUN mkdir -p common/api/allatra-video/src/ \
  && touch common/log/src/lib.rs \
  && mkdir -p common/serde/src/ \
  && touch common/serde/src/lib.rs \
- && mkdir -p components/mixer/src/ \
- && touch components/mixer/src/lib.rs \
  && mkdir -p components/restreamer/src/ \
  && touch components/restreamer/src/lib.rs components/restreamer/src/main.rs \
  && mkdir -p components/vod-meta-server/src/ \

@@ -68,7 +68,7 @@ docker.down:
 # Build project Docker image.
 #
 # Usage:
-#	make docker.image [comp=(restreamer|mixer|vod-meta-server)]
+#	make docker.image [comp=(restreamer|vod-meta-server)]
 #	                  [tag=($(IMAGE_TAG)|<tag>)]
 #	                  [no-cache=(no|yes)]
 
@@ -91,7 +91,7 @@ endif
 #
 # Usage:
 #	make docker.push [tags=($(IMAGE_TAG)|<t1>[,<t2>...])]
-#	                 [comp=(restreamer|mixer|vod-meta-server)]
+#	                 [comp=(restreamer|vod-meta-server)]
 
 docker-push-tags = $(if $(call eq,$(tags),),$(IMAGE_TAG),$(tags))
 
@@ -110,7 +110,7 @@ endef
 # Usage:
 #	make docker.tag [of=($(IMAGE_TAG)|<tag>)]
 #	                [tags=($(IMAGE_TAG)|<with-t1>[,<with-t2>...])]
-#	                [comp=(restreamer|mixer|vod-meta-server)]
+#	                [comp=(restreamer|vod-meta-server)]
 
 docker-tag-of = $(if $(call eq,$(of),),$(IMAGE_TAG),$(of))
 docker-tag-with = $(if $(call eq,$(tags),),$(IMAGE_TAG),$(tags))
@@ -130,7 +130,7 @@ endef
 #
 # Usage:
 #	make docker.tar [to-file=(.cache/image.tar|<file-path>)]
-#	                [comp=(restreamer|mixer|vod-meta-server)]
+#	                [comp=(restreamer|vod-meta-server)]
 #	                [tags=($(IMAGE_TAG)|<t1>[,<t2>...])]
 
 docker-tar-file = $(if $(call eq,$(to-file),),.cache/image.tar,$(to-file))
