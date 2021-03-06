@@ -14,8 +14,9 @@
     value.subscribe((v) => {
       try {
         submitable =
+          (v.prev_spec === '' && v.spec.trim() !== '') ||
           JSON.stringify(JSON.parse(v.spec)) !==
-          JSON.stringify(JSON.parse(v.prev_spec));
+            JSON.stringify(JSON.parse(v.prev_spec));
       } catch (e) {
         submitable = false;
       }
@@ -25,6 +26,10 @@
   let invalidSpec = null;
   onDestroy(value.subscribe((v) => validateSpec(v.spec)));
   function validateSpec(v) {
+    if (v.trim() === '') {
+      invalidSpec = null;
+      return;
+    }
     try {
       JSON.parse(v);
       invalidSpec = null;

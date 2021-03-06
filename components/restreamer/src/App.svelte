@@ -84,10 +84,12 @@
       return;
     }
 
-    if (!!resp.data && !!resp.data.export) {
+    if (!!resp.data) {
       exportModal.open(
         null,
-        JSON.stringify(JSON.parse(resp.data.export), null, 2)
+        resp.data.export
+          ? JSON.stringify(JSON.parse(resp.data.export), null, 2)
+          : ''
       );
     }
   }
@@ -119,7 +121,7 @@
       <RestreamModal public_host={$info.data.info.publicHost} />
       <OutputModal />
       {#if isOnline && $state.data}
-        <ExportModal full_state={$state.data.allRestreams} />
+        <ExportModal />
         <a
           class="export-import-all"
           href="/"
