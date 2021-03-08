@@ -151,6 +151,16 @@
                 "defaultValue": "false"
               },
               {
+                "name": "withHls",
+                "description": "Indicator whether the `Restream` should have an additional endpoint for serving a live stream via HLS.",
+                "type": {
+                  "kind": "SCALAR",
+                  "name": "Boolean",
+                  "ofType": null
+                },
+                "defaultValue": "false"
+              },
+              {
                 "name": "id",
                 "description": "ID of the `Restream` to be updated rather than creating a new one.",
                 "type": {
@@ -748,6 +758,16 @@
         "possibleTypes": null
       },
       {
+        "kind": "SCALAR",
+        "name": "EndpointId",
+        "description": null,
+        "fields": null,
+        "inputFields": null,
+        "interfaces": null,
+        "enumValues": null,
+        "possibleTypes": null
+      },
+      {
         "kind": "OBJECT",
         "name": "Input",
         "description": "Upstream source that a `Restream` receives a live stream from.",
@@ -770,7 +790,7 @@
           },
           {
             "name": "key",
-            "description": "Key of this `Input` to expose its endpoint with for accepting and\nserving a live stream.",
+            "description": "Key of this `Input` to expose its `InputEndpoint`s with for accepting\nand serving a live stream.",
             "args": [],
             "type": {
               "kind": "NON_NULL",
@@ -779,6 +799,30 @@
                 "kind": "SCALAR",
                 "name": "InputKey",
                 "ofType": null
+              }
+            },
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "endpoints",
+            "description": "Endpoints of this `Input` serving a live stream for `Output`s and\nclients.",
+            "args": [],
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "LIST",
+                "name": null,
+                "ofType": {
+                  "kind": "NON_NULL",
+                  "name": null,
+                  "ofType": {
+                    "kind": "OBJECT",
+                    "name": "InputEndpoint",
+                    "ofType": null
+                  }
+                }
               }
             },
             "isDeprecated": false,
@@ -806,22 +850,6 @@
               "ofType": {
                 "kind": "SCALAR",
                 "name": "Boolean",
-                "ofType": null
-              }
-            },
-            "isDeprecated": false,
-            "deprecationReason": null
-          },
-          {
-            "name": "status",
-            "description": "`Status` of this `Input` indicating whether it actually serves a live\nstream ready to be consumed by `Output`s.",
-            "args": [],
-            "type": {
-              "kind": "NON_NULL",
-              "name": null,
-              "ofType": {
-                "kind": "ENUM",
-                "name": "Status",
                 "ofType": null
               }
             },
@@ -1159,6 +1187,65 @@
       },
       {
         "kind": "OBJECT",
+        "name": "InputEndpoint",
+        "description": "Endpoint of an `Input` serving a live stream for `Output`s and clients.",
+        "fields": [
+          {
+            "name": "id",
+            "description": "Unique ID of this `InputEndpoint`.\n\nOnce assigned, it never changes.",
+            "args": [],
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "SCALAR",
+                "name": "EndpointId",
+                "ofType": null
+              }
+            },
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "kind",
+            "description": "Kind of this `InputEndpoint`.",
+            "args": [],
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "ENUM",
+                "name": "InputEndpointKind",
+                "ofType": null
+              }
+            },
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "status",
+            "description": "`Status` of this `InputEndpoint` indicating whether it actually serves a\nlive stream ready to be consumed by `Output`s and clients.",
+            "args": [],
+            "type": {
+              "kind": "NON_NULL",
+              "name": null,
+              "ofType": {
+                "kind": "ENUM",
+                "name": "Status",
+                "ofType": null
+              }
+            },
+            "isDeprecated": false,
+            "deprecationReason": null
+          }
+        ],
+        "inputFields": null,
+        "interfaces": [],
+        "enumValues": null,
+        "possibleTypes": null
+      },
+      {
+        "kind": "OBJECT",
         "name": "Query",
         "description": null,
         "fields": [
@@ -1237,6 +1324,29 @@
         "inputFields": null,
         "interfaces": [],
         "enumValues": null,
+        "possibleTypes": null
+      },
+      {
+        "kind": "ENUM",
+        "name": "InputEndpointKind",
+        "description": "Possible kinds of an `InputEndpoint`.",
+        "fields": null,
+        "inputFields": null,
+        "interfaces": null,
+        "enumValues": [
+          {
+            "name": "RTMP",
+            "description": "[RTMP] endpoint.\n\nCan accept a live stream and serve it for playing.\n\n[RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol",
+            "isDeprecated": false,
+            "deprecationReason": null
+          },
+          {
+            "name": "HLS",
+            "description": "[HLS] endpoint.\n\nOnly serves a live stream for playing and is not able to accept one.\n\n[HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming",
+            "isDeprecated": false,
+            "deprecationReason": null
+          }
+        ],
         "possibleTypes": null
       },
       {

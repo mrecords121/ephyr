@@ -53,6 +53,8 @@
   };
 
   function openEditRestreamModal() {
+    const with_hls = value.input.endpoints.some((e) => e.kind === 'HLS');
+
     let pull_url = null;
     let backup = null;
 
@@ -73,7 +75,14 @@
       }
     }
 
-    restreamModal.openEdit(value.id, value.key, value.label, pull_url, backup);
+    restreamModal.openEdit(
+      value.id,
+      value.key,
+      value.label,
+      pull_url,
+      backup,
+      with_hls
+    );
   }
 
   async function removeRestream() {

@@ -14,8 +14,9 @@ use crate::{
     api::graphql,
     spec,
     state::{
-        Delay, InputId, InputKey, InputSrcUrl, Label, MixinId, MixinSrcUrl,
-        OutputDstUrl, OutputId, Restream, RestreamId, RestreamKey, Volume,
+        Delay, InputEndpointKind, InputId, InputKey, InputSrcUrl, Label,
+        MixinId, MixinSrcUrl, OutputDstUrl, OutputId, Restream, RestreamId,
+        RestreamKey, Volume,
     },
     Spec,
 };
@@ -133,6 +134,12 @@ impl MutationsRoot {
                            backup endpoint for a live stream.",
             default = false,
         ),
+        with_hls(
+            description = "Indicator whether the `Restream` should have an \
+                           additional endpoint for serving a live stream via \
+                           HLS.",
+            default = false,
+        ),
         id(description = "ID of the `Restream` to be updated rather than \
                           creating a new one."),
     ))]
@@ -142,6 +149,7 @@ impl MutationsRoot {
         src: Option<InputSrcUrl>,
         backup_src: Option<InputSrcUrl>,
         with_backup: bool,
+        with_hls: bool,
         id: Option<RestreamId>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
@@ -149,11 +157,17 @@ impl MutationsRoot {
             Some(spec::v1::InputSrc::FailoverInputs(vec![
                 spec::v1::Input {
                     key: InputKey::new("main").unwrap(),
+                    endpoints: vec![spec::v1::InputEndpoint {
+                        kind: InputEndpointKind::Rtmp,
+                    }],
                     src: src.map(spec::v1::InputSrc::RemoteUrl),
                     enabled: true,
                 },
                 spec::v1::Input {
                     key: InputKey::new("backup").unwrap(),
+                    endpoints: vec![spec::v1::InputEndpoint {
+                        kind: InputEndpointKind::Rtmp,
+                    }],
                     src: backup_src.map(spec::v1::InputSrc::RemoteUrl),
                     enabled: true,
                 },
@@ -162,11 +176,21 @@ impl MutationsRoot {
             src.map(spec::v1::InputSrc::RemoteUrl)
         };
 
+        let mut endpoints = vec![spec::v1::InputEndpoint {
+            kind: InputEndpointKind::Rtmp,
+        }];
+        if with_hls {
+            endpoints.push(spec::v1::InputEndpoint {
+                kind: InputEndpointKind::Hls,
+            });
+        }
+
         let spec = spec::v1::Restream {
             key,
             label,
             input: spec::v1::Input {
                 key: InputKey::new("origin").unwrap(),
+                endpoints,
                 src: input_src,
                 enabled: true,
             },

@@ -39,54 +39,69 @@
       checked={value.enabled}
       on:change={toggle}
     />
-    <span
-      class:uk-alert-danger={value.status === 'OFFLINE'}
-      class:uk-alert-warning={value.status === 'INITIALIZING'}
-      class:uk-alert-success={value.status === 'ONLINE'}
-    >
-      {#if isFailover}
-        {#if value.status === 'ONLINE'}
-          <span
-            ><i
-              class="fas fa-circle"
-              title="Serves failover live stream"
-            /></span
-          >
-        {:else if value.status === 'INITIALIZING'}
-          <span
-            ><i
-              class="fas fa-dot-circle"
-              title="Serves failover live stream"
-            /></span
-          >
-        {:else}
-          <span
-            ><i
-              class="far fa-dot-circle"
-              title="Serves failover live stream"
-            /></span
-          >
-        {/if}
-      {:else if isPull}
+    {#each value.endpoints as endpoint}
+      <span class="endpoint">
         <span
-          ><i class="fas fa-arrow-down" title="Pulls {value.key} live stream" />
+          class:uk-alert-danger={endpoint.status === 'OFFLINE'}
+          class:uk-alert-warning={endpoint.status === 'INITIALIZING'}
+          class:uk-alert-success={endpoint.status === 'ONLINE'}
+        >
+          {#if isFailover || endpoint.kind !== 'RTMP'}
+            {#if endpoint.status === 'ONLINE'}
+              <span
+                ><i
+                  class="fas fa-circle"
+                  title="Serves {isFailover
+                    ? 'failover '
+                    : ''}live {endpoint.kind} stream"
+                /></span
+              >
+            {:else if endpoint.status === 'INITIALIZING'}
+              <span
+                ><i
+                  class="fas fa-dot-circle"
+                  title="Serves {isFailover
+                    ? 'failover '
+                    : ''} live {endpoint.kind} stream"
+                /></span
+              >
+            {:else}
+              <span
+                ><i
+                  class="far fa-dot-circle"
+                  title="Serves {isFailover
+                    ? 'failover '
+                    : ''} live {endpoint.kind} stream"
+                /></span
+              >
+            {/if}
+          {:else if isPull}
+            <span
+              ><i
+                class="fas fa-arrow-down"
+                title="Pulls {value.key} live {endpoint.kind} stream"
+              />
+            </span>
+          {:else}
+            <span
+              ><i
+                class="fas fa-arrow-right"
+                title="Accepts {value.key} live {endpoint.kind} stream"
+              />
+            </span>
+          {/if}
         </span>
-      {:else}
-        <span
-          ><i
-            class="fas fa-arrow-right"
-            title="Accepts {value.key} live stream"
-          />
+        <span>
+          {#if isPull}
+            {value.src.url}
+          {:else if endpoint.kind === 'HLS'}
+            http://{public_host}:8000/hls/{restream_key}/{value.key}.m3u8
+          {:else}
+            rtmp://{public_host}/{restream_key}/{value.key}
+          {/if}
         </span>
-      {/if}
-    </span>
-    <span>
-      {#if isPull}
-        {value.src.url}
-      {:else}
-        rtmp://{public_host}/{restream_key}/{value.key}
-      {/if}
-    </span>
+      </span>
+    {/each}
   </div>
 </template>
 
@@ -97,4 +112,8 @@
   .fa-circle, .fa-dot-circle
     font-size: 12px
     cursor: help
+
+  .endpoint + .endpoint
+    display: block
+    margin-left: 45px
 </style>

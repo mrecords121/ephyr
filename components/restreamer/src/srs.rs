@@ -13,7 +13,7 @@ use std::{
 
 use anyhow::anyhow;
 use askama::Template;
-use derive_more::Display;
+use derive_more::{AsRef, Deref, Display, From, Into};
 use ephyr_log::{log, slog};
 use futures::future::{self, FutureExt as _, TryFutureExt as _};
 use smart_default::SmartDefault;
@@ -55,6 +55,25 @@ impl Server {
 
         let mut conf_path = workdir.to_path_buf();
         conf_path.push("conf/srs.conf");
+
+        let http_dir = if cfg.http_server_dir.is_relative() {
+            let mut dir = workdir.to_path_buf();
+            dir.push(&cfg.http_server_dir);
+            dir
+        } else {
+            cfg.http_server_dir.clone().into()
+        };
+
+        // Pre-create directory for HLS.
+        let mut hls_dir = http_dir.clone();
+        hls_dir.push("hls");
+        fs::create_dir_all(&hls_dir).await.map_err(|e| {
+            anyhow!(
+                "Failed to pre-create HLS directory {} : {}",
+                hls_dir.display(),
+                e,
+            )
+        })?;
 
         let mut cmd = Command::new(bin_path);
         let _ = cmd
@@ -206,6 +225,11 @@ pub struct Config {
     /// [1]: https://en.wikipedia.org/wiki/Basic_access_authentication
     pub callback_port: u16,
 
+    /// Path to the directory served by [SRS] HTTP server (HLS chunks, etc).
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    pub http_server_dir: DisplayablePath,
+
     /// Severity of [SRS] server logs.
     ///
     /// [SRS]: https://github.com/ossrs/srs
@@ -261,3 +285,12 @@ impl From<slog::Level> for LogLevel {
         }
     }
 }
+
+/// [`Display`]able wrapper around [`PathBuf`] for using in
+/// [`askama::Template`]s.
+///
+/// [`Display`]: std::fmt::Display
+#[derive(AsRef, Clone, Debug, Deref, Display, From, Into)]
+#[as_ref(forward)]
+#[display(fmt = "{}", "_0.display()")]
+pub struct DisplayablePath(PathBuf);

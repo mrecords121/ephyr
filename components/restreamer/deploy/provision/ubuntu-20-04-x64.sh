@@ -25,7 +25,8 @@ if [ "$WITH_FIREWALLD" == "1" ]; then
   systemctl unmask firewalld.service
   systemctl enable firewalld.service
   systemctl start firewalld.service
-  firewall-cmd --zone=public --permanent --add-port=80/tcp --add-port=1935/tcp
+  firewall-cmd --zone=public --permanent \
+               --add-port=80/tcp --add-port=1935/tcp --add-port=8000/tcp
   firewall-cmd --reload
 fi
 

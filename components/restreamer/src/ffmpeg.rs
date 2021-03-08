@@ -70,13 +70,13 @@ impl RestreamersPool {
         let mut new_pool = HashMap::with_capacity(self.pool.len() + 1);
 
         for r in restreams {
-            let _ = self.apply_input(&r.key, &r.input, &mut new_pool);
+            self.apply_input(&r.key, &r.input, &mut new_pool);
 
             if !r.input.enabled || !r.input.is_ready_to_serve() {
                 continue;
             }
 
-            let input_url = r.input.rtmp_endpoint_url(&r.key);
+            let input_url = r.main_input_rtmp_endpoint_url();
 
             for o in &r.outputs {
                 let _ = self.apply_output(&input_url, o, &mut new_pool);
@@ -96,16 +96,32 @@ impl RestreamersPool {
         key: &state::RestreamKey,
         input: &state::Input,
         new_pool: &mut HashMap<Uuid, Restreamer>,
-    ) -> Option<()> {
+    ) {
         if let Some(state::InputSrc::Failover(s)) = &input.src {
             for i in &s.inputs {
-                let _ = self.apply_input(key, i, new_pool);
+                self.apply_input(key, i, new_pool);
             }
         }
+        for endpoint in &input.endpoints {
+            let _ = self.apply_input_endpoint(key, input, endpoint, new_pool);
+        }
+    }
 
-        let id = input.id.into();
+    /// Inspects the given [`state::InputEndpoint`] filling the `new_pool` with
+    /// a required [FFmpeg] re-streaming process. Tries to preserve already
+    /// running [FFmpeg] processes in its `pool` as much as possible.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
+    fn apply_input_endpoint(
+        &mut self,
+        key: &state::RestreamKey,
+        input: &state::Input,
+        endpoint: &state::InputEndpoint,
+        new_pool: &mut HashMap<Uuid, Restreamer>,
+    ) -> Option<()> {
+        let id = endpoint.id.into();
 
-        let new_kind = RestreamerKind::from_input(input, key)?;
+        let new_kind = RestreamerKind::from_input(input, endpoint, key)?;
 
         let process = self
             .pool
@@ -275,6 +291,11 @@ pub enum RestreamerKind {
     /// transmuxing it to the destination format.
     Copy(CopyRestreamer),
 
+    /// Re-streaming of a live stream from one URL endpoint to another one
+    /// transcoding it with desired settings, and optionally transmuxing it to
+    /// the destination format.
+    Transcoding(TranscodingRestreamer),
+
     /// Mixing a live stream from one URL endpoint with additional live streams
     /// and re-streaming the result to another endpoint.
     Mixing(MixingRestreamer),
@@ -289,6 +310,7 @@ impl RestreamerKind {
     pub fn id<Id: From<Uuid>>(&self) -> Id {
         match self {
             Self::Copy(c) => c.id.into(),
+            Self::Transcoding(c) => c.id.into(),
             Self::Mixing(m) => m.id.into(),
         }
     }
@@ -303,25 +325,52 @@ impl RestreamerKind {
     #[must_use]
     pub fn from_input(
         input: &state::Input,
+        endpoint: &state::InputEndpoint,
         key: &state::RestreamKey,
     ) -> Option<Self> {
         if !input.enabled {
             return None;
         }
 
-        match input.src.as_ref()? {
-            state::InputSrc::Remote(remote) => Some(remote.url.clone().into()),
-            state::InputSrc::Failover(s) => s.inputs.iter().find_map(|i| {
-                (i.status == Status::Online).then(|| i.rtmp_endpoint_url(key))
-            }),
-        }
-        .map(|from_url| {
-            CopyRestreamer {
-                id: input.id.into(),
-                from_url,
-                to_url: input.rtmp_endpoint_url(key),
+        Some(match endpoint.kind {
+            state::InputEndpointKind::Rtmp => {
+                let from_url = match input.src.as_ref()? {
+                    state::InputSrc::Remote(remote) => {
+                        remote.url.clone().into()
+                    }
+                    state::InputSrc::Failover(s) => {
+                        s.inputs.iter().find_map(|i| {
+                            i.endpoints.iter().find_map(|e| {
+                                (e.is_rtmp() && e.status == Status::Online)
+                                    .then(|| e.kind.rtmp_url(key, &i.key))
+                            })
+                        })?
+                    }
+                };
+                CopyRestreamer {
+                    id: endpoint.id.into(),
+                    from_url,
+                    to_url: endpoint.kind.rtmp_url(key, &input.key),
+                }
+                .into()
             }
-            .into()
+
+            state::InputEndpointKind::Hls => {
+                if !input.is_ready_to_serve() {
+                    return None;
+                }
+                TranscodingRestreamer {
+                    id: endpoint.id.into(),
+                    from_url: state::InputEndpointKind::Rtmp
+                        .rtmp_url(key, &input.key),
+                    to_url: endpoint.kind.rtmp_url(key, &input.key),
+                    vcodec: Some("libx264".into()),
+                    vprofile: Some("baseline".into()),
+                    vpreset: Some("superfast".into()),
+                    acodec: Some("libfdk_aac".into()),
+                }
+                .into()
+            }
         })
     }
 
@@ -364,6 +413,9 @@ impl RestreamerKind {
     pub fn needs_restart(&mut self, actual: &Self) -> bool {
         match (self, actual) {
             (Self::Copy(old), Self::Copy(new)) => old.needs_restart(new),
+            (Self::Transcoding(old), Self::Transcoding(new)) => {
+                old.needs_restart(new)
+            }
             (Self::Mixing(old), Self::Mixing(new)) => old.needs_restart(new),
             _ => true,
         }
@@ -380,6 +432,7 @@ impl RestreamerKind {
     fn setup_ffmpeg(&self, cmd: &mut Command, state: &State) {
         match self {
             Self::Copy(c) => c.setup_ffmpeg(cmd),
+            Self::Transcoding(c) => c.setup_ffmpeg(cmd),
             Self::Mixing(m) => m.setup_ffmpeg(cmd, state),
         }
     }
@@ -398,8 +451,33 @@ impl RestreamerKind {
         if let Self::Mixing(m) = self {
             m.run_ffmpeg(cmd).await
         } else {
-            CopyRestreamer::run_ffmpeg(cmd).await
+            Self::run_ffmpeg_no_stdin(cmd).await
         }
+    }
+
+    /// Properly runs the given [FFmpeg] [`Command`] without writing to its
+    /// STDIN and awaits its completion.
+    ///
+    /// # Errors
+    ///
+    /// This method doesn't return [`Ok`] as the running [FFmpeg] [`Command`] is
+    /// aborted by dropping and is intended to never stop. If it returns, than
+    /// an [`io::Error`] occurs and the [FFmpeg] [`Command`] cannot run.
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
+    async fn run_ffmpeg_no_stdin(mut cmd: Command) -> io::Result<()> {
+        let process = cmd.spawn()?;
+
+        let out = process.wait_with_output().await?;
+
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!(
+                "FFmpeg re-streamer stopped with exit code: {}\n{}",
+                out.status,
+                String::from_utf8_lossy(&out.stderr),
+            ),
+        ))
     }
 
     /// Renews [`Status`] of this [FFmpeg] re-streaming process in the `actual`
@@ -423,10 +501,12 @@ impl RestreamerKind {
                 fn renew_input_status(
                     input: &mut state::Input,
                     status: Status,
-                    my_id: state::InputId,
+                    my_id: state::EndpointId,
                 ) -> bool {
-                    if input.id == my_id {
-                        input.status = status;
+                    if let Some(endpoint) =
+                        input.endpoints.iter_mut().find(|e| e.id == my_id)
+                    {
+                        endpoint.status = status;
                         return true;
                     }
 
@@ -496,30 +576,82 @@ impl CopyRestreamer {
         }
         .arg(self.to_url.as_str());
     }
+}
 
-    /// Properly runs the given [FFmpeg] [`Command`] for a [`CopyRestreamer`]
-    /// awaiting its completion.
+/// Kind of a [FFmpeg] re-streaming process that re-streams a live stream from
+/// one URL endpoint to another one transcoding it with desired settings, and
+/// optionally transmuxing it to the destination format.
+///
+/// [FFmpeg]: https://ffmpeg.org
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct TranscodingRestreamer {
+    /// ID of an element in a [`State`] this [`TranscodingRestreamer`] process
+    /// is related to.
+    pub id: Uuid,
+
+    /// [`Url`] to pull a live stream from.
+    pub from_url: Url,
+
+    /// [`Url`] to publish the transcoded live stream onto.
+    pub to_url: Url,
+
+    /// [FFmpeg video encoder][1] to encode the transcoded live stream with.
     ///
-    /// # Errors
+    /// [1]: https://ffmpeg.org/ffmpeg-codecs.html#Video-Encoders
+    pub vcodec: Option<Cow<'static, str>>,
+
+    /// [Preset] of the [`TranscodingRestreamer::vcodec`] if it has one.
     ///
-    /// This method doesn't return [`Ok`] as the running [FFmpeg] [`Command`] is
-    /// aborted by dropping and is intended to never stop. If it returns, than
-    /// an [`io::Error`] occurs and the [FFmpeg] [`Command`] cannot run.
+    /// [Preset]: https://trac.ffmpeg.org/wiki/Encode/H.264#Preset
+    pub vpreset: Option<Cow<'static, str>>,
+
+    /// [Profile] of the [`TranscodingRestreamer::vcodec`] if it has one.
+    ///
+    /// [Profile]: https://trac.ffmpeg.org/wiki/Encode/H.264#Profile
+    pub vprofile: Option<Cow<'static, str>>,
+
+    /// [FFmpeg audio encoder][1] to encode the transcoded live stream with.
+    ///
+    /// [1]: https://ffmpeg.org/ffmpeg-codecs.html#Audio-Encoders
+    pub acodec: Option<Cow<'static, str>>,
+}
+
+impl TranscodingRestreamer {
+    /// Checks whether this [`TranscodingRestreamer`] process must be restarted,
+    /// as cannot apply the new `actual` params on itself correctly, without
+    /// interruptions.
+    #[inline]
+    #[must_use]
+    pub fn needs_restart(&self, actual: &Self) -> bool {
+        self != actual
+    }
+
+    /// Properly setups the given [FFmpeg] [`Command`] for this
+    /// [`TranscodingRestreamer`] before running it.
     ///
     /// [FFmpeg]: https://ffmpeg.org
-    async fn run_ffmpeg(mut cmd: Command) -> io::Result<()> {
-        let process = cmd.spawn()?;
+    fn setup_ffmpeg(&self, cmd: &mut Command) {
+        let _ = cmd.args(&["-i", self.from_url.as_str()]);
 
-        let out = process.wait_with_output().await?;
+        if let Some(val) = self.vcodec.as_ref() {
+            let _ = cmd.args(&["-c:v", val]);
+        }
+        if let Some(val) = self.vpreset.as_ref() {
+            let _ = cmd.args(&["-preset", val]);
+        }
+        if let Some(val) = self.vprofile.as_ref() {
+            let _ = cmd.args(&["-profile:v", val]);
+        }
 
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "FFmpeg re-streamer stopped with exit code: {}\n{}",
-                out.status,
-                String::from_utf8_lossy(&out.stderr),
-            ),
-        ))
+        if let Some(val) = self.acodec.as_ref() {
+            let _ = cmd.args(&["-c:a", val]);
+        }
+
+        let _ = match self.to_url.scheme() {
+            "rtmp" | "rtmps" => cmd.args(&["-f", "flv"]),
+            _ => unimplemented!(),
+        }
+        .arg(self.to_url.as_str());
     }
 }
 
@@ -783,7 +915,7 @@ impl MixingRestreamer {
                 "FFmpeg re-streamer stopped unexpectedly",
             ))
         } else {
-            CopyRestreamer::run_ffmpeg(cmd).await
+            RestreamerKind::run_ffmpeg_no_stdin(cmd).await
         }
     }
 }

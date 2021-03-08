@@ -39,7 +39,8 @@ All user visible changes to this project will be documented in this file. This p
 - Web UI:
     - Input:
         - Optional backup endpoint (push or pull) ([a3236808], [9e1ac1c7]);
-        - Ability to export/import as JSON spec ([9e1ac1c7]).
+        - Ability to export/import as JSON spec ([9e1ac1c7]);
+        - Optional [HLS] endpoint ([rev]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
         - Tuning volume rate of tracks ([77d25dd7], [#23]);
@@ -53,7 +54,8 @@ All user visible changes to this project will be documented in this file. This p
         - `Label` scalar ([9e1ac1c7]);
         - `InputSrcUrl`, `OutputDstUrl` and `MixinSrcUrl` scalars ([5dabcfdc], [9e1ac1c7]);
         - `RestreamKey` and `InputKey` scalars ([9e1ac1c7]);
-        - `InputSrc` union with `RemoteInputSrc` and `FailoverInputSrc` variants ([9e1ac1c7]).
+        - `InputSrc` union with `RemoteInputSrc` and `FailoverInputSrc` variants ([9e1ac1c7]);
+        - `InputEndpoint` object, `InputEndpointKind` enum and `EndpointId` scalar ([rev]).
     - Mutations:
         - `enableRestream` and `disableRestream` ([9e1ac1c7]);
         - `tuneVolume` and `tuneDelay` ([77d25dd7], [#23]);
@@ -64,6 +66,8 @@ All user visible changes to this project will be documented in this file. This p
         - `export` ([9e1ac1c7]).
 - Spec (export/import):
     - `v1` version ([9e1ac1c7]).
+- Config:
+    - `--srs-http-dir` CLI option and `EPHYR_RESTREAMER_SRS_HTTP_DIR` env var ([rev]).
 - Deployment:
     - Provision script for [Ubuntu] 20.04:
         - Optional [firewalld] installation via `WITH_FIREWALLD` env var ([bbccc004]).
@@ -71,9 +75,10 @@ All user visible changes to this project will be documented in this file. This p
 [#23]: /../../issues/23
 [5dabcfdc]: /../../commit/5dabcfdce2420fdd43a8f4c20c2eff497e884ac3
 [77d25dd7]: /../../commit/77d25dd739d4f05b319769eddd83c01bd3a490a4
+[9e1ac1c7]: /../../commit/9e1ac1c7e576c22f6234777bf01d054adb9fe5db
 [a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
-[9e1ac1c7]: /../../commit/9e1ac1c7e576c22f6234777bf01d054adb9fe5db
+[rev]: /../../commit/rev
 
 
 
@@ -169,6 +174,7 @@ All user visible changes to this project will be documented in this file. This p
 [GraphQL]: https://www.graphql.com
 [GraphQL Playground]: https://github.com/graphql/graphql-playground
 [Hetzner Cloud]: https://www.hetzner.com/cloud
+[HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming
 [Icecast]: https://icecast.org
 [Podman]: https://podman.io
 [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol

@@ -76,9 +76,29 @@ pub struct Opts {
         env = "EPHYR_RESTREAMER_SRS_PATH",
         default_value = "/usr/local/srs",
         help = "Path to SRS dir",
-        help = "Path to SRS installation directory"
+        long_help = "Path to SRS installation directory"
     )]
     pub srs_path: PathBuf,
+
+    /// Path to the directory where [SRS] serves public files from via HTTP
+    /// (HLS chunks, etc).
+    ///
+    /// Relative path will use [`Opts::srs_path`] as its base path, not the
+    /// current working directory.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[structopt(
+        long,
+        env = "EPHYR_RESTREAMER_SRS_HTTP_DIR",
+        default_value = "/var/www/srs",
+        help = "Path to SRS public HTTP files",
+        long_help = "Path to the directory where SRS serves public files from \
+                     via HTTP (HLS chunks, etc).\
+                     \n\n\
+                     Relative path will use --srs-path as its base path, not \
+                     the current working directory."
+    )]
+    pub srs_http_dir: PathBuf,
 
     /// Path to [FFmpeg] binary.
     ///

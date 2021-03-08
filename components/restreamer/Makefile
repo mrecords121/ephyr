@@ -234,7 +234,7 @@ ifeq ($(rebuild),yes)
 endif
 	docker run --rm --name ephyr-restreamer-dev \
 	           $(if $(call eq,$(background),yes),-d,-it) \
-	           -p 80:80 -p 1935:1935 \
+	           -p 80:80 -p 1935:1935 -p 8000:8000 \
 	           -v '$(PWD)/state.json:/state.json' \
 		$(IMAGE_NAME):restreamer-$(IMAGE_TAG) \
 			$(if $(call eq,$(debug),no),,--debug)

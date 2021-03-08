@@ -45,6 +45,7 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
         &cfg.srs_path,
         &srs::Config {
             callback_port: cfg.callback_http_port,
+            http_server_dir: cfg.srs_http_dir.clone().into(),
             log_level: cfg.verbose.map(Into::into).unwrap_or_default(),
         },
     )
@@ -233,7 +234,7 @@ pub mod callback {
     use crate::{
         api::srs::callback,
         cli::{Failure, Opts},
-        state::{Input, InputSrc, State, Status},
+        state::{Input, InputEndpointKind, InputSrc, State, Status},
     };
 
     /// Runs HTTP server for exposing [SRS] [HTTP Callback API][1] on `/`
@@ -276,13 +277,14 @@ pub mod callback {
         state: web::Data<State>,
     ) -> Result<&'static str, Error> {
         match req.action {
-            callback::Event::OnConnect => on_connect(&req, &*state)?,
-            callback::Event::OnPublish => on_start(&req, &*state, true)?,
-            callback::Event::OnUnpublish => on_stop(&req, &*state, true)?,
-            callback::Event::OnPlay => on_start(&req, &*state, false)?,
-            callback::Event::OnStop => on_stop(&req, &*state, false)?,
+            callback::Event::OnConnect => on_connect(&req, &*state),
+            callback::Event::OnPublish => on_start(&req, &*state, true),
+            callback::Event::OnUnpublish => on_stop(&req, &*state, true),
+            callback::Event::OnPlay => on_start(&req, &*state, false),
+            callback::Event::OnStop => on_stop(&req, &*state, false),
+            callback::Event::OnHls => on_hls(&req, &*state),
         }
-        Ok("0")
+        .map(|_| "0")
     }
 
     /// Handles [`callback::Event::OnConnect`].
@@ -307,16 +309,19 @@ pub mod callback {
 
     /// Handles [`callback::Event::OnPublish`] and [`callback::Event::OnPlay`].
     ///
-    /// Updates the appropriate [`state::Restream`]'s [`Input`] to
+    /// Updates the appropriate [`state::Restream`]'s [`InputEndpoint`] to
     /// [`Status::Online`] (if [`callback::Event::OnPublish`]) and remembers the
     /// connected [SRS] client.
     ///
     /// # Errors
     ///
-    /// - If [`callback::Request::app`] or [`callback::Request::stream`] matches
-    ///   no existing enabled [`Input`].
-    /// - If [`Input`] is not allowed to be published by external client.
+    /// - If [`callback::Request::vhost`], [`callback::Request::app`] or
+    ///   [`callback::Request::stream`] matches no existing enabled
+    ///   [`InputEndpoint`].
+    /// - If [`InputEndpoint`] is not allowed to be published by external
+    ///   client.
     ///
+    /// [`InputEndpoint`]: crate::state::InputEndpoint
     /// [`state::Restream`]: crate::state::Restream
     ///
     /// [SRS]: https://github.com/ossrs/srs
@@ -342,7 +347,11 @@ pub mod callback {
             }
         }
 
-        let endpoint = req.stream.as_deref().unwrap_or_default();
+        let stream = req.stream.as_deref().unwrap_or_default();
+        let kind = match req.vhost.as_str() {
+            "hls" => InputEndpointKind::Hls,
+            _ => InputEndpointKind::Rtmp,
+        };
 
         let mut restreams = state.restreams.lock_mut();
         let restream = restreams
@@ -351,29 +360,40 @@ pub mod callback {
             .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
 
         let input =
-            lookup_input(&mut restream.input, endpoint).ok_or_else(|| {
+            lookup_input(&mut restream.input, stream).ok_or_else(|| {
                 error::ErrorNotFound("Such `stream` doesn't exist")
             })?;
 
+        let endpoint = input
+            .endpoints
+            .iter_mut()
+            .find(|e| e.kind == kind)
+            .ok_or_else(|| {
+                error::ErrorForbidden("Such `vhost` is not allowed")
+            })?;
+
         if publishing {
-            if input.src.is_some() && !req.ip.is_loopback() {
+            if !req.ip.is_loopback()
+                && (input.src.is_some() || !endpoint.is_rtmp())
+            {
                 return Err(error::ErrorForbidden(
                     "Such `stream` is allowed only locally",
                 ));
             }
 
-            if input.srs_publisher_id.as_ref().map(|id| **id)
+            if endpoint.srs_publisher_id.as_ref().map(|id| **id)
                 != Some(req.client_id)
             {
-                input.srs_publisher_id = Some(req.client_id.into());
+                endpoint.srs_publisher_id = Some(req.client_id.into());
             }
-            input.status = Status::Online;
+
+            endpoint.status = Status::Online;
         } else {
             // `srs::ClientId` kicks the client when `Drop`ped, so we should be
             // careful here to not accidentally kick the client by creating a
             // temporary binding.
-            if !input.srs_player_ids.contains(&req.client_id) {
-                let _ = input.srs_player_ids.insert(req.client_id.into());
+            if !endpoint.srs_player_ids.contains(&req.client_id) {
+                let _ = endpoint.srs_player_ids.insert(req.client_id.into());
             }
         }
         Ok(())
@@ -381,14 +401,15 @@ pub mod callback {
 
     /// Handles [`callback::Event::OnUnpublish`].
     ///
-    /// Updates the appropriate [`state::Restream`]'s [`Input`] to
+    /// Updates the appropriate [`state::Restream`]'s [`InputEndpoint`] to
     /// [`Status::Offline`].
     ///
     /// # Errors
     ///
-    /// If [`callback::Request::app`] or [`callback::Request::stream`] matches
-    /// no existing [`Input`].
+    /// If [`callback::Request::vhost`], [`callback::Request::app`] or
+    /// [`callback::Request::stream`] matches no existing [`InputEndpoint`].
     ///
+    /// [`InputEndpoint`]: crate::state::InputEndpoint
     /// [`state::Restream`]: crate::state::Restream
     fn on_stop(
         req: &callback::Request,
@@ -412,7 +433,11 @@ pub mod callback {
             }
         }
 
-        let endpoint = req.stream.as_deref().unwrap_or_default();
+        let stream = req.stream.as_deref().unwrap_or_default();
+        let kind = match req.vhost.as_str() {
+            "hls" => InputEndpointKind::Hls,
+            _ => InputEndpointKind::Rtmp,
+        };
 
         let mut restreams = state.restreams.lock_mut();
         let restream = restreams
@@ -421,15 +446,89 @@ pub mod callback {
             .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
 
         let input =
-            lookup_input(&mut restream.input, endpoint).ok_or_else(|| {
+            lookup_input(&mut restream.input, stream).ok_or_else(|| {
                 error::ErrorNotFound("Such `stream` doesn't exist")
             })?;
 
+        let endpoint = input
+            .endpoints
+            .iter_mut()
+            .find(|e| e.kind == kind)
+            .ok_or_else(|| {
+                error::ErrorForbidden("Such `vhost` is not allowed")
+            })?;
+
         if publishing {
-            input.srs_publisher_id = None;
-            input.status = Status::Offline;
+            endpoint.srs_publisher_id = None;
+            endpoint.status = Status::Offline;
         } else {
-            let _ = input.srs_player_ids.remove(&req.client_id);
+            let _ = endpoint.srs_player_ids.remove(&req.client_id);
+        }
+        Ok(())
+    }
+
+    /// Handles [`callback::Event::OnHls`].
+    ///
+    /// Checks whether the appropriate [`state::Restream`] with an
+    /// [`InputEndpointKind::Hls`] exists and its [`Input`] is enabled.
+    ///
+    /// # Errors
+    ///
+    /// If [`callback::Request::vhost`], [`callback::Request::app`] or
+    /// [`callback::Request::stream`] matches no existing [`InputEndpoint`]
+    /// of [`InputEndpointKind::Hls`].
+    ///
+    /// [`InputEndpoint`]: crate::state::InputEndpoint
+    /// [`state::Restream`]: crate::state::Restream
+    fn on_hls(req: &callback::Request, state: &State) -> Result<(), Error> {
+        /// Traverses the given [`Input`] and all its [`Input::srcs`] looking
+        /// for the one matching the specified `stream` and being enabled.
+        #[must_use]
+        fn lookup_input<'i>(
+            input: &'i mut Input,
+            stream: &str,
+        ) -> Option<&'i mut Input> {
+            if input.key == *stream {
+                return input.enabled.then(|| input);
+            }
+            if let Some(InputSrc::Failover(s)) = input.src.as_mut() {
+                s.inputs.iter_mut().find_map(|i| lookup_input(i, stream))
+            } else {
+                None
+            }
+        }
+
+        let stream = req.stream.as_deref().unwrap_or_default();
+        let kind = (req.vhost.as_str() == "hls")
+            .then(|| InputEndpointKind::Hls)
+            .ok_or_else(|| {
+                error::ErrorForbidden("Such `vhost` is not allowed")
+            })?;
+
+        let mut restreams = state.restreams.lock_mut();
+        let restream = restreams
+            .iter_mut()
+            .find(|r| r.input.enabled && r.key == *req.app)
+            .ok_or_else(|| error::ErrorNotFound("Such `app` doesn't exist"))?;
+
+        let endpoint = lookup_input(&mut restream.input, stream)
+            .ok_or_else(|| error::ErrorNotFound("Such `stream` doesn't exist"))?
+            .endpoints
+            .iter_mut()
+            .find(|e| e.kind == kind)
+            .ok_or_else(|| {
+                error::ErrorNotFound("Such `stream` doesn't exist")
+            })?;
+
+        if endpoint.status != Status::Online {
+            return Err(error::ErrorImATeapot("Not ready to serve"));
+        }
+
+        // `srs::ClientId` kicks the client when `Drop`ped, so we should be
+        // careful here to not accidentally kick the client by creating a
+        // temporary binding.
+        if !endpoint.srs_player_ids.contains(&req.client_id) {
+            let _ = endpoint.srs_player_ids.insert(req.client_id.into());
         }
         Ok(())
     }

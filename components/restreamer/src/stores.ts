@@ -114,6 +114,20 @@ export class RestreamModalState {
   prev_backup_pull_url: string | null = null;
 
   /**
+   * Indicator whether a an additional endpoint is required to server a live
+   * stream via [HLS].
+   *
+   * [HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming
+   */
+  with_hls: boolean = false;
+
+  /**
+   * Previous value of the `with_hls` indicator before it has been edited in the
+   * [[`RestreamModal`]].
+   */
+  prev_with_hls: boolean | null = null;
+
+  /**
    * Indicator whether the [[`RestreamModal`]] is visible (opened) at the
    * moment.
    */
@@ -181,13 +195,16 @@ export class RestreamModal implements Writable<RestreamModalState> {
    * @param pull_url    Current pull URL of the `Restream` before editing.
    * @param backup      Current backup pull URL of the `Restream` before
    *                    editing.
+   * @param with_hls    Indicator the `Restream` has had HLS endpoint before
+   *                    editing.
    */
   openEdit(
     id: string,
     key: string,
     label: string | null,
     pull_url: string | null,
-    backup: string | boolean | null
+    backup: string | boolean | null,
+    with_hls: boolean
   ) {
     this.update((v) => {
       v.edit_id = id;
@@ -215,6 +232,9 @@ export class RestreamModal implements Writable<RestreamModalState> {
           v.backup_pull_url = v.prev_backup_pull_url;
         }
       }
+
+      v.prev_with_hls = with_hls;
+      v.with_hls = v.prev_with_hls;
 
       v.visible = true;
       return v;
@@ -260,6 +280,11 @@ export class RestreamModal implements Writable<RestreamModalState> {
       }
       v.backup_pull_url = '';
       v.prev_backup_pull_url = null;
+
+      if (v.prev_with_hls !== null) {
+        v.with_hls = false;
+      }
+      v.prev_with_hls = null;
 
       v.visible = false;
       return v;

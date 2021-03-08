@@ -20,7 +20,7 @@ impl Client {
     /// [SRS]: https://github.com/ossrs/srs
     /// [URL]: https://en.wikipedia.org/wiki/URL
     /// [1]: https://github.com/ossrs/srs/wiki/v3_EN_HTTPApi
-    const V1_URL: &'static str = "http://127.0.0.1:8082/api/v1";
+    const V1_URL: &'static str = "http://127.0.0.1:8002/api/v1";
 
     /// [Kicks off][1] a client connected to [SRS] server by its `id`.
     ///

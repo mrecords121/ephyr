@@ -617,10 +617,10 @@ impl Restream {
     /// main [`Input`] in this [`Restream`].
     ///
     /// [SRS]: https://github.com/ossrs/srs
-    #[inline]
     #[must_use]
     pub fn main_input_rtmp_endpoint_url(&self) -> Url {
-        self.input.rtmp_endpoint_url(&self.key)
+        let main = self.input.endpoints.iter().find(|e| e.is_rtmp()).unwrap();
+        main.kind.rtmp_url(&self.key, &self.input.key)
     }
 }
 
@@ -720,9 +720,13 @@ pub struct Input {
     /// Once assigned, it never changes.
     pub id: InputId,
 
-    /// Key of this `Input` to expose its endpoint with for accepting and
-    /// serving a live stream.
+    /// Key of this `Input` to expose its `InputEndpoint`s with for accepting
+    /// and serving a live stream.
     pub key: InputKey,
+
+    /// Endpoints of this `Input` serving a live stream for `Output`s and
+    /// clients.
+    pub endpoints: Vec<InputEndpoint>,
 
     /// Source to pull a live stream from.
     ///
@@ -736,42 +740,22 @@ pub struct Input {
     /// live stream from its upstream sources.
     #[serde(default, skip_serializing_if = "is_false")]
     pub enabled: bool,
-
-    /// `Status` of this `Input` indicating whether it actually serves a live
-    /// stream ready to be consumed by `Output`s.
-    #[serde(skip)]
-    pub status: Status,
-
-    /// ID of a [SRS] client who publishes a live stream to this [`Input`]
-    /// (either an external client or a local process).
-    ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[graphql(skip)]
-    #[serde(skip)]
-    pub srs_publisher_id: Option<srs::ClientId>,
-
-    /// IDs of [SRS]s client who plays a live stream from this [`Input`] (either
-    /// an external client or a local process).
-    ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[graphql(skip)]
-    #[serde(skip)]
-    pub srs_player_ids: HashSet<srs::ClientId>,
 }
 
 impl Input {
     /// Creates a new [`Input`] out of the given [`spec::v1::Input`].
-    #[inline]
     #[must_use]
     pub fn new(spec: spec::v1::Input) -> Self {
         Self {
             id: InputId::random(),
             key: spec.key,
+            endpoints: spec
+                .endpoints
+                .into_iter()
+                .map(InputEndpoint::new)
+                .collect(),
             src: spec.src.map(InputSrc::new),
             enabled: spec.enabled,
-            status: Status::Offline,
-            srs_publisher_id: None,
-            srs_player_ids: HashSet::new(),
         }
     }
 
@@ -782,16 +766,36 @@ impl Input {
             || (self.src.is_none() && new.src.is_some())
             || (self.src.is_some() && new.src.is_none())
         {
-            // SRS endpoint has changed, disabled, or push/pull type has been
+            // SRS endpoints have changed, disabled, or push/pull type has been
             // switched, so we should kick the publisher and all the players.
-            self.srs_publisher_id = None;
-            self.srs_player_ids.clear();
+            for e in &mut self.endpoints {
+                e.srs_publisher_id = None;
+                e.srs_player_ids.clear();
+            }
         }
 
         self.key = new.key;
         // Temporary omit changing existing `enabled` value to avoid unexpected
         // breakages of ongoing re-streams.
         //self.enabled = new.enabled;
+
+        let mut olds = mem::replace(
+            &mut self.endpoints,
+            Vec::with_capacity(new.endpoints.len()),
+        );
+        for new in new.endpoints {
+            if let Some(mut old) = olds
+                .iter()
+                .enumerate()
+                .find_map(|(n, o)| (o.kind == new.kind).then(|| n))
+                .map(|n| olds.swap_remove(n))
+            {
+                old.apply(new);
+                self.endpoints.push(old);
+            } else {
+                self.endpoints.push(InputEndpoint::new(new));
+            }
+        }
 
         match (self.src.as_mut(), new.src) {
             (Some(old), Some(new)) => old.apply(new),
@@ -801,11 +805,15 @@ impl Input {
     }
 
     /// Exports this [`Input`] as a [`spec::v1::Input`].
-    #[inline]
     #[must_use]
     pub fn export(&self) -> spec::v1::Input {
         spec::v1::Input {
             key: self.key.clone(),
+            endpoints: self
+                .endpoints
+                .iter()
+                .map(InputEndpoint::export)
+                .collect(),
             src: self.src.as_ref().map(InputSrc::export),
             enabled: self.enabled,
         }
@@ -837,8 +845,11 @@ impl Input {
         let mut changed = self.enabled;
 
         self.enabled = false;
-        self.srs_publisher_id = None;
-        self.srs_player_ids.clear();
+
+        for e in &mut self.endpoints {
+            e.srs_publisher_id = None;
+            e.srs_player_ids.clear();
+        }
 
         if let Some(InputSrc::Failover(s)) = self.src.as_mut() {
             for i in &mut s.inputs {
@@ -863,29 +874,176 @@ impl Input {
         }
     }
 
-    /// Returns an URL on a local [SRS] server of the endpoint representing this
-    /// [`Input`] in the given `restream`.
-    ///
-    /// [SRS]: https://github.com/ossrs/srs
-    #[must_use]
-    pub fn rtmp_endpoint_url(&self, restream: &RestreamKey) -> Url {
-        Url::parse(&format!("rtmp://127.0.0.1:1935/{}/{}", restream, self.key))
-            .unwrap()
-    }
-
     /// Indicates whether this [`Input`] is ready to serve a live stream for
     /// [`Output`]s.
     #[must_use]
     pub fn is_ready_to_serve(&self) -> bool {
-        let mut is_online = self.status == Status::Online;
+        let mut is_online = self
+            .endpoints
+            .iter()
+            .any(|e| e.is_rtmp() && e.status == Status::Online);
 
         if !is_online {
             if let Some(InputSrc::Failover(s)) = &self.src {
-                is_online = s.inputs.iter().any(|i| i.status == Status::Online);
+                is_online = s.inputs.iter().any(|i| {
+                    i.endpoints
+                        .iter()
+                        .any(|e| e.is_rtmp() && e.status == Status::Online)
+                });
             }
         }
 
         is_online
+    }
+}
+
+/// Endpoint of an `Input` serving a live stream for `Output`s and clients.
+#[derive(
+    Clone, Debug, Deserialize, Eq, GraphQLObject, PartialEq, Serialize,
+)]
+pub struct InputEndpoint {
+    /// Unique ID of this `InputEndpoint`.
+    ///
+    /// Once assigned, it never changes.
+    pub id: EndpointId,
+
+    /// Kind of this `InputEndpoint`.
+    pub kind: InputEndpointKind,
+
+    /// `Status` of this `InputEndpoint` indicating whether it actually serves a
+    /// live stream ready to be consumed by `Output`s and clients.
+    #[serde(skip)]
+    pub status: Status,
+
+    /// ID of [SRS] client who publishes a live stream to this [`InputEndpoint`]
+    /// (either an external client or a local process).
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[graphql(skip)]
+    #[serde(skip)]
+    pub srs_publisher_id: Option<srs::ClientId>,
+
+    /// IDs of [SRS] clients who play a live stream from this [`InputEndpoint`]
+    /// (either an external clients or a local processes).
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[graphql(skip)]
+    #[serde(skip)]
+    pub srs_player_ids: HashSet<srs::ClientId>,
+}
+
+impl InputEndpoint {
+    /// Creates a new [`InputEndpoint`] out of the given
+    /// [`spec::v1::InputEndpoint`].
+    #[inline]
+    #[must_use]
+    pub fn new(spec: spec::v1::InputEndpoint) -> Self {
+        Self {
+            id: EndpointId::random(),
+            kind: spec.kind,
+            status: Status::Offline,
+            srs_publisher_id: None,
+            srs_player_ids: HashSet::new(),
+        }
+    }
+
+    /// Applies the given [`spec::v1::InputEndpoint`] to this [`InputEndpoint`].
+    #[inline]
+    pub fn apply(&mut self, new: spec::v1::InputEndpoint) {
+        self.kind = new.kind;
+    }
+
+    /// Exports this [`InputEndpoint`] as a [`spec::v1::InputEndpoint`].
+    #[inline]
+    #[must_use]
+    pub fn export(&self) -> spec::v1::InputEndpoint {
+        spec::v1::InputEndpoint { kind: self.kind }
+    }
+
+    /// Indicates whether this [`InputEndpoint`] is an
+    /// [`InputEndpointKind::Rtmp`].
+    #[inline]
+    #[must_use]
+    pub fn is_rtmp(&self) -> bool {
+        matches!(self.kind, InputEndpointKind::Rtmp)
+    }
+}
+
+/// Possible kinds of an `InputEndpoint`.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Display,
+    Eq,
+    From,
+    GraphQLEnum,
+    Hash,
+    PartialEq,
+    Serialize,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum InputEndpointKind {
+    /// [RTMP] endpoint.
+    ///
+    /// Can accept a live stream and serve it for playing.
+    ///
+    /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
+    #[display(fmt = "RTMP")]
+    Rtmp,
+
+    /// [HLS] endpoint.
+    ///
+    /// Only serves a live stream for playing and is not able to accept one.
+    ///
+    /// [HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming
+    #[display(fmt = "HLS")]
+    Hls,
+}
+
+impl InputEndpointKind {
+    /// Returns RTMP URL on a local [SRS] server of this [`InputEndpointKind`]
+    /// for the given `restream` and `input`.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[must_use]
+    pub fn rtmp_url(self, restream: &RestreamKey, input: &InputKey) -> Url {
+        Url::parse(&format!(
+            "rtmp://127.0.0.1:1935/{}{}/{}",
+            restream,
+            match self {
+                Self::Rtmp => "",
+                Self::Hls => "?vhost=hls",
+            },
+            input,
+        ))
+        .unwrap()
+    }
+}
+
+/// ID of an `InputEndpoint`.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Display,
+    Eq,
+    From,
+    GraphQLScalarValue,
+    Into,
+    PartialEq,
+    Serialize,
+)]
+pub struct EndpointId(Uuid);
+
+impl EndpointId {
+    /// Generates a new random [`EndpointId`].
+    #[inline]
+    #[must_use]
+    pub fn random() -> Self {
+        Self(Uuid::new_v4())
     }
 }
 

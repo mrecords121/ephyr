@@ -92,9 +92,13 @@ impl Restream {
 /// Shareable (exportable and importable) specification of a [`state::Input`].
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct Input {
-    /// Key of this [`Input`] to expose its endpoint with for accepting and
-    /// serving a live stream.
+    /// Key of this [`Input`] to expose its [`InputEndpoint`]s with for
+    /// accepting and serving a live stream.
     pub key: state::InputKey,
+
+    /// Endpoints of this [`Input`] serving a live stream for `Output`s and
+    /// clients.
+    pub endpoints: Vec<InputEndpoint>,
 
     /// Source to pull a live stream from.
     ///
@@ -116,6 +120,7 @@ impl<'de> Deserialize<'de> for Input {
         #[derive(Deserialize)]
         struct RawInput {
             key: state::InputKey,
+            endpoints: Vec<InputEndpoint>,
             #[serde(default)]
             src: Option<InputSrc>,
             #[serde(default)]
@@ -123,6 +128,22 @@ impl<'de> Deserialize<'de> for Input {
         }
 
         let raw = RawInput::deserialize(deserializer)?;
+
+        let mut unique_endpoints = HashSet::with_capacity(raw.endpoints.len());
+        for e in &raw.endpoints {
+            if let Some(kind) = unique_endpoints.replace(e.kind) {
+                return Err(D::Error::custom(format!(
+                    "Duplicate InputEndpoint.kind in Input.endpoints: {}",
+                    kind,
+                )));
+            }
+        }
+        if !unique_endpoints.contains(&state::InputEndpointKind::Rtmp) {
+            return Err(D::Error::custom(format!(
+                "Input.endpoints should contain at least one {} endpoint",
+                state::InputEndpointKind::Rtmp,
+            )));
+        }
 
         if let Some(src) = &raw.src {
             fn ensure_srcs_unique<'i>(
@@ -169,10 +190,19 @@ impl<'de> Deserialize<'de> for Input {
 
         Ok(Self {
             key: raw.key,
+            endpoints: raw.endpoints,
             src: raw.src,
             enabled: raw.enabled,
         })
     }
+}
+
+/// Shareable (exportable and importable) specification of a
+/// [`state::InputEndpoint`].
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InputEndpoint {
+    /// Kind of this [`InputEndpoint`].
+    pub kind: state::InputEndpointKind,
 }
 
 /// Shareable (exportable and importable) specification of a

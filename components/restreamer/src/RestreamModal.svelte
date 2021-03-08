@@ -42,6 +42,9 @@
           }
         }
       }
+      if (!!v.edit_id) {
+        changed |= v.with_hls !== v.prev_with_hls;
+      }
       submitable &= changed;
     })
   );
@@ -56,7 +59,7 @@
     if (!submitable) return;
     const v = get(value);
 
-    let variables = { key: v.key };
+    let variables = { key: v.key, with_hls: v.with_hls };
     if (v.label !== '') {
       variables.label = v.label;
     }
@@ -162,6 +165,15 @@
               />
             {/if}
           {/if}
+        </div>
+        <div class="hls">
+          <label
+            ><input
+              class="uk-checkbox"
+              type="checkbox"
+              bind:checked={$value.with_hls}
+            /> with HLS endpoint</label
+          >
         </div>
       </fieldset>
 

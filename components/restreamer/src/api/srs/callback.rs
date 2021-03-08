@@ -28,6 +28,13 @@ pub struct Request {
     /// [SRS]: https://github.com/ossrs/srs
     pub ip: IpAddr,
 
+    /// [SRS] `vhost` ([virtual host][1]) of RTMP stream that happened event is
+    /// related to.
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    /// [1]: https://github.com/ossrs/srs/wiki/v3_EN_RtmpUrlVhost
+    pub vhost: String,
+
     /// [SRS] `app` of RTMP stream that happened event is related to.
     ///
     /// [SRS]: https://github.com/ossrs/srs
@@ -73,4 +80,10 @@ pub enum Event {
     ///
     /// [SRS]: https://github.com/ossrs/srs
     OnStop,
+
+    /// [SRS] client plays an existing RTMP stream via [HLS].
+    ///
+    /// [HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming
+    /// [SRS]: https://github.com/ossrs/srs
+    OnHls,
 }

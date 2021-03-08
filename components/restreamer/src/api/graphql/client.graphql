@@ -13,6 +13,10 @@ subscription State {
         input {
             id
             key
+            endpoints {
+                kind
+                status
+            }
             src {
                 ... on RemoteInputSrc {
                     url
@@ -21,18 +25,20 @@ subscription State {
                     inputs {
                         id
                         key
+                        endpoints {
+                            kind
+                            status
+                        }
                         src {
                             ... on RemoteInputSrc {
                                 url
                             }
                         }
                         enabled
-                        status
                     }
                 }
             }
             enabled
-            status
         }
         outputs {
             id
@@ -70,6 +76,7 @@ mutation SetRestream(
     $id: RestreamId
     $with_backup: Boolean
     $backup_url: InputSrcUrl
+    $with_hls: Boolean
 ) {
     setRestream(
         key: $key
@@ -77,6 +84,7 @@ mutation SetRestream(
         label: $label
         withBackup: $with_backup
         backupSrc: $backup_url
+        withHls: $with_hls
         id: $id
     )
 }

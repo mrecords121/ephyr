@@ -1,6 +1,6 @@
 [package]
 name = "ephyr-restreamer"
-version = "0.2.0-alpha.3"
+version = "0.2.0-beta.1"
 edition = "2018"
 authors = ["Kai Ren <tyranron@gmail.com>"]
 publish = false
@@ -39,7 +39,7 @@ url = { version = "2.1", features = ["serde"] }
 uuid = { version = "0.8", features = ["serde", "v4"] }
 [dependencies.derive_more]
     version = "0.99.11"
-    features = ["deref", "display", "error", "from"]
+    features = ["as_ref", "deref", "display", "error", "from"]
     default-features = false
 [dependencies.tokio]
     version = "0.2"
