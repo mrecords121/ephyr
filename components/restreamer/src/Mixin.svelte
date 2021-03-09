@@ -24,12 +24,18 @@
     update_volumes_and_delay();
   }
 
+  // Last used non-zero volume.
+  let last_volume = value.volume === 0 ? 100 : value.volume;
+
   function update_volumes_and_delay() {
     volume = value.volume;
     delay = value.delay / 1000;
   }
 
   async function tuneVolume() {
+    if (volume !== 0) {
+      last_volume = volume;
+    }
     const variables = {
       restream_id,
       output_id,
@@ -41,6 +47,11 @@
     } catch (e) {
       showError(e.message);
     }
+  }
+
+  async function toggleVolume() {
+    volume = volume !== 0 ? 0 : last_volume;
+    await tuneVolume();
   }
 
   async function tuneDelay() {
@@ -63,7 +74,13 @@
     <i class="fas fa-wave-square" title="Mixed audio" />
     <span>{value.src}</span>
     <div class="volume">
-      <i class="fas fa-volume-up" title="Volume" />
+      <a href="/" on:click|preventDefault={toggleVolume}>
+        {#if volume > 0}
+          <span><i class="fas fa-volume-up" title="Volume" /></span>
+        {:else}
+          <span><i class="fas fa-volume-mute" title="Muted" /></span>
+        {/if}
+      </a>
       <input
         class="uk-range"
         type="range"
@@ -91,7 +108,9 @@
 </template>
 
 <style lang="stylus">
-  .fa-volume-up, .fa-wave-square, .fa-clock
+  .fa-volume-up, .fa-volume-mute
+    font-size: 10px
+  .fa-wave-square, .fa-clock
     font-size: 10px
     color: #d9d9d9
 
@@ -102,6 +121,13 @@
   .volume
     padding-left: 17px
     font-size: 10px
+
+    a
+      color: #d9d9d9
+      outline: none
+      &:hover
+        text-decoration: none
+        color: #c4c4c4
 
     .uk-range::-moz-range-thumb, .uk-range::-webkit-slider-thumb
       width: 7px

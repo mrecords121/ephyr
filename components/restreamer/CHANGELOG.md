@@ -43,7 +43,7 @@ All user visible changes to this project will be documented in this file. This p
         - Optional [HLS] endpoint ([65f8b86e]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
-        - Tuning volume rate of tracks ([77d25dd7], [#23]);
+        - Tuning and toggling volume rate of tracks ([77d25dd7], [rev], [#23]);
         - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]); 
         - [Icecast] URL as supported destination ([5dabcfdc]).
 - GraphQL API:
@@ -79,6 +79,7 @@ All user visible changes to this project will be documented in this file. This p
 [9e1ac1c7]: /../../commit/9e1ac1c7e576c22f6234777bf01d054adb9fe5db
 [a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
+[rev]: /../../commit/rev
 
 
 

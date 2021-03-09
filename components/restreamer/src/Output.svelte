@@ -31,6 +31,9 @@
     update_volume();
   }
 
+  // Last used non-zero volume.
+  let last_volume = value.volume === 0 ? 100 : value.volume;
+
   function update_volume() {
     volume = value.volume;
   }
@@ -58,12 +61,20 @@
   }
 
   async function tuneVolume() {
+    if (volume !== 0) {
+      last_volume = volume;
+    }
     const variables = { restream_id, output_id: value.id, volume };
     try {
       await tuneVolumeMutation({ variables });
     } catch (e) {
       showError(e.message);
     }
+  }
+
+  async function toggleVolume() {
+    volume = volume !== 0 ? 0 : last_volume;
+    await tuneVolume();
   }
 </script>
 
@@ -92,7 +103,13 @@
 
     {#if value.mixins.length > 0}
       <div class="volume orig">
-        <i class="fas fa-volume-up" title="Volume" />
+        <a href="/" on:click|preventDefault={toggleVolume}>
+          {#if volume > 0}
+            <span><i class="fas fa-volume-up" title="Volume" /></span>
+          {:else}
+            <span><i class="fas fa-volume-mute" title="Muted" /></span>
+          {/if}
+        </a>
         <input
           class="uk-range"
           type="range"
@@ -145,10 +162,8 @@
   .fa-circle, .fa-dot-circle
     font-size: 10px
     margin-top: -1px
-
-  .fa-volume-up
+  .fa-volume-up, .fa-volume-mute
     font-size: 10px
-    color: #d9d9d9
 
   .volume
     padding-left: 17px
@@ -156,6 +171,13 @@
 
     &.orig
       margin-left: 34px
+
+    a
+      color: #d9d9d9
+      outline: none
+      &:hover
+        text-decoration: none
+        color: #c4c4c4
 
     .uk-range::-moz-range-thumb, .uk-range::-webkit-slider-thumb
       width: 7px
