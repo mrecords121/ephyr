@@ -46,7 +46,7 @@
 Вставьте текст ниже в `User data` секцию.
 ```bash
 #!/bin/bash
-curl -sL https://raw.githubusercontent.com/ALLATRA-IT/ephyr/master/components/restreamer/deploy/provision/ubuntu-20-04-x64.sh | bash -s
+curl -sL https://raw.githubusercontent.com/ALLATRA-IT/ephyr/restreamer-v0.2.0-beta.1/components/restreamer/deploy/provision/ubuntu-20-04-x64.sh | bash -s
 ```
 
 ![Преднастройка](images/do_1.4.jpg)

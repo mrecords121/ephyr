@@ -69,7 +69,7 @@ const config: webpack.Configuration = {
     }),
     new webpack.EnvironmentPlugin({
       VERSION: process.env.CARGO_PKG_VERSION || process.env.npm_package_version,
-      WEBPACK_DEV_SERVER: process.env.WEBPACK_DEV_SERVER,
+      WEBPACK_DEV_SERVER: process.env.WEBPACK_DEV_SERVER || '',
     }),
   ],
   devtool: is_prod ? false : 'source-map',
