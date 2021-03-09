@@ -53,6 +53,7 @@ ExecStart=/usr/bin/podman run \\
   --network=host \\
   -v /var/lib/\${EPHYR_CONTAINER_NAME}/srs.conf:/usr/local/srs/conf/srs.conf \\
   -v /var/lib/\${EPHYR_CONTAINER_NAME}/state.json:/state.json \\
+  -v /tmp/\${EPHYR_CONTAINER_NAME}/www/:/var/www/srs/ \\
   --name=\${EPHYR_CONTAINER_NAME} \\
   \${EPHYR_IMAGE_NAME}:\${EPHYR_IMAGE_TAG} ${EPHYR_CLI_ARGS}
 
