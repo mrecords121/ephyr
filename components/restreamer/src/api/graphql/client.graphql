@@ -101,13 +101,20 @@ mutation DisableInput($restream_id: RestreamId!, $input_id: InputId!) {
     disableInput(id: $input_id, restreamId: $restream_id)
 }
 
-mutation AddOutput(
+mutation SetOutput(
     $restream_id: RestreamId!
     $url: OutputDstUrl!
     $label: Label
     $mix: MixinSrcUrl
+    $id: OutputId
 ) {
-    addOutput(restreamId: $restream_id, dst: $url, label: $label, mix: $mix)
+    setOutput(
+        restreamId: $restream_id
+        dst: $url
+        label: $label
+        mix: $mix
+        id: $id
+    )
 }
 
 mutation RemoveOutput($restream_id: RestreamId!, $output_id: OutputId!) {

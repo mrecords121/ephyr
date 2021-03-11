@@ -2,13 +2,13 @@
   import { onDestroy } from 'svelte';
   import { mutation } from 'svelte-apollo';
 
-  import { AddOutput } from './api/graphql/client.graphql';
+  import { SetOutput } from './api/graphql/client.graphql';
 
   import { outputModal as value } from './stores';
 
   import { sanitizeLabel, sanitizeUrl, showError } from './util';
 
-  const addOutputMutation = mutation(AddOutput);
+  const setOutputMutation = mutation(SetOutput);
 
   let submitable = false;
   let invalidLine;
@@ -18,9 +18,20 @@
         submitable = v.list !== '' && !invalidLine;
       } else {
         submitable = v.url !== '';
-        if (v.mixing) {
-          submitable = submitable && v.mix_url !== '';
+        let changed = !v.edit_id;
+        if (!!v.edit_id) {
+          changed |=
+            v.label !== v.prev_label ||
+            v.url !== v.prev_url ||
+            v.mixing !== v.prev_mixing;
         }
+        if (v.mixing) {
+          submitable &= v.mix_url !== '';
+          if (!!v.edit_id) {
+            changed |= v.mix_url !== v.prev_mix_url;
+          }
+        }
+        submitable &= changed;
       }
     })
   );
@@ -106,6 +117,9 @@
       if (v.mixing) {
         vars.mix = v.mix_url;
       }
+      if (v.edit_id) {
+        vars.id = v.edit_id;
+      }
       submit.push(vars);
     }
     if (submit.length < 1) return;
@@ -114,7 +128,7 @@
     await Promise.all(
       submit.map(async (variables) => {
         try {
-          await addOutputMutation({ variables });
+          await setOutputMutation({ variables });
         } catch (e) {
           showError('Failed to add ' + variables.url + ':\n' + e.message);
           failed.push(variables);
@@ -140,7 +154,11 @@
   <div class="uk-modal" class:uk-open={$value.visible} on:click={onAreaClick}>
     <div class="uk-modal-dialog uk-modal-body" class:is-multi={$value.multi}>
       <h2 class="uk-modal-title">
-        Add new output destination{$value.multi ? 's' : ''} for re-streaming
+        {#if !$value.edit_id}
+          Add new output destination{$value.multi ? 's' : ''} for re-streaming
+        {:else}
+          Edit output destination for re-streaming
+        {/if}
       </h2>
       <button
         class="uk-modal-close-outside"
@@ -149,18 +167,20 @@
         on:click={() => value.close()}
       />
 
-      <ul class="uk-tab">
-        <li class:uk-active={!$value.multi}>
-          <a href="/" on:click|preventDefault={() => value.switchSingle()}
-            >Single</a
-          >
-        </li>
-        <li class:uk-active={$value.multi}>
-          <a href="/" on:click|preventDefault={() => value.switchMulti()}
-            >Multiple</a
-          >
-        </li>
-      </ul>
+      {#if !$value.edit_id}
+        <ul class="uk-tab">
+          <li class:uk-active={!$value.multi}>
+            <a href="/" on:click|preventDefault={() => value.switchSingle()}
+              >Single</a
+            >
+          </li>
+          <li class:uk-active={$value.multi}>
+            <a href="/" on:click|preventDefault={() => value.switchMulti()}
+              >Multiple</a
+            >
+          </li>
+        </ul>
+      {/if}
 
       <fieldset class="single-form">
         <input
@@ -187,6 +207,7 @@
             ><input
               class="uk-checkbox"
               type="checkbox"
+              checked={$value.mixing}
               on:change={() => value.toggleMixing()}
             /> Mix with</label
           >
@@ -229,7 +250,7 @@ label3,rtmp://3..."
       <button
         class="uk-button uk-button-primary"
         disabled={!submitable}
-        on:click={submit}>Add</button
+        on:click={submit}>{!$value.edit_id ? 'Add' : 'Edit'}</button
       >
     </div>
   </div>
@@ -245,6 +266,7 @@ label3,rtmp://3..."
 
     fieldset
       border: none
+      padding: 0
 
       .uk-form-small
         width: auto

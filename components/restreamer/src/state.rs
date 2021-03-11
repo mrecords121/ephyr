@@ -198,9 +198,10 @@ impl State {
         Ok(())
     }
 
-    /// Edits a [`Restream`] this [`State`] identified by the given `spec`.
+    /// Edits a [`Restream`] with the given `spec` identified by the given `id`
+    /// in this [`State`].
     ///
-    /// Returns [`None`] if there is no [`Restream`] with such `key` in this
+    /// Returns [`None`] if there is no [`Restream`] with such `id` in this
     /// [`State`].
     ///
     /// # Errors
@@ -308,7 +309,7 @@ impl State {
     /// # Errors
     ///
     /// If the [`Restream`] has an [`Output`] with such `dst` already.
-    pub fn add_new_output(
+    pub fn add_output(
         &self,
         restream_id: RestreamId,
         spec: spec::v1::Output,
@@ -329,6 +330,42 @@ impl State {
 
         outputs.push(Output::new(spec));
         Ok(Some(()))
+    }
+
+    /// Edits an [`Output`] with the given `spec` identified by the given `id`
+    /// in the specified [`Restream`] of this [`State`].
+    ///
+    /// Returns [`None`] if there is no [`Restream`] with such `restream_id` in
+    /// this [`State`], or there is no [`Output`] with such `id`.
+    ///
+    /// # Errors
+    ///
+    /// If the [`Restream`] has an [`Output`] with such `dst` already.
+    pub fn edit_output(
+        &self,
+        restream_id: RestreamId,
+        id: OutputId,
+        spec: spec::v1::Output,
+    ) -> anyhow::Result<Option<()>> {
+        let mut restreams = self.restreams.lock_mut();
+
+        let outputs = if let Some(r) =
+            restreams.iter_mut().find(|r| r.id == restream_id)
+        {
+            &mut r.outputs
+        } else {
+            return Ok(None);
+        };
+
+        if outputs.iter().any(|o| o.dst == spec.dst && o.id != id) {
+            return Err(anyhow!("Output.dst '{}' is used already", spec.dst));
+        }
+
+        #[allow(clippy::find_map)] // due to consuming `spec`
+        Ok(outputs
+            .iter_mut()
+            .find(|o| o.id == id)
+            .map(|o| o.apply(spec, true)))
     }
 
     /// Removes an [`Output`] with the given `id` from the specified

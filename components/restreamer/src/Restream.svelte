@@ -94,7 +94,7 @@
   }
 
   function openAddOutputModal() {
-    outputModal.open(value.id);
+    outputModal.openAdd(value.id);
   }
 
   async function toggleAllOutputs() {
@@ -303,6 +303,7 @@
 
     .uk-grid
       margin-top: 10px
+      margin-left: -10px
 
     .label
       position: absolute

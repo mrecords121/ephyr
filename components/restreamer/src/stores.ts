@@ -293,13 +293,20 @@ export class RestreamModal implements Writable<RestreamModalState> {
 }
 
 /**
- * State of the modal window for adding re-streaming `Output`s.
+ * State of the modal window for adding/editing re-streaming `Output`s.
  */
 export class OutputModalState {
   /**
-   * ID of the `Restream` to add new `Output` for.
+   * ID of the `Restream` to that the `Output` belongs to.
    */
   restream_id: string | null = null;
+
+  /**
+   * ID of the `Output` being edited in the [[`OutputModal`]] at the moment.
+   *
+   * If `null` then a new `Output` is being added.
+   */
+  edit_id: string | null = null;
 
   /**
    * Indicator whether the "Multiple" tab is active in the [[`OutputModal`]].
@@ -307,27 +314,53 @@ export class OutputModalState {
   multi: boolean = false;
 
   /**
-   * Indicator whether the mixing form is active in the [[`OutputModal`]].
-   */
-  mixing: boolean = false;
-
-  /**
-   * Label to be assigned to the added `Output`.
+   * Label to be assigned to the `Output`.
    *
    * Empty string means no label.
    */
   label: string = '';
 
   /**
-   * RTMP URL to restream a live RTMP stream to with the added `Output`.
+   * Previous label of the `Output` before it has been edited in the
+   * [[`OutputModal`]].
+   *
+   * Empty string means no label.
+   */
+  prev_label: string | null = null;
+
+  /**
+   * Destination URL to re-stream a live stream onto with the `Output`.
    */
   url: string = '';
+
+  /**
+   * Previous value of `Output`'s destination URL before it has been edited in
+   * the [[`OutputModal`]].
+   */
+  prev_url: string | null = null;
+
+  /**
+   * Indicator whether the mixing form is active in the [[`OutputModal`]].
+   */
+  mixing: boolean = false;
+
+  /**
+   * Previous value of the `mixing` indicator before it has been edited in the
+   * [[`OutputModal`]].
+   */
+  prev_mixing: boolean | null = null;
 
   /**
    * URL of a TeamSpeak channel to mix audio from with a live RTMP stream before
    * outputting it.
    */
   mix_url: string = '';
+
+  /**
+   * Previous value of mixing TeamSpeak channel URL before it has been edited in
+   * the [[`OutputModal`]].
+   */
+  prev_mix_url: string | null = null;
 
   /**
    * List of multiple labels and RTMP URLs to be added in a comma-separated
@@ -380,11 +413,53 @@ export class OutputModal implements Writable<OutputModalState> {
   /**
    * Opens this [[`OutputModal`]] window for adding a new `Ouput`.
    *
-   * @param id    ID of the `Input` that new `Ouput` being added to.
+   * @param restream_id    ID of the `Restream` that a new `Ouput` being added
+   *                       to.
    */
-  open(id: string) {
+  openAdd(restream_id: string) {
     this.update((v) => {
-      v.restream_id = id;
+      v.restream_id = restream_id;
+      v.visible = true;
+      return v;
+    });
+  }
+
+  /**
+   * Opens this [[`OutputModal`]] window for editing an existing `Ouput`.
+   *
+   * @param restream_id    ID of the `Restream` that an edited `Ouput` belongs
+   *                       to.
+   * @param id             ID of the `Output` being edited.
+   * @param label          Current label of the `Output` before editing.
+   * @param dst_url        Current destination URL of the `Output` before
+   *                       editing.
+   * @param mix_url        Current mixing URL of the `Output` before editing.
+   */
+  openEdit(
+    restream_id: string,
+    id: string,
+    label: string | null,
+    dst_url: string,
+    mix_url: string | null
+  ) {
+    this.update((v) => {
+      v.restream_id = restream_id;
+      v.edit_id = id;
+
+      v.prev_label = sanitizeLabel(label ?? '');
+      v.label = v.prev_label;
+
+      v.prev_url = sanitizeUrl(dst_url);
+      v.url = v.prev_url;
+
+      v.prev_mixing = mix_url !== null;
+      v.mixing = v.prev_mixing;
+      if (mix_url !== null) {
+        v.prev_mix_url = sanitizeUrl(mix_url);
+        v.mix_url = v.prev_mix_url;
+      }
+
+      v.multi = false;
       v.visible = true;
       return v;
     });
@@ -436,9 +511,21 @@ export class OutputModal implements Writable<OutputModalState> {
   close() {
     this.update((v) => {
       v.restream_id = null;
+      v.edit_id = null;
+
       v.label = '';
+      v.prev_label = null;
+
       v.url = '';
+      v.prev_url = null;
+
+      if (v.prev_mixing !== null) {
+        v.mixing = false;
+      }
+      v.prev_mixing = null;
       v.mix_url = '';
+      v.prev_mix_url = null;
+
       v.list = '';
       v.visible = false;
       return v;

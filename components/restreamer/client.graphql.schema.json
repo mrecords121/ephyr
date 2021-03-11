@@ -343,8 +343,8 @@
             "deprecationReason": null
           },
           {
-            "name": "addOutput",
-            "description": "Adds a new `Output` to the specified `Restream`.\n\n### Non-idempotent\n\nAlways creates a new `Output` and errors on the `dst` duplicates within\nthe specified `Restream`.\n\n### Result\n\nReturns `null` if `Restream` with the given `restreamId` doesn't exist.\nOtherwise always returns `true`.",
+            "name": "setOutput",
+            "description": "Sets a new `Output` or updates an existing one (if `id` is specified).\n\n### Idempotency\n\nIdempotent if `id` is specified. Otherwise is non-idempotent, always\ncreates a new `Output` and errors on the `dst` duplicates within the\nspecified `Restream`.\n\n### Result\n\nReturns `null` if a `Restream` with the given `restreamId` doesn't\nexist, or an `Output` with the given `id` doesn't exist, otherwise\nalways returns `true`.",
             "args": [
               {
                 "name": "restreamId",
@@ -390,6 +390,16 @@
                 "type": {
                   "kind": "SCALAR",
                   "name": "MixinSrcUrl",
+                  "ofType": null
+                },
+                "defaultValue": null
+              },
+              {
+                "name": "id",
+                "description": "ID of the `Output` to be updated rather than creating a new one.",
+                "type": {
+                  "kind": "SCALAR",
+                  "name": "OutputId",
                   "ofType": null
                 },
                 "defaultValue": null

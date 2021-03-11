@@ -11,6 +11,8 @@
 
   import { showError, isOutputPage } from './util';
 
+  import { outputModal } from './stores';
+
   import Toggle from './Toggle.svelte';
   import Mixin from './Mixin.svelte';
 
@@ -77,6 +79,16 @@
     volume = volume !== 0 ? 0 : last_volume;
     await tuneVolume();
   }
+
+  function openEditOutputModal() {
+    outputModal.openEdit(
+      restream_id,
+      value.id,
+      value.label,
+      value.dst,
+      value.mixins.length > 0 ? value.mixins[0].src : null
+    );
+  }
 </script>
 
 <template>
@@ -91,6 +103,15 @@
     {#if value.label}
       <span class="label">{value.label}</span>
     {/if}
+
+    <div class="left-buttons-area" />
+    <a
+      class="edit-output"
+      href="/"
+      on:click|preventDefault={openEditOutputModal}
+    >
+      <i class="far fa-edit" title="Edit output" />
+    </a>
 
     <Toggle
       id="output-toggle-{value.id}"
@@ -146,9 +167,6 @@
 </template>
 
 <style lang="stylus">
-  .uk-margin-left
-    margin-left: 15px !important
-
   .uk-card
     position: relative
     padding: 6px
@@ -156,7 +174,7 @@
     min-width 250px
     font-size: 13px
     &.grouped
-      width: calc((100% - (15px * 2)) / 2)
+      width: calc((100% - (20px * 2)) / 2)
       @media screen and (max-width: 700px)
         width: 100%
     &.hidden
@@ -176,19 +194,35 @@
       border-top-right-radius: 4px
       background-color: #fff
 
-    a.single-view
+    a.single-view, a.edit-output
       position: absolute
-      top: 47px
-      left: 16px
-      color: #d9d9d9
       outline: none
       transition: opacity .3s ease
       &:hover
         text-decoration: none
+    a.single-view
+      top: 47px
+      left: 16px
+      color: #d9d9d9
+      &:hover
         color: #c4c4c4
+    a.edit-output
+      left: -16px
+      top: 6px
+      color: #666
+      &:hover
+        color: #444
+        opacity: 1
     &:not(:hover)
-      a.single-view
+      a.single-view, a.edit-output
         opacity: 0
+
+    .left-buttons-area
+      position: absolute
+      width: 18px
+      right: 100%
+      top: 0
+      height: 100%
 
   .fa-circle, .fa-dot-circle
     font-size: 10px

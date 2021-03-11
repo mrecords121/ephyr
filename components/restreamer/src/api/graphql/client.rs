@@ -299,17 +299,19 @@ impl MutationsRoot {
         context.state().disable_input(id, restream_id)
     }
 
-    /// Adds a new `Output` to the specified `Restream`.
+    /// Sets a new `Output` or updates an existing one (if `id` is specified).
     ///
-    /// ### Non-idempotent
+    /// ### Idempotency
     ///
-    /// Always creates a new `Output` and errors on the `dst` duplicates within
-    /// the specified `Restream`.
+    /// Idempotent if `id` is specified. Otherwise is non-idempotent, always
+    /// creates a new `Output` and errors on the `dst` duplicates within the
+    /// specified `Restream`.
     ///
     /// ### Result
     ///
-    /// Returns `null` if `Restream` with the given `restreamId` doesn't exist.
-    /// Otherwise always returns `true`.
+    /// Returns `null` if a `Restream` with the given `restreamId` doesn't
+    /// exist, or an `Output` with the given `id` doesn't exist, otherwise
+    /// always returns `true`.
     #[graphql(arguments(
         restream_id(
             description = "ID of the `Restream` to add a new `Output` \
@@ -325,12 +327,15 @@ impl MutationsRoot {
                                    Real-Time_Messaging_Protocol"),
         label(description = "Optional label to add a new `Output` with."),
         mix(description = "Optional TeamSpeak URL to mix into this `Output`."),
+        id(description = "ID of the `Output` to be updated rather than \
+                          creating a new one."),
     ))]
-    fn add_output(
+    fn set_output(
         restream_id: RestreamId,
         dst: OutputDstUrl,
         label: Option<Label>,
         mix: Option<MixinSrcUrl>,
+        id: Option<OutputId>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
         let spec = spec::v1::Output {
@@ -353,15 +358,18 @@ impl MutationsRoot {
             enabled: false,
         };
 
-        Ok(context
-            .state()
-            .add_new_output(restream_id, spec)
-            .map_err(|e| {
-                graphql::Error::new("DUPLICATE_OUTPUT_URL")
-                    .status(StatusCode::CONFLICT)
-                    .message(&e)
-            })?
-            .map(|_| true))
+        #[allow(clippy::option_if_let_else)] // due to consuming `spec`
+        Ok(if let Some(id) = id {
+            context.state().edit_output(restream_id, id, spec)
+        } else {
+            context.state().add_output(restream_id, spec)
+        }
+        .map_err(|e| {
+            graphql::Error::new("DUPLICATE_OUTPUT_URL")
+                .status(StatusCode::CONFLICT)
+                .message(&e)
+        })?
+        .map(|_| true))
     }
 
     /// Removes an `Output` by its `id` from the specified `Restream`.
