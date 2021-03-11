@@ -4,7 +4,10 @@
   import { WebSocketLink } from '@apollo/client/link/ws';
   import { SubscriptionClient } from 'subscriptions-transport-ws';
   import { onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import { setClient, subscribe } from 'svelte-apollo';
+  import Router, { replace, location, link } from 'svelte-spa-router';
+  import { wrap } from 'svelte-spa-router/wrap';
 
   import {
     ExportAllRestreams,
@@ -12,7 +15,7 @@
     State,
   } from './api/graphql/client.graphql';
 
-  import { showError } from './util';
+  import { showError, isOutputPage } from './util';
 
   import UIkit from 'uikit';
   import Icons from 'uikit/dist/js/uikit-icons';
@@ -23,7 +26,9 @@
   import OutputModal from './OutputModal.svelte';
   import PasswordModal from './PasswordModal.svelte';
   import ExportModal from './ExportModal.svelte';
-  import Restream from './Restream.svelte';
+
+  import * as PageAll from './pages/All.svelte';
+  import * as PageOutput from './pages/Output.svelte';
 
   UIkit.use(Icons);
 
@@ -93,17 +98,60 @@
       );
     }
   }
+
+  const routes = {
+    '/restream/:restream_id/output/:output_id': wrap({
+      component: PageOutput,
+      props: {
+        state,
+      },
+      userData: {
+        state,
+      },
+      conditions: [
+        (detail) => {
+          const st = get(detail.userData.state);
+          const p = detail.location.split('/');
+          return (
+            !!st.data &&
+            st.data.allRestreams.some(
+              (r) => r.id === p[2] && r.outputs.some((o) => o.id === p[4])
+            )
+          );
+        },
+      ],
+    }),
+    '*': wrap({
+      component: PageAll,
+      props: {
+        info,
+        state,
+      },
+    }),
+  };
 </script>
 
 <template>
   <header class="uk-container">
     {#if isOnline && $info.data}
-      <button
-        class="uk-button uk-button-primary"
-        on:click={() => restreamModal.openAdd()}
-      >
-        <i class="fas fa-plus" />&nbsp;<span>Input</span>
-      </button>
+      {#if !isOutputPage($location)}
+        <button
+          class="uk-button uk-button-primary"
+          on:click={() => restreamModal.openAdd()}
+        >
+          <i class="fas fa-plus" />&nbsp;<span>Input</span>
+        </button>
+      {/if}
+      {#if isOutputPage($location)}
+        <a
+          href="/"
+          class="back-to-all"
+          use:link
+          title="Return back to all definitions"
+        >
+          <i class="fas fa-th" />
+        </a>
+      {/if}
       {#key $info.data.info.passwordHash}
         <a
           href="/"
@@ -118,23 +166,25 @@
           />
         </a>
       {/key}
-      <RestreamModal public_host={$info.data.info.publicHost} />
-      <OutputModal />
-      {#if isOnline && $state.data}
-        <ExportModal />
-        <a
-          class="export-import-all"
-          href="/"
-          on:click|preventDefault={openExportModal}
-          title="Export/Import all"
-        >
-          <i class="fas fa-share-square" />
-        </a>
-      {/if}
       <PasswordModal
         current_hash={$info.data.info.passwordHash}
         bind:visible={openPasswordModal}
       />
+      <OutputModal />
+      {#if !isOutputPage($location)}
+        <RestreamModal public_host={$info.data.info.publicHost} />
+        {#if isOnline && $state.data}
+          <ExportModal />
+          <a
+            class="export-import-all"
+            href="/"
+            on:click|preventDefault={openExportModal}
+            title="Export/Import all"
+          >
+            <i class="fas fa-share-square" />
+          </a>
+        {/if}
+      {/if}
     {:else if $info.error}
       {showError($info.error.message) || ''}
     {/if}
@@ -155,9 +205,7 @@
     {#if !isOnline || $state.loading}
       <div class="uk-alert uk-alert-warning loading">Loading...</div>
     {:else if isOnline && $state.data && $info.data}
-      {#each $state.data.allRestreams as restream}
-        <Restream public_host={$info.data.info.publicHost} value={restream} />
-      {/each}
+      <Router {routes} on:conditionsFailed={() => replace('/')} />
     {/if}
     {#if $state.error}
       {showError($state.error.message) || ''}
@@ -191,8 +239,11 @@
     button
       float: right
     .set-password
-      float: right
       margin-right: 30px
+    .back-to-all
+      margin-top: 2px
+    .set-password, .back-to-all
+      float: right
       font-size: 26px
       color: #666
       outline: none

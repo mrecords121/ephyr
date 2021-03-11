@@ -110,7 +110,7 @@
     font-size: 14px
     cursor: help
   .fa-circle, .fa-dot-circle
-    font-size: 12px
+    font-size: 13px
     cursor: help
 
   .endpoint + .endpoint

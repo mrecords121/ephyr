@@ -31,3 +31,14 @@ export function sanitizeLabel(label: string): string {
 export function sanitizeUrl(url: string): string {
   return url.replace(/[\s]+/g, '');
 }
+
+/**
+ * Checks whether the given location page corresponds to
+ * `/restream/:restream_id/output/:output_id` route.
+ *
+ * @param location    Location to be checked.
+ */
+export function isOutputPage(location: string): boolean {
+  const p = location.split('/');
+  return p[1] === 'restream' && p[3] === 'output';
+}

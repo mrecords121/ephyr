@@ -1,5 +1,6 @@
 <script lang="js">
   import { mutation } from 'svelte-apollo';
+  import { link, location } from 'svelte-spa-router';
 
   import {
     DisableOutput,
@@ -8,7 +9,7 @@
     TuneVolume,
   } from './api/graphql/client.graphql';
 
-  import { showError } from './util';
+  import { showError, isOutputPage } from './util';
 
   import Toggle from './Toggle.svelte';
   import Mixin from './Mixin.svelte';
@@ -79,7 +80,12 @@
 </script>
 
 <template>
-  <div class="uk-card uk-card-default uk-card-body uk-margin-left" class:hidden>
+  <div
+    class="uk-card uk-card-default uk-card-body"
+    class:hidden
+    class:grouped={!isOutputPage($location)}
+    class:uk-margin-left={!isOutputPage($location)}
+  >
     <button type="button" class="uk-close" uk-close on:click={remove} />
 
     {#if value.label}
@@ -102,6 +108,16 @@
     <span>{value.dst}</span>
 
     {#if value.mixins.length > 0}
+      {#if !isOutputPage($location)}
+        <a
+          class="single-view"
+          href="/restream/{restream_id}/output/{value.id}"
+          use:link
+          title="Open in a separate window"
+          ><i class="fas fa-external-link-alt" />
+        </a>
+      {/if}
+
       <div class="volume orig">
         <a href="/" on:click|preventDefault={toggleVolume}>
           {#if volume > 0}
@@ -137,11 +153,12 @@
     position: relative
     padding: 6px
     margin-top: 15px !important
-    width: calc((100% - (15px * 2)) / 2)
     min-width 250px
     font-size: 13px
-    @media screen and (max-width: 600px)
-      width: 100%
+    &.grouped
+      width: calc((100% - (15px * 2)) / 2)
+      @media screen and (max-width: 700px)
+        width: 100%
     &.hidden
       display: none
 
@@ -158,6 +175,20 @@
       border-top-left-radius: 4px
       border-top-right-radius: 4px
       background-color: #fff
+
+    a.single-view
+      position: absolute
+      top: 47px
+      left: 16px
+      color: #d9d9d9
+      outline: none
+      transition: opacity .3s ease
+      &:hover
+        text-decoration: none
+        color: #c4c4c4
+    &:not(:hover)
+      a.single-view
+        opacity: 0
 
   .fa-circle, .fa-dot-circle
     font-size: 10px
