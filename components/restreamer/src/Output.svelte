@@ -13,6 +13,7 @@
 
   import { outputModal } from './stores';
 
+  import Confirm from './Confirm.svelte';
   import Toggle from './Toggle.svelte';
   import Mixin from './Mixin.svelte';
 
@@ -98,7 +99,19 @@
     class:grouped={!isOutputPage($location)}
     class:uk-margin-left={!isOutputPage($location)}
   >
-    <button type="button" class="uk-close" uk-close on:click={remove} />
+    <Confirm let:confirm>
+      <button
+        type="button"
+        class="uk-close"
+        uk-close
+        on:click={() => confirm(remove)}
+      />
+      <span slot="title">Removing output</span>
+      <span slot="description"
+        ><code>{value.dst}</code><br /><br />You won't be able to undone this.</span
+      >
+      <span slot="confirm">Remove</span>
+    </Confirm>
 
     {#if value.label}
       <span class="label">{value.label}</span>

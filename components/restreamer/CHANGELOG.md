@@ -41,7 +41,8 @@ All user visible changes to this project will be documented in this file. This p
     - Input:
         - Optional backup endpoint (push or pull) ([a3236808], [9e1ac1c7]);
         - Ability to export/import as JSON spec ([9e1ac1c7]);
-        - Optional [HLS] endpoint ([65f8b86e]).
+        - Optional [HLS] endpoint ([65f8b86e]);
+        - Confirmation window on removing ([rev6]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
         - Specifying [MP3] HTTP URL for mixing ([rev4], [#30]);
@@ -49,7 +50,8 @@ All user visible changes to this project will be documented in this file. This p
         - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]);
         - Separate page for mixing a single output ([8103cb32], [#29]);
         - [Icecast] URL as supported destination ([5dabcfdc]);
-        - Ability to edit an existing output ([740fa998], [#28]).
+        - Ability to edit an existing output ([740fa998], [#28]);
+        - Confirmation window on removing ([rev6]).
 - GraphQL API:
     - Types:
         - `Mixin` object ([77d25dd7], [#23]);
@@ -93,6 +95,7 @@ All user visible changes to this project will be documented in this file. This p
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
 [rev4]: /../../commit/rev4
 [rev5]: /../../commit/rev5
+[rev6]: /../../commit/rev6
 
 
 

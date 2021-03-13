@@ -14,6 +14,7 @@
 
   import { restreamModal, outputModal, exportModal } from './stores';
 
+  import Confirm from './Confirm.svelte';
   import Input from './Input.svelte';
   import Output from './Output.svelte';
   import Toggle from './Toggle.svelte';
@@ -137,7 +138,21 @@
   <div class="uk-section uk-section-muted uk-section-xsmall">
     <div class="left-buttons-area" />
     <div class="right-buttons-area" />
-    <button type="button" class="uk-close" uk-close on:click={removeRestream} />
+    <Confirm let:confirm>
+      <button
+        type="button"
+        class="uk-close"
+        uk-close
+        on:click={() => confirm(removeRestream)}
+      />
+      <span slot="title"
+        >Removing <code>{value.key}</code> input source for re-streaming</span
+      >
+      <span slot="description"
+        >All its outputs will be removed too. You won't be able to undone this.</span
+      >
+      <span slot="confirm">Remove</span>
+    </Confirm>
 
     <button
       class="uk-button uk-button-primary uk-button-small"

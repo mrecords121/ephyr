@@ -28,7 +28,6 @@
         if (v.mix_urls.length > 0) {
           submitable &= v.mix_urls.every((m) => m !== '');
         }
-        console.debug(submitable, changed);
         submitable &= changed;
       }
     })
