@@ -23,7 +23,7 @@ All user visible changes to this project will be documented in this file. This p
         - Remove `PushInput` and `PullInput` objects ([9e1ac1c7]).
     - Mutations:
         - Replace `addPullInput` and `addPushInput` with `setRestream` ([9e1ac1c7]);
-        - Replace `addOutput` with `setOutput` ([rev3], [#28]);
+        - Replace `addOutput` with `setOutput` ([740fa998], [#28]);
         - Rename `removeInput` to `removeRestream` an change its argument's type ([9e1ac1c7]);
         - Add `restreamId` argument to `enableInput` and `disableInput` ([9e1ac1c7]);
         - Replace `inputId` argument with `restreamId` in `addOutput`, `removeOutput`, `enableOutput`, `disableOutput`, `enableAllOutputs` and `disableAllOutputs` ([9e1ac1c7]);
@@ -44,11 +44,12 @@ All user visible changes to this project will be documented in this file. This p
         - Optional [HLS] endpoint ([65f8b86e]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
+        - Specifying [MP3] HTTP URL for mixing ([rev4], [#30]);
         - Tuning and toggling volume rate of tracks ([77d25dd7], [a2c5f83f], [#23]);
         - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]);
         - Separate page for mixing a single output ([8103cb32], [#29]);
         - [Icecast] URL as supported destination ([5dabcfdc]);
-        - Ability to edit an existing output ([rev3], [#28]).
+        - Ability to edit an existing output ([740fa998], [#28]).
 - GraphQL API:
     - Types:
         - `Mixin` object ([77d25dd7], [#23]);
@@ -78,15 +79,17 @@ All user visible changes to this project will be documented in this file. This p
 [#23]: /../../issues/23
 [#28]: /../../issues/28
 [#29]: /../../issues/29
+[#30]: /../../issues/30
 [5dabcfdc]: /../../commit/5dabcfdce2420fdd43a8f4c20c2eff497e884ac3
 [65f8b86e]: /../../commit/65f8b86eebad0396ef37f1df27548e70952eef63
+[740fa998]: /../../commit/740fa9985feae057ecea758292bcf1c2d2758988
 [77d25dd7]: /../../commit/77d25dd739d4f05b319769eddd83c01bd3a490a4
 [8103cb32]: /../../commit/8103cb32c1f0e71f13907fc9917c8bcf66c51696
 [9e1ac1c7]: /../../commit/9e1ac1c7e576c22f6234777bf01d054adb9fe5db
 [a2c5f83f]: /../../commit/a2c5f83ff55f078f242f3beb6d2310a24c835c98
 [a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
-[rev3]: /../../commit/rev3
+[rev4]: /../../commit/rev4
 
 
 
@@ -184,6 +187,7 @@ All user visible changes to this project will be documented in this file. This p
 [Hetzner Cloud]: https://www.hetzner.com/cloud
 [HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming
 [Icecast]: https://icecast.org
+[MP3]: https://en.wikipedia.org/wiki/MP3
 [Podman]: https://podman.io
 [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 [Semantic Versioning 2.0.0]: https://semver.org

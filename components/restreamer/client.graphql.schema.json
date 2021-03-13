@@ -385,14 +385,22 @@
                 "defaultValue": null
               },
               {
-                "name": "mix",
-                "description": "Optional TeamSpeak URL to mix into this `Output`.",
+                "name": "mixins",
+                "description": "Optional `MixinSrcUrl`s to mix into this `Output`.",
                 "type": {
-                  "kind": "SCALAR",
-                  "name": "MixinSrcUrl",
-                  "ofType": null
+                  "kind": "LIST",
+                  "name": null,
+                  "ofType": {
+                    "kind": "NON_NULL",
+                    "name": null,
+                    "ofType": {
+                      "kind": "SCALAR",
+                      "name": "MixinSrcUrl",
+                      "ofType": null
+                    }
+                  }
                 },
-                "defaultValue": null
+                "defaultValue": "[]"
               },
               {
                 "name": "id",

@@ -1,3 +1,4 @@
+import { identity } from 'svelte/internal';
 import { writable, get, Writable } from 'svelte/store';
 
 import { sanitizeLabel, sanitizeUrl } from './util';
@@ -340,27 +341,15 @@ export class OutputModalState {
   prev_url: string | null = null;
 
   /**
-   * Indicator whether the mixing form is active in the [[`OutputModal`]].
+   * URLs to mix audio from with a live RTMP stream before outputting it.
    */
-  mixing: boolean = false;
+  mix_urls: string[] = [];
 
   /**
-   * Previous value of the `mixing` indicator before it has been edited in the
+   * Previous value of `Output`'s mix URLs before they have been edited in the
    * [[`OutputModal`]].
    */
-  prev_mixing: boolean | null = null;
-
-  /**
-   * URL of a TeamSpeak channel to mix audio from with a live RTMP stream before
-   * outputting it.
-   */
-  mix_url: string = '';
-
-  /**
-   * Previous value of mixing TeamSpeak channel URL before it has been edited in
-   * the [[`OutputModal`]].
-   */
-  prev_mix_url: string | null = null;
+  prev_mix_urls: string[] | null = null;
 
   /**
    * List of multiple labels and RTMP URLs to be added in a comma-separated
@@ -392,7 +381,7 @@ export class OutputModal implements Writable<OutputModalState> {
   /** @inheritdoc */
   set(v: OutputModalState) {
     v.url = sanitizeUrl(v.url);
-    v.mix_url = sanitizeUrl(v.mix_url);
+    v.mix_urls = v.mix_urls.map(sanitizeUrl);
     this.state.set(v);
   }
 
@@ -433,14 +422,14 @@ export class OutputModal implements Writable<OutputModalState> {
    * @param label          Current label of the `Output` before editing.
    * @param dst_url        Current destination URL of the `Output` before
    *                       editing.
-   * @param mix_url        Current mixing URL of the `Output` before editing.
+   * @param mix_urls       Current mixing URLs of the `Output` before editing.
    */
   openEdit(
     restream_id: string,
     id: string,
     label: string | null,
     dst_url: string,
-    mix_url: string | null
+    mix_urls: string[]
   ) {
     this.update((v) => {
       v.restream_id = restream_id;
@@ -452,12 +441,8 @@ export class OutputModal implements Writable<OutputModalState> {
       v.prev_url = sanitizeUrl(dst_url);
       v.url = v.prev_url;
 
-      v.prev_mixing = mix_url !== null;
-      v.mixing = v.prev_mixing;
-      if (mix_url !== null) {
-        v.prev_mix_url = sanitizeUrl(mix_url);
-        v.mix_url = v.prev_mix_url;
-      }
+      v.prev_mix_urls = mix_urls.map(sanitizeUrl);
+      v.mix_urls = v.prev_mix_urls.map(identity);
 
       v.multi = false;
       v.visible = true;
@@ -486,11 +471,21 @@ export class OutputModal implements Writable<OutputModalState> {
   }
 
   /**
-   * Toggles the mixing form of this [[`OutputModal`]].
+   * Removes the `i`-indexed mixin URL of this [[`OutputModal`]].
    */
-  toggleMixing() {
+  removeMixinSlot(i: number) {
     this.update((v) => {
-      v.mixing = !v.mixing;
+      v.mix_urls.splice(i, 1);
+      return v;
+    });
+  }
+
+  /**
+   * Adds a slot for a new mixin URL to this [[`OutputModal`]].
+   */
+  addMixinSlot() {
+    this.update((v) => {
+      v.mix_urls.push('');
       return v;
     });
   }
@@ -519,12 +514,8 @@ export class OutputModal implements Writable<OutputModalState> {
       v.url = '';
       v.prev_url = null;
 
-      if (v.prev_mixing !== null) {
-        v.mixing = false;
-      }
-      v.prev_mixing = null;
-      v.mix_url = '';
-      v.prev_mix_url = null;
+      v.mix_urls = [];
+      v.prev_mix_urls = null;
 
       v.list = '';
       v.visible = false;

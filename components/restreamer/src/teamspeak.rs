@@ -401,7 +401,9 @@ impl Future for AudioCapture {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Self::Output> {
+        use tsclientlib::audio::Error as AE;
         use AudioCaptureError as E;
+
         loop {
             let audio_packet =
                 match ready!(Pin::new(&mut self.conn.events()).poll_next(cx))
@@ -415,15 +417,23 @@ impl Future for AudioCapture {
             let member_id = match audio_packet.data().data() {
                 AudioData::S2C { from, .. }
                 | AudioData::S2CWhisper { from, .. } => *from,
-                _ => return Poll::Ready(Err(E::UnexpectedC2sPacket))?,
+                _ => return Poll::Ready(Err(E::UnexpectedC2sPacket)),
             };
 
-            let _ = self
+            if let Err(e) = self
                 .audio
                 .lock()
                 .unwrap()
                 .handle_packet(member_id, audio_packet)
-                .map_err(E::DecodingFailed)?;
+            {
+                if !matches!(
+                    e,
+                    AE::QueueFull | AE::TooLate { .. } | AE::Duplicate(_),
+                ) {
+                    return Poll::Ready(Err(E::DecodingFailed(e)));
+                }
+                log::warn!("Drop audio packet from TeamSpeak server: {}", e);
+            }
         }
     }
 }

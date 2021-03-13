@@ -2,6 +2,8 @@
 //!
 //! [GraphQL]: https://graphql.com
 
+use std::collections::HashSet;
+
 use actix_web::http::StatusCode;
 use anyhow::anyhow;
 use futures::stream::BoxStream;
@@ -326,7 +328,10 @@ impl MutationsRoot {
                            [RTMP]: https://en.wikipedia.org/wiki/\
                                    Real-Time_Messaging_Protocol"),
         label(description = "Optional label to add a new `Output` with."),
-        mix(description = "Optional TeamSpeak URL to mix into this `Output`."),
+        mixins(
+            description = "Optional `MixinSrcUrl`s to mix into this `Output`.",
+            default = Vec::new(),
+        ),
         id(description = "ID of the `Output` to be updated rather than \
                           creating a new one."),
     ))]
@@ -334,27 +339,55 @@ impl MutationsRoot {
         restream_id: RestreamId,
         dst: OutputDstUrl,
         label: Option<Label>,
-        mix: Option<MixinSrcUrl>,
+        mixins: Vec<MixinSrcUrl>,
         id: Option<OutputId>,
         context: &Context,
     ) -> Result<Option<bool>, graphql::Error> {
+        if mixins.len() > 5 {
+            return Err(graphql::Error::new("TOO_MUCH_MIXIN_URLS")
+                .status(StatusCode::BAD_REQUEST)
+                .message("Maximum 5 mixing URLs are allowed"));
+        }
+        if !mixins.is_empty() {
+            let mut unique = HashSet::with_capacity(mixins.len());
+            for m in &mixins {
+                if let Some(dup) = unique.replace(m) {
+                    return Err(graphql::Error::new("DUPLICATE_MIXIN_URL")
+                        .status(StatusCode::BAD_REQUEST)
+                        .message(&format!(
+                            "Duplicate Output.mixin.src: {}",
+                            dup,
+                        )));
+                }
+            }
+            if mixins.iter().filter(|u| u.scheme() == "ts").take(2).count() > 1
+            {
+                return Err(graphql::Error::new(
+                    "TOO_MUCH_TEAMSPEAK_MIXIN_URLS",
+                )
+                .status(StatusCode::BAD_REQUEST)
+                .message("Only one TeamSpeak URL is allowed"));
+            }
+        }
+
         let spec = spec::v1::Output {
             dst,
             label,
             volume: Volume::ORIGIN,
-            mixins: mix
+            mixins: mixins
+                .into_iter()
                 .map(|src| {
                     let delay = (src.scheme() == "ts")
                         .then(|| Delay::from_millis(3500))
                         .flatten()
                         .unwrap_or_default();
-                    vec![spec::v1::Mixin {
+                    spec::v1::Mixin {
                         src,
                         volume: Volume::ORIGIN,
                         delay,
-                    }]
+                    }
                 })
-                .unwrap_or_default(),
+                .collect(),
             enabled: false,
         };
 

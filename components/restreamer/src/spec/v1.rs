@@ -258,12 +258,22 @@ impl Output {
 
         if !mixins.is_empty() {
             let mut unique = HashSet::with_capacity(mixins.len());
+            let mut has_ts = false;
             for m in &mixins {
                 if let Some(src) = unique.replace(&m.src) {
                     return Err(D::Error::custom(format!(
                         "Duplicate Mixin.src in Output.mixins: {}",
                         src,
                     )));
+                }
+                if m.src.scheme() == "ts" {
+                    if has_ts {
+                        return Err(D::Error::custom(format!(
+                            "Second TeamSpeak Mixin.src in Output.mixins: {}",
+                            m.src,
+                        )));
+                    }
+                    has_ts = true;
                 }
             }
         }

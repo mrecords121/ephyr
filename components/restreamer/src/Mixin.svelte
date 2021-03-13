@@ -85,7 +85,7 @@
         class="uk-range"
         type="range"
         min="0"
-        max="1000"
+        max={value.src.startsWith('ts://') ? 1000 : 200}
         step="1"
         bind:value={volume}
         on:change={tuneVolume}

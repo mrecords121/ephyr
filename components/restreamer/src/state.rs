@@ -1626,8 +1626,12 @@ impl MixinId {
 
 /// [`Url`] of a [`Mixin::src`].
 ///
-/// Only [TeamSpeak] URLs are allowed at the moment.
+/// Only the following URLs are allowed at the moment:
+/// - [TeamSpeak] URL (starting with `ts://` scheme and having a host);
+/// - [MP3] HTTP URL (starting with `http://` or `https://` scheme, having a
+///   host and `.mp3` extension in its path).
 ///
+/// [MP3]: https://en.wikipedia.org/wiki/MP3
 /// [TeamSpeak]: https://teamspeak.com
 #[derive(
     Clone, Debug, Deref, Display, Eq, Hash, Into, PartialEq, Serialize,
@@ -1636,10 +1640,31 @@ pub struct MixinSrcUrl(Url);
 
 impl MixinSrcUrl {
     /// Creates a new [`MixinSrcUrl`] if the given [`Url`] is suitable for that.
+    ///
+    /// # Errors
+    ///
+    /// Returns the given [`Url`] back if it doesn't represent a valid
+    /// [`MixinSrcUrl`].
     #[inline]
+    pub fn new(url: Url) -> Result<Self, Url> {
+        if Self::validate(&url) {
+            Ok(Self(url))
+        } else {
+            Err(url)
+        }
+    }
+
+    /// Validates the given [`Url`] to represent a valid [`MixinSrcUrl`].
     #[must_use]
-    pub fn new(url: Url) -> Option<Self> {
-        (url.scheme() == "ts" && url.host().is_some()).then(|| Self(url))
+    pub fn validate(url: &Url) -> bool {
+        url.has_host()
+            && match url.scheme() {
+                "ts" => true,
+                "http" | "https" => {
+                    Path::new(url.path()).extension() == Some("mp3".as_ref())
+                }
+                _ => false,
+            }
     }
 }
 
@@ -1649,8 +1674,9 @@ impl<'de> Deserialize<'de> for MixinSrcUrl {
     where
         D: Deserializer<'de>,
     {
-        Self::new(Url::deserialize(deserializer)?)
-            .ok_or_else(|| D::Error::custom("Not a valid Mixin.src URL"))
+        Self::new(Url::deserialize(deserializer)?).map_err(|url| {
+            D::Error::custom(format!("Not a valid Mixin.src URL: {}", url))
+        })
     }
 }
 
@@ -1672,7 +1698,7 @@ where
         v.as_scalar()
             .and_then(ScalarValue::as_str)
             .and_then(|s| Url::parse(s).ok())
-            .and_then(Self::new)
+            .and_then(|url| Self::new(url).ok())
     }
 
     fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {

@@ -86,7 +86,7 @@
       value.id,
       value.label,
       value.dst,
-      value.mixins.length > 0 ? value.mixins[0].src : null
+      value.mixins.map((m) => m.src)
     );
   }
 </script>

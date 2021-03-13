@@ -49,6 +49,7 @@ ExecStartPre=touch /var/lib/\${EPHYR_CONTAINER_NAME}/state.json
 ExecStartPre=-/usr/bin/podman pull \${EPHYR_IMAGE_NAME}:\${EPHYR_IMAGE_TAG}
 ExecStartPre=-/usr/bin/podman stop \${EPHYR_CONTAINER_NAME}
 ExecStartPre=-/usr/bin/podman rm --volumes \${EPHYR_CONTAINER_NAME}
+ExecStartPre=/usr/bin/mkdir -p /tmp/\${EPHYR_CONTAINER_NAME}/www/
 ExecStart=/usr/bin/podman run \\
   --network=host \\
   -v /var/lib/\${EPHYR_CONTAINER_NAME}/srs.conf:/usr/local/srs/conf/srs.conf \\

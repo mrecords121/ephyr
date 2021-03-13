@@ -105,14 +105,14 @@ mutation SetOutput(
     $restream_id: RestreamId!
     $url: OutputDstUrl!
     $label: Label
-    $mix: MixinSrcUrl
+    $mixins: [MixinSrcUrl!]
     $id: OutputId
 ) {
     setOutput(
         restreamId: $restream_id
         dst: $url
         label: $label
-        mix: $mix
+        mixins: $mixins
         id: $id
     )
 }

@@ -766,6 +766,7 @@ impl MixingRestreamer {
     /// re-streaming process.
     ///
     /// [FFmpeg]: https://ffmpeg.org
+    #[allow(clippy::too_many_lines)]
     fn setup_ffmpeg(&self, cmd: &mut Command, state: &State) {
         let my_id = self.id.into();
 
@@ -809,12 +810,22 @@ impl MixingRestreamer {
             let _ = match mixin.url.scheme() {
                 "ts" => {
                     extra_filters.push_str("aresample=async=1,");
-                    cmd.args(&["-f", "f32be"])
+                    cmd.args(&["-thread_queue_size", "512"])
+                        .args(&["-f", "f32be"])
                         .args(&["-sample_rate", "48000"])
                         .args(&["-channels", "2"])
                         .args(&["-use_wallclock_as_timestamps", "true"])
                         .args(&["-i", "pipe:0"])
                 }
+
+                "http" | "https"
+                    if Path::new(mixin.url.path()).extension()
+                        == Some("mp3".as_ref()) =>
+                {
+                    extra_filters.push_str("aresample=48000,");
+                    cmd.args(&["-i", mixin.url.as_str()])
+                }
+
                 _ => unimplemented!(),
             };
 

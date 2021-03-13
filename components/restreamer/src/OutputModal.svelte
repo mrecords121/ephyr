@@ -23,14 +23,12 @@
           changed |=
             v.label !== v.prev_label ||
             v.url !== v.prev_url ||
-            v.mixing !== v.prev_mixing;
+            JSON.stringify(v.mix_urls) !== JSON.stringify(v.prev_mix_urls);
         }
-        if (v.mixing) {
-          submitable &= v.mix_url !== '';
-          if (!!v.edit_id) {
-            changed |= v.mix_url !== v.prev_mix_url;
-          }
+        if (v.mix_urls.length > 0) {
+          submitable &= v.mix_urls.every((m) => m !== '');
         }
+        console.debug(submitable, changed);
         submitable &= changed;
       }
     })
@@ -114,8 +112,8 @@
       if (label !== '') {
         vars.label = label;
       }
-      if (v.mixing) {
-        vars.mix = v.mix_url;
+      if (v.mix_urls.length > 0) {
+        vars.mixins = v.mix_urls;
       }
       if (v.edit_id) {
         vars.id = v.edit_id;
@@ -147,6 +145,16 @@
         .join('\n');
       return v;
     });
+  }
+
+  function addMixinSlot(event) {
+    value.addMixinSlot();
+    event.currentTarget.checked = false;
+  }
+
+  function removeMixinSlot(event, i) {
+    value.removeMixinSlot(i);
+    event.currentTarget.checked = true;
   }
 </script>
 
@@ -202,27 +210,48 @@
           Supported protocols: <code>rtmp://</code>, <code>icecast://</code>
         </div>
 
-        <fieldset class="mix-form" class:expanded={$value.mixing}>
-          <label
-            ><input
+        {#each $value.mix_urls as mix_url, i}
+          <label class="mix-with">
+            <input
               class="uk-checkbox"
               type="checkbox"
-              checked={$value.mixing}
-              on:change={() => value.toggleMixing()}
-            /> Mix with</label
+              checked
+              on:change={(ev) => removeMixinSlot(ev, i)}
+            /> mix with</label
           >
-
           <input
             class="uk-input"
             type="text"
-            bind:value={$value.mix_url}
+            bind:value={mix_url}
             placeholder="ts://<teamspeak-host>:<port>/<channel>?name=<name>"
           />
+        {/each}
+
+        {#if $value.mix_urls.length < 5}
+          <label class="mix-with">
+            <input
+              class="uk-checkbox"
+              type="checkbox"
+              on:change={addMixinSlot}
+            /> mix with</label
+          >
+        {/if}
+
+        {#if $value.mix_urls.length > 0}
           <div class="uk-alert">
-            If name is not specified than the label value will be used, if any,
-            or a random generated one.
+            Server will mix the input live stream with the address{$value
+              .mix_urls.length > 1
+              ? 'es'
+              : ''} above.
+            <br />
+            Supported protocols: <code>ts://</code>, <code>http://.mp3</code>
+            <br /><br />
+            For <code>ts://</code>:
+            <br />
+            If <code>name</code> is not specified than the label value will be used,
+            if any, or a random generated one.
           </div>
-        </fieldset>
+        {/if}
       </fieldset>
 
       <fieldset class="multi-form">
@@ -294,17 +323,7 @@ label3,rtmp://3..."
       .multi-form
         display: block
 
-    .mix-form
-      padding-left: 0
-      padding-right: 0
-      margin-bottom: 0
-
-      &:not(.expanded)
-        .uk-input, .uk-alert
-          display: none
-
-      .uk-input
-        margin-top: 4px
-      .uk-alert
-        margin-top: 8px
+    .mix-with
+      display: block
+      margin-top: 16px
 </style>
