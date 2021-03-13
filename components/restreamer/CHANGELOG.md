@@ -75,6 +75,8 @@ All user visible changes to this project will be documented in this file. This p
 - Deployment:
     - Provision script for [Ubuntu] 20.04:
         - Optional [firewalld] installation via `WITH_FIREWALLD` env var ([bbccc004]).
+- Documentation:
+    - Deployment instructions for [Oracle Cloud Infrastructure] on English and Russian languages ([rev5]).
 
 [#23]: /../../issues/23
 [#28]: /../../issues/28
@@ -90,6 +92,7 @@ All user visible changes to this project will be documented in this file. This p
 [a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
 [rev4]: /../../commit/rev4
+[rev5]: /../../commit/rev5
 
 
 
@@ -188,6 +191,7 @@ All user visible changes to this project will be documented in this file. This p
 [HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming
 [Icecast]: https://icecast.org
 [MP3]: https://en.wikipedia.org/wiki/MP3
+[Oracle Cloud Infrastructure]: https://www.oracle.com/cloud
 [Podman]: https://podman.io
 [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 [Semantic Versioning 2.0.0]: https://semver.org

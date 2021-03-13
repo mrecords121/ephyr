@@ -58,7 +58,7 @@ curl -sL https://raw.githubusercontent.com/ALLATRA-IT/ephyr/master/components/re
 
 ### 1.5. Setup SSH access
 
-[Hetzner Cloud] requires the created server to be accessible via [SSH], thought it's not required to use Ephyr re-streamer.
+[Hetzner Cloud] requires the created server to be accessible via [SSH], thought it's not required for using Ephyr re-streamer.
 
 If you don't have [SSH] key, you may quickly generate a new pair of keys [on this page][2]. You will need to specify a __public key__ to [Hetzner Cloud].
 

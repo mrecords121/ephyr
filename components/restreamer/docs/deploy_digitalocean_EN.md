@@ -56,7 +56,7 @@ curl -sL https://raw.githubusercontent.com/ALLATRA-IT/ephyr/master/components/re
 
 [DigitalOcean] requires the created droplet to be accessible via [SSH].
 
-It's not required to use Ephyr re-streamer, so just specify a random password. Or specify an appropriate [SSH] key if you know what you're doing.
+It's not required for using Ephyr re-streamer, so just specify a random password. Or specify an appropriate [SSH] key if you know what you're doing.
 
 ![SSH access](images/do_1.5.jpg)
 
