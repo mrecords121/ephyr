@@ -5,6 +5,8 @@ This guide provides a common and recommended way to deploy Ephyr re-streamer app
 
 This may be an interesting deployment variant, because [Oracle Cloud Infrastructure] provides [Free Tier] instances. However, their bandwidth and resources are quite limited to be used for some serious re-streams.
 
+> __NOTE__: Despite web interface specifies that a bandwidth of [Free Tier] VM instance is limited to 0.5 Gbps, in reality it's limited to 50 Mbps. This should be enough to make up to 8 re-streams with 5000 kbps bitrate.
+
 
 
 
