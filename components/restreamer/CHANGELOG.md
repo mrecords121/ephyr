@@ -6,10 +6,10 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
-## [0.2.0-beta.1] · 2021-03-09
-[0.2.0-beta.1]: /../../tree/restreamer-v0.2.0-beta.1
+## [0.2.0-beta.2] · 2021-03-13
+[0.2.0-beta.2]: /../../tree/restreamer-v0.2.0-beta.2
 
-[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-beta.1)
+[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-beta.2)
 
 ### BC Breaks
 
@@ -42,16 +42,16 @@ All user visible changes to this project will be documented in this file. This p
         - Optional backup endpoint (push or pull) ([a3236808], [9e1ac1c7]);
         - Ability to export/import as JSON spec ([9e1ac1c7]);
         - Optional [HLS] endpoint ([65f8b86e]);
-        - Confirmation window on removing ([rev6]).
+        - Confirmation window on removing ([9acf42e2]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
-        - Specifying [MP3] HTTP URL for mixing ([rev4], [#30]);
+        - Specifying [MP3] HTTP URL for mixing ([e96b39f1], [#30]);
         - Tuning and toggling volume rate of tracks ([77d25dd7], [a2c5f83f], [#23]);
         - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]);
         - Separate page for mixing a single output ([8103cb32], [#29]);
         - [Icecast] URL as supported destination ([5dabcfdc]);
         - Ability to edit an existing output ([740fa998], [#28]);
-        - Confirmation window on removing ([rev6]).
+        - Confirmation window on removing ([9acf42e2]).
 - GraphQL API:
     - Types:
         - `Mixin` object ([77d25dd7], [#23]);
@@ -78,7 +78,7 @@ All user visible changes to this project will be documented in this file. This p
     - Provision script for [Ubuntu] 20.04:
         - Optional [firewalld] installation via `WITH_FIREWALLD` env var ([bbccc004]).
 - Documentation:
-    - Deployment instructions for [Oracle Cloud Infrastructure] on English and Russian languages ([rev5]).
+    - Deployment instructions for [Oracle Cloud Infrastructure] on English and Russian languages ([9c7a9c71]).
 
 [#23]: /../../issues/23
 [#28]: /../../issues/28
@@ -89,13 +89,13 @@ All user visible changes to this project will be documented in this file. This p
 [740fa998]: /../../commit/740fa9985feae057ecea758292bcf1c2d2758988
 [77d25dd7]: /../../commit/77d25dd739d4f05b319769eddd83c01bd3a490a4
 [8103cb32]: /../../commit/8103cb32c1f0e71f13907fc9917c8bcf66c51696
+[9acf42e2]: /../../commit/9acf42e26aa3089688378a25871cc341cd0ab04e
+[9c7a9c71]: /../../commit/9c7a9c7105324ca198eb322071ced35f53413b00
 [9e1ac1c7]: /../../commit/9e1ac1c7e576c22f6234777bf01d054adb9fe5db
 [a2c5f83f]: /../../commit/a2c5f83ff55f078f242f3beb6d2310a24c835c98
 [a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
-[rev4]: /../../commit/rev4
-[rev5]: /../../commit/rev5
-[rev6]: /../../commit/rev6
+[e96b39f1]: /../../commit/e96b39f1fd3f249b1befd0db4db745e5a495b62d
 
 
 
