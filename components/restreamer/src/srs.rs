@@ -19,7 +19,7 @@ use futures::future::{self, FutureExt as _, TryFutureExt as _};
 use smart_default::SmartDefault;
 use tokio::{fs, process::Command};
 
-use crate::{api, display_panic};
+use crate::{api, display_panic, dvr};
 
 /// [SRS] server spawnable as a separate process.
 ///
@@ -74,6 +74,11 @@ impl Server {
                 e,
             )
         })?;
+
+        // Set directory for dvr::Storage served by this SRS instance.
+        let mut dvr_dir = http_dir.clone();
+        dvr_dir.push("dvr");
+        dvr::Storage { root_path: dvr_dir }.set_global()?;
 
         let mut cmd = Command::new(bin_path);
         let _ = cmd

@@ -50,6 +50,8 @@ All user visible changes to this project will be documented in this file. This p
         - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]);
         - Separate page for mixing a single output ([8103cb32], [#29]);
         - [Icecast] URL as supported destination ([5dabcfdc]);
+        - [FLV] `file:///` URL as supported destination ([rev], [#26]);
+        - Ability to show, download and remove recorded [FLV] files ([rev], [#26]);
         - Ability to edit an existing output ([740fa998], [#28]);
         - Confirmation window on removing ([9acf42e2]).
 - GraphQL API:
@@ -66,21 +68,27 @@ All user visible changes to this project will be documented in this file. This p
         - `enableRestream` and `disableRestream` ([9e1ac1c7]);
         - `tuneVolume` and `tuneDelay` ([77d25dd7], [#23]);
         - `mix` argument to `addOutput` ([77d25dd7], [#23]);
-        - `import` ([9e1ac1c7]).
+        - `import` ([9e1ac1c7]);
+        - `removeDvrFile` ([rev], [#26]).
     - Queries:
         - `Output.volume` and `Output.mixins` fields ([77d25dd7], [#23]);
-        - `export` ([9e1ac1c7]).
+        - `export` ([9e1ac1c7]);
+        - `dvrFiles` ([rev], [#26]).
 - Spec (export/import):
     - `v1` version ([9e1ac1c7]).
 - Config:
     - `--srs-http-dir` CLI option and `EPHYR_RESTREAMER_SRS_HTTP_DIR` env var ([65f8b86e]).
 - Deployment:
     - Provision script for [Ubuntu] 20.04:
-        - Optional [firewalld] installation via `WITH_FIREWALLD` env var ([bbccc004]).
+        - Optional [firewalld] installation via `WITH_FIREWALLD` env var ([bbccc004]);
+        - Auto-detection and usage of [DigitalOcean] and [Hetzner Cloud] mounted external volumes ([rev], [#26]).
 - Documentation:
-    - Deployment instructions for [Oracle Cloud Infrastructure] on English and Russian languages ([9c7a9c71]).
+    - Deployment instructions:
+        - [Oracle Cloud Infrastructure] on English and Russian languages ([9c7a9c71]);
+        - Mounting additional volume on [DigitalOcean] and [Hetzner Cloud] ([rev], [#26]).
 
 [#23]: /../../issues/23
+[#26]: /../../issues/26
 [#28]: /../../issues/28
 [#29]: /../../issues/29
 [#30]: /../../issues/30
@@ -96,6 +104,7 @@ All user visible changes to this project will be documented in this file. This p
 [a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
 [e96b39f1]: /../../commit/e96b39f1fd3f249b1befd0db4db745e5a495b62d
+[rev]: /../../commit/rev
 
 
 
@@ -188,6 +197,7 @@ All user visible changes to this project will be documented in this file. This p
 [DigitalOcean]: https://www.digitalocean.com
 [Docker]: https://www.docker.com
 [firewalld]: https://firewalld.org
+[FLV]: https://en.wikipedia.org/wiki/Flash_Video
 [GraphQL]: https://www.graphql.com
 [GraphQL Playground]: https://github.com/graphql/graphql-playground
 [Hetzner Cloud]: https://www.hetzner.com/cloud

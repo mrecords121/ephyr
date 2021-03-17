@@ -43,7 +43,19 @@ For simple re-streaming the cheapest one should be enough. But if you're going t
 ![Server resources](images/hcloud_1.3.jpg)
 
 
-### 1.4. Inject provision script
+### 1.4. Attach volume (optional)
+
+> __NOTE__: Skip this step if you're not going to do recording into files.
+
+If you're going to record live streams into files you may need a larger disk size than the one provided by default on the server. This can be fulfilled by creating and attaching an external volume to the created server.
+
+![Add volume](images/hcloud_1.4.1.jpg)  
+![Setup volume](images/hcloud_1.4.2.jpg)
+
+Provision script will automatically detect and use it for Ephyr re-streamer.
+
+
+### 1.5. Inject provision script
 
 To install Ephyr re-streamer onto a newly created server, we should specify a provision script for doing that installation job.
 
@@ -53,30 +65,30 @@ Paste the text below to the `User data` section.
 curl -sL https://raw.githubusercontent.com/ALLATRA-IT/ephyr/restreamer-v0.2.0-beta.2/components/restreamer/deploy/provision/ubuntu-20-04-x64.sh | bash -s
 ```
 
-![Provision](images/hcloud_1.4.jpg)
+![Provision](images/hcloud_1.5.jpg)
 
 
-### 1.5. Setup SSH access
+### 1.6. Setup SSH access
 
 [Hetzner Cloud] requires the created server to be accessible via [SSH], thought it's not required for using Ephyr re-streamer.
 
 If you don't have [SSH] key, you may quickly generate a new pair of keys [on this page][2]. You will need to specify a __public key__ to [Hetzner Cloud].
 
-![SSH access](images/hcloud_1.5.jpg)
+![SSH access](images/hcloud_1.6.jpg)
 
 
-### 1.6. Provide server's name
+### 1.7. Provide server's name
 
 Specify a custom name of the server to not forget its purpose, or just go with a default one if you don't bother about it.
 
-![Droplet name](images/hcloud_1.6.jpg)
+![Droplet name](images/hcloud_1.7.jpg)
 
 
-### 1.7. Proceed with a server creation
+### 1.8. Proceed with a server creation
 
 Do not use backups or volumes. They are redundant as Ephyr re-streamer doesn't store any data.
 
-![Create server](images/hcloud_1.7.jpg)
+![Create server](images/hcloud_1.8.jpg)
 
 
 

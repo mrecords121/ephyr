@@ -3,7 +3,7 @@
 set -e
 
 EPHYR_CLI_ARGS=${EPHYR_CLI_ARGS:-''}
-EPHYR_VER=${EPHYR_VER:-'0.2.0-beta.2'}
+EPHYR_VER=${EPHYR_VER:-edge}
 if [ "$EPHYR_VER" == "latest" ]; then
   EPHYR_VER=''
 else
@@ -30,11 +30,34 @@ if [ "$WITH_FIREWALLD" == "1" ]; then
   firewall-cmd --reload
 fi
 
+# Install Ephyr re-streamer runner wrapper which detect directory for DVR.
+cat <<'EOF' > /usr/local/bin/detect-ephyr-restreamer-volume.sh
+#!/usr/bin/env bash
+
+set -e
+
+export EPHYR_WWW_DIR="/var/run/ephyr-restreamer/www"
+do_volume="$(set +e; find /mnt/volume_* -type d | head -1 | tr -d '\n')"
+if [ -d "$do_volume" ]; then
+  export EPHYR_WWW_DIR="$do_volume/www"
+fi
+hcloud_volume="$(set +e; find /mnt/HC_Volume_* -type d | head -1 | tr -d '\n')"
+if [ -d "$hcloud_volume" ]; then
+  export EPHYR_WWW_DIR="$hcloud_volume/www"
+fi
+
+mkdir -p "$EPHYR_WWW_DIR/"
+
+exec "$@"
+EOF
+chmod +x /usr/local/bin/detect-ephyr-restreamer-volume.sh
+
 # Install Ephyr re-streamer.
 cat <<EOF > /etc/systemd/system/ephyr-restreamer.service
 [Unit]
 Description=Ephyr service for re-streaming RTMP streams
-After=podman.service
+After=local-fs.target podman.service
+Requires=local-fs.target
 
 
 [Service]
@@ -49,12 +72,12 @@ ExecStartPre=touch /var/lib/\${EPHYR_CONTAINER_NAME}/state.json
 ExecStartPre=-/usr/bin/podman pull \${EPHYR_IMAGE_NAME}:\${EPHYR_IMAGE_TAG}
 ExecStartPre=-/usr/bin/podman stop \${EPHYR_CONTAINER_NAME}
 ExecStartPre=-/usr/bin/podman rm --volumes \${EPHYR_CONTAINER_NAME}
-ExecStartPre=/usr/bin/mkdir -p /tmp/\${EPHYR_CONTAINER_NAME}/www/
-ExecStart=/usr/bin/podman run \\
+ExecStart=/usr/local/bin/detect-ephyr-restreamer-volume.sh \\
+  /usr/bin/podman run \\
   --network=host \\
   -v /var/lib/\${EPHYR_CONTAINER_NAME}/srs.conf:/usr/local/srs/conf/srs.conf \\
   -v /var/lib/\${EPHYR_CONTAINER_NAME}/state.json:/state.json \\
-  -v /tmp/\${EPHYR_CONTAINER_NAME}/www/:/var/www/srs/ \\
+  -v \${EPHYR_WWW_DIR}/:/var/www/srs/ \\
   --name=\${EPHYR_CONTAINER_NAME} \\
   \${EPHYR_IMAGE_NAME}:\${EPHYR_IMAGE_TAG} ${EPHYR_CLI_ARGS}
 
@@ -70,4 +93,4 @@ EOF
 systemctl daemon-reload
 systemctl unmask ephyr-restreamer.service
 systemctl enable ephyr-restreamer.service
-systemctl start ephyr-restreamer.service
+systemctl restart ephyr-restreamer.service

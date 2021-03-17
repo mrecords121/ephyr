@@ -1,14 +1,14 @@
 //! HTTP servers.
 
-use std::net::IpAddr;
+use std::{net::IpAddr, time::Duration};
 
 use ephyr_log::log;
 use futures::future;
-use tokio::fs;
+use tokio::{fs, time};
 
 use crate::{
     cli::{Failure, Opts},
-    ffmpeg, srs, teamspeak, State,
+    dvr, ffmpeg, srs, teamspeak, State,
 };
 
 /// Initializes and runs all application's HTTP servers.
@@ -41,7 +41,7 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
         .await
         .map_err(|e| log::error!("Failed to initialize server state: {}", e))?;
 
-    let _srs = srs::Server::try_new(
+    let srs = srs::Server::try_new(
         &cfg.srs_path,
         &srs::Config {
             callback_port: cfg.callback_http_port,
@@ -51,6 +51,15 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
     )
     .await
     .map_err(|e| log::error!("Failed to initialize SRS server: {}", e))?;
+    State::on_change(
+        "cleanup_dvr_files",
+        &state.restreams,
+        |restreams| async move {
+            // Wait for all the re-streaming processes to release DVR files.
+            time::delay_for(Duration::from_secs(1)).await;
+            dvr::Storage::global().cleanup(&restreams).await;
+        },
+    );
 
     let mut restreamers =
         ffmpeg::RestreamersPool::new(ffmpeg_path, state.clone());
@@ -65,6 +74,8 @@ pub async fn run(mut cfg: Opts) -> Result<(), Failure> {
     )
     .await?;
 
+    drop(srs);
+    // Wait for all the async `Drop`s to proceed well.
     teamspeak::finish_all_disconnects().await;
 
     Ok(())

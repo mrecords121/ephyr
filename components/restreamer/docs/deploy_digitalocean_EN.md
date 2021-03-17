@@ -32,14 +32,26 @@ For simple re-streaming the cheapest one should be enough. But if you're going t
 ![Server resources](images/do_1.2.jpg)
 
 
-### 1.3. Choose a region
+### 1.3. Attach volume (optional)
+
+> __NOTE__: Skip this step if you're not going to do recording into files.
+
+If you're going to record live streams into files you may need a larger disk size than the one provided by default in the droplet. This can be fulfilled by creating and attaching an external volume to the created droplet.
+
+![Add volume](images/do_1.3.1.jpg)  
+![Setup volume](images/do_1.3.2.jpg)
+
+Provision script will automatically detect and use it for Ephyr re-streamer.
+
+
+### 1.4. Choose a region
 
 Consider the region, which is the closest both to source endpoints (where the RTMP stream origin goes from) and destination endpoints (where the RTMP stream is re-streamed to).
 
-![Region](images/do_1.3.jpg)
+![Region](images/do_1.4.jpg)
 
 
-### 1.4. Inject provision script
+### 1.5. Inject provision script
 
 To install Ephyr re-streamer onto a newly created droplet, we should specify a provision script for doing that installation job.
 
@@ -49,30 +61,30 @@ Paste the text below to the `User data` section.
 curl -sL https://raw.githubusercontent.com/ALLATRA-IT/ephyr/restreamer-v0.2.0-beta.2/components/restreamer/deploy/provision/ubuntu-20-04-x64.sh | bash -s
 ```
 
-![Provision](images/do_1.4.jpg)
+![Provision](images/do_1.5.jpg)
 
 
-### 1.5. Setup SSH access
+### 1.6. Setup SSH access
 
 [DigitalOcean] requires the created droplet to be accessible via [SSH].
 
 It's not required for using Ephyr re-streamer, so just specify a random password. Or specify an appropriate [SSH] key if you know what you're doing.
 
-![SSH access](images/do_1.5.jpg)
+![SSH access](images/do_1.6.jpg)
 
 
-### 1.6. Provide droplet's name
+### 1.7. Provide droplet's name
 
 Specify a custom name of the droplet to not forget its purpose, or just go with a default one if you don't bother about it.
 
-![Droplet name](images/do_1.6.jpg)
+![Droplet name](images/do_1.7.jpg)
 
 
-### 1.7. Proceed with a droplet creation
+### 1.8. Proceed with a droplet creation
 
 Do not use backups. They are redundant as Ephyr re-streamer doesn't store any data.
 
-![Create droplet](images/do_1.7.jpg)
+![Create droplet](images/do_1.8.jpg)
 
 
 

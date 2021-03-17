@@ -57,6 +57,10 @@ subscription State {
     }
 }
 
+query DvrFiles($id: OutputId!) {
+    dvrFiles(id: $id)
+}
+
 query ExportRestream($id: RestreamId!) {
     export(ids: [$id])
 }
@@ -163,6 +167,10 @@ mutation TuneDelay(
         mixinId: $mixin_id
         delay: $delay
     )
+}
+
+mutation RemoveDvrFile($path: String!) {
+    removeDvrFile(path: $path)
 }
 
 mutation SetPassword($new: String, $old: String) {

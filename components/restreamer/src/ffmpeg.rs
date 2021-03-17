@@ -20,7 +20,7 @@ use url::Url;
 use uuid::Uuid;
 
 use crate::{
-    display_panic,
+    display_panic, dvr,
     state::{self, Delay, MixinId, MixinSrcUrl, State, Status, Volume},
     teamspeak,
 };
@@ -227,7 +227,14 @@ impl Restreamer {
                                 .stdout(Stdio::null())
                                 .stderr(Stdio::piped()),
                             state,
-                        );
+                        )
+                        .map_err(|e| {
+                            log::error!(
+                                "Failed to setup FFmpeg re-streamer: {}",
+                                e,
+                            )
+                        })
+                        .await?;
 
                         let running = kind.run_ffmpeg(cmd);
                         pin_mut!(running);
@@ -398,12 +405,24 @@ impl RestreamerKind {
             CopyRestreamer {
                 id: output.id.into(),
                 from_url: from_url.clone(),
-                to_url: output.dst.clone().into(),
+                to_url: Self::dst_url(&output),
             }
             .into()
         } else {
             MixingRestreamer::new(output, from_url, prev).into()
         })
+    }
+
+    /// Extracts the correct [`Url`] acceptable by [FFmpeg] for sinking a live
+    /// stream by the given [`state::Output`].
+    ///
+    /// [FFmpeg]: https://ffmpeg.org
+    #[inline]
+    #[must_use]
+    fn dst_url(output: &state::Output) -> Url {
+        (output.dst.scheme() == "file")
+            .then(|| dvr::Storage::global().file_url(output))
+            .unwrap_or_else(|| output.dst.clone().into())
     }
 
     /// Checks whether this [`Restreamer`] must be restarted, as cannot apply
@@ -427,14 +446,23 @@ impl RestreamerKind {
     /// which don't trigger re-creation of the whole [FFmpeg] re-streaming
     /// process.
     ///
+    /// # Errors
+    ///
+    /// If the given [FFmpeg] [`Command`] fails to be setup.
+    ///
     /// [FFmpeg]: https://ffmpeg.org
     #[inline]
-    fn setup_ffmpeg(&self, cmd: &mut Command, state: &State) {
+    async fn setup_ffmpeg(
+        &self,
+        cmd: &mut Command,
+        state: &State,
+    ) -> io::Result<()> {
         match self {
-            Self::Copy(c) => c.setup_ffmpeg(cmd),
+            Self::Copy(c) => c.setup_ffmpeg(cmd).await?,
             Self::Transcoding(c) => c.setup_ffmpeg(cmd),
-            Self::Mixing(m) => m.setup_ffmpeg(cmd, state),
-        }
+            Self::Mixing(m) => m.setup_ffmpeg(cmd, state).await?,
+        };
+        Ok(())
     }
 
     /// Properly runs the given [FFmpeg] [`Command`] awaiting its completion.
@@ -562,19 +590,35 @@ impl CopyRestreamer {
     /// Properly setups the given [FFmpeg] [`Command`] for this
     /// [`CopyRestreamer`] before running it.
     ///
+    /// # Errors
+    ///
+    /// If the given [FFmpeg] [`Command`] fails to be setup.
+    ///
     /// [FFmpeg]: https://ffmpeg.org
-    fn setup_ffmpeg(&self, cmd: &mut Command) {
+    async fn setup_ffmpeg(&self, cmd: &mut Command) -> io::Result<()> {
         let _ = cmd.args(&["-i", self.from_url.as_str()]);
         let _ = match self.to_url.scheme() {
             "icecast" => cmd
                 .args(&["-c:a", "libmp3lame", "-b:a", "64k"])
-                .args(&["-f", "mp3", "-content_type", "audio/mpeg"]),
+                .args(&["-f", "mp3", "-content_type", "audio/mpeg"])
+                .arg(self.to_url.as_str()),
 
-            "rtmp" | "rtmps" => cmd.args(&["-c", "copy"]).args(&["-f", "flv"]),
+            "rtmp" | "rtmps" => cmd
+                .args(&["-c", "copy"])
+                .args(&["-f", "flv"])
+                .arg(self.to_url.as_str()),
+
+            "file"
+                if Path::new(self.to_url.path()).extension()
+                    == Some("flv".as_ref()) =>
+            {
+                cmd.args(&["-c", "copy"])
+                    .arg(dvr::new_file_path(&self.to_url).await?)
+            }
 
             _ => unimplemented!(),
-        }
-        .arg(self.to_url.as_str());
+        };
+        Ok(())
     }
 }
 
@@ -708,7 +752,7 @@ impl MixingRestreamer {
         Self {
             id: output.id.into(),
             from_url: from_url.clone(),
-            to_url: output.dst.clone().into(),
+            to_url: RestreamerKind::dst_url(&output),
             orig_volume: output.volume,
             orig_zmq_port: new_unique_zmq_port(),
             mixins: output
@@ -765,9 +809,17 @@ impl MixingRestreamer {
     /// their changes don't trigger re-creation of the whole [FFmpeg]
     /// re-streaming process.
     ///
+    /// # Errors
+    ///
+    /// If the given [FFmpeg] [`Command`] fails to be setup.
+    ///
     /// [FFmpeg]: https://ffmpeg.org
     #[allow(clippy::too_many_lines)]
-    fn setup_ffmpeg(&self, cmd: &mut Command, state: &State) {
+    async fn setup_ffmpeg(
+        &self,
+        cmd: &mut Command,
+        state: &State,
+    ) -> io::Result<()> {
         let my_id = self.id.into();
 
         // We need up-to-date values of `Volume` here, right from the `State`,
@@ -879,16 +931,27 @@ impl MixingRestreamer {
         let _ = match self.to_url.scheme() {
             "icecast" => cmd
                 .args(&["-c:a", "libmp3lame", "-b:a", "64k"])
-                .args(&["-f", "mp3", "-content_type", "audio/mpeg"]),
+                .args(&["-f", "mp3", "-content_type", "audio/mpeg"])
+                .arg(self.to_url.as_str()),
 
             "rtmp" | "rtmps" => cmd
                 .args(&["-map", "0:v"])
                 .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"])
-                .args(&["-f", "flv"]),
+                .args(&["-f", "flv"])
+                .arg(self.to_url.as_str()),
+
+            "file"
+                if Path::new(self.to_url.path()).extension()
+                    == Some("flv".as_ref()) =>
+            {
+                cmd.args(&["-map", "0:v"])
+                    .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"])
+                    .arg(dvr::new_file_path(&self.to_url).await?)
+            }
 
             _ => unimplemented!(),
-        }
-        .arg(self.to_url.as_str());
+        };
+        Ok(())
     }
 
     /// Runs the given [FFmpeg] [`Command`] by feeding to its STDIN the captured

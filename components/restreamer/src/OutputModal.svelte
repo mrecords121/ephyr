@@ -206,7 +206,10 @@
         <div class="uk-alert">
           Server will publish the input live stream to this address.
           <br />
-          Supported protocols: <code>rtmp://</code>, <code>icecast://</code>
+          Supported protocols:
+          <code>rtmp://</code>,
+          <code>icecast://</code>,
+          <code>file:///.flv</code>
         </div>
 
         {#each $value.mix_urls as mix_url, i}

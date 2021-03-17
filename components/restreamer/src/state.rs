@@ -1471,8 +1471,14 @@ impl OutputId {
 
 /// [`Url`] of an [`Output::dst`].
 ///
-/// Only [RTMP] and [Icecast] URLs are allowed at the moment.
+/// Only the following URLs are allowed at the moment:
+/// - [RTMP] URL (starting with `rtmp://` or `rtmps://` scheme and having a
+///   host);
+/// - [Icecast] URL (starting with `icecast://` scheme and having a host);
+/// - [FLV] file URL (starting with `file:///` scheme, without host and
+///   subdirectories, and with `.flv` extension in its path).
 ///
+/// [FLV]: https://en.wikipedia.org/wiki/Flash_Video
 /// [Icecast]: https://icecast.org
 /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 #[derive(
@@ -1483,12 +1489,35 @@ pub struct OutputDstUrl(Url);
 impl OutputDstUrl {
     /// Creates a new [`OutputDstUrl`] if the given [`Url`] is suitable for
     /// that.
+    ///
+    /// # Errors
+    ///
+    /// Returns the given [`Url`] back if it doesn't represent a valid
+    /// [`OutputDstUrl`].
     #[inline]
+    pub fn new(url: Url) -> Result<Self, Url> {
+        if Self::validate(&url) {
+            Ok(Self(url))
+        } else {
+            Err(url)
+        }
+    }
+
+    /// Validates the given [`Url`] to represent a valid [`OutputDstUrl`].
     #[must_use]
-    pub fn new(url: Url) -> Option<Self> {
-        (matches!(url.scheme(), "icecast" | "rtmp" | "rtmps")
-            && url.host().is_some())
-        .then(|| Self(url))
+    pub fn validate(url: &Url) -> bool {
+        match url.scheme() {
+            "icecast" | "rtmp" | "rtmps" => url.has_host(),
+            "file" => {
+                let path = Path::new(url.path());
+                !url.has_host()
+                    && path.is_absolute()
+                    && path.extension() == Some("flv".as_ref())
+                    && path.parent() == Some("/".as_ref())
+                    && !url.path().contains("/../")
+            }
+            _ => false,
+        }
     }
 }
 
@@ -1498,15 +1527,22 @@ impl<'de> Deserialize<'de> for OutputDstUrl {
     where
         D: Deserializer<'de>,
     {
-        Self::new(Url::deserialize(deserializer)?)
-            .ok_or_else(|| D::Error::custom("Not a valid Output.dst URL"))
+        Self::new(Url::deserialize(deserializer)?).map_err(|url| {
+            D::Error::custom(format!("Not a valid Output.src URL: {}", url))
+        })
     }
 }
 
 /// Type of an `Output.dst` URL.
 ///
-/// Only [RTMP] and [Icecast] URLs are allowed at the moment.
+/// Only the following URLs are allowed at the moment:
+/// - [RTMP] URL (starting with `rtmp://` or `rtmps://` scheme and having a
+///   host);
+/// - [Icecast] URL (starting with `icecast://` scheme and having a host);
+/// - [FLV] file URL (starting with `file:///` scheme, without host and
+///   subdirectories, and with `.flv` extension in its path).
 ///
+/// [FLV]: https://en.wikipedia.org/wiki/Flash_Video
 /// [Icecast]: https://icecast.org
 /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 #[graphql_scalar]
@@ -1522,7 +1558,7 @@ where
         v.as_scalar()
             .and_then(ScalarValue::as_str)
             .and_then(|s| Url::parse(s).ok())
-            .and_then(Self::new)
+            .and_then(|url| Self::new(url).ok())
     }
 
     fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {
@@ -1682,8 +1718,12 @@ impl<'de> Deserialize<'de> for MixinSrcUrl {
 
 /// Type of a `Mixin.src` URL.
 ///
-/// Only [TeamSpeak] URLs are allowed at the moment.
+/// Only the following URLs are allowed at the moment:
+/// - [TeamSpeak] URL (starting with `ts://` scheme and having a host);
+/// - [MP3] HTTP URL (starting with `http://` or `https://` scheme, having a
+///   host and `.mp3` extension in its path).
 ///
+/// [MP3]: https://en.wikipedia.org/wiki/MP3
 /// [TeamSpeak]: https://teamspeak.com
 #[graphql_scalar]
 impl<S> GraphQLScalar for MixinSrcUrl

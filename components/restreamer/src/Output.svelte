@@ -16,6 +16,7 @@
   import Confirm from './Confirm.svelte';
   import Toggle from './Toggle.svelte';
   import Mixin from './Mixin.svelte';
+  import RecordsModal from './RecordsModal.svelte';
 
   const disableOutputMutation = mutation(DisableOutput);
   const enableOutputMutation = mutation(EnableOutput);
@@ -108,7 +109,13 @@
       />
       <span slot="title">Removing output</span>
       <span slot="description"
-        ><code>{value.dst}</code><br /><br />You won't be able to undone this.</span
+        ><code>{value.dst}</code>
+        <br /><br />
+        {#if value.dst.startsWith('file:///')}
+          <b>Warning!</b> Any associated recorded files will be removed.
+          <br /><br />
+        {/if}
+        You won't be able to undone this.</span
       >
       <span slot="confirm">Remove</span>
     </Confirm>
@@ -139,7 +146,18 @@
     {:else}
       <span><i class="far fa-dot-circle uk-alert-danger" /></span>
     {/if}
-    <span>{value.dst}</span>
+    {#if value.dst.startsWith('file:///') && value.status === 'OFFLINE'}
+      <RecordsModal let:open id={value.id}>
+        <a
+          class="dvr-link"
+          href="/"
+          on:click|preventDefault={open}
+          title="Download records">{value.dst}</a
+        >
+      </RecordsModal>
+    {:else}
+      <span>{value.dst}</span>
+    {/if}
 
     {#if value.mixins.length > 0}
       {#if !isOutputPage($location)}
@@ -264,4 +282,7 @@
       display: inline-block
       width: 70%
       margin-top: -1px
+
+  a.dvr-link
+    color: #666
 </style>

@@ -14,7 +14,7 @@ use rand::Rng as _;
 
 use crate::{
     api::graphql,
-    spec,
+    dvr, spec,
     state::{
         Delay, InputEndpointKind, InputId, InputKey, InputSrcUrl, Label,
         MixinId, MixinSrcUrl, OutputDstUrl, OutputId, Restream, RestreamId,
@@ -565,6 +565,27 @@ impl MutationsRoot {
             .tune_delay(restream_id, output_id, mixin_id, delay)
     }
 
+    /// Removes the specified recorded file.
+    ///
+    /// ### Result
+    ///
+    /// Returns `true` if the specified recorded file was removed, otherwise
+    /// `false` if nothing changes.
+    #[graphql(arguments(path(
+        description = "Relative path of the recorded file to be removed.\
+                       \n\n\
+                       Use the exact value returned by `Query.dvrFiles`."
+    )))]
+    async fn remove_dvr_file(path: String) -> Result<bool, graphql::Error> {
+        if path.starts_with('/') || path.contains("../") {
+            return Err(graphql::Error::new("INVALID_DVR_FILE_PATH")
+                .status(StatusCode::BAD_REQUEST)
+                .message(&format!("Invalid DVR file path: {}", path)));
+        }
+
+        Ok(dvr::Storage::global().remove_file(path).await)
+    }
+
     /// Sets or unsets the password to protect this GraphQL API with.
     ///
     /// Once password is set, any subsequent requests to this GraphQL API should
@@ -573,8 +594,8 @@ impl MutationsRoot {
     ///
     /// ### Result
     ///
-    /// Returns if password has been changed or unset, otherwise `false` if
-    /// nothing changes.
+    /// Returns `true` if password has been changed or unset, otherwise `false`
+    /// if nothing changes.
     ///
     /// [1]: https://en.wikipedia.org/wiki/Basic_access_authentication
     #[graphql(arguments(
@@ -647,6 +668,25 @@ impl QueriesRoot {
     /// Returns all the `Restream`s happening on this server.
     fn all_restreams(context: &Context) -> Vec<Restream> {
         context.state().restreams.get_cloned()
+    }
+
+    /// Returns list of recorded files of the specified `Output`.
+    ///
+    /// If returned list is empty, the there is no recorded files for the
+    /// specified `Output`.
+    ///
+    /// Each recorded file is represented as a relative path on [SRS] HTTP
+    /// server in `dvr/` directory, so the download link should look like this:
+    /// ```ignore
+    /// http://my.host:8080/dvr/returned/file/path.flv
+    /// ```
+    ///
+    /// [SRS]: https://github.com/ossrs/srs
+    #[graphql(arguments(id(
+        description = "ID of the `Output` to return recorded files of."
+    )))]
+    async fn dvr_files(id: OutputId) -> Vec<String> {
+        dvr::Storage::global().list_files(id).await
     }
 
     /// Returns `Restream`s happening on this server and identifiable by the
