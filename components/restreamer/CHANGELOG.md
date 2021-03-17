@@ -50,6 +50,7 @@ All user visible changes to this project will be documented in this file. This p
         - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]);
         - Separate page for mixing a single output ([8103cb32], [#29]);
         - [Icecast] URL as supported destination ([5dabcfdc]);
+        - [SRT] URL as supported destination ([rev2], [#21]);
         - [FLV] `file:///` URL as supported destination ([rev], [#26]);
         - Ability to show, download and remove recorded [FLV] files ([rev], [#26]);
         - Ability to edit an existing output ([740fa998], [#28]);
@@ -87,6 +88,7 @@ All user visible changes to this project will be documented in this file. This p
         - [Oracle Cloud Infrastructure] on English and Russian languages ([9c7a9c71]);
         - Mounting additional volume on [DigitalOcean] and [Hetzner Cloud] ([rev], [#26]).
 
+[#21]: /../../issues/21
 [#23]: /../../issues/23
 [#26]: /../../issues/26
 [#28]: /../../issues/28
@@ -105,6 +107,7 @@ All user visible changes to this project will be documented in this file. This p
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
 [e96b39f1]: /../../commit/e96b39f1fd3f249b1befd0db4db745e5a495b62d
 [rev]: /../../commit/rev
+[rev2]: /../../commit/rev2
 
 
 
@@ -208,5 +211,6 @@ All user visible changes to this project will be documented in this file. This p
 [Podman]: https://podman.io
 [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 [Semantic Versioning 2.0.0]: https://semver.org
+[SRT]: https://en.wikipedia.org/wiki/Secure_Reliable_Transport
 [TeamSpeak]: https://teamspeak.com 
 [Ubuntu]: https://ubuntu.com

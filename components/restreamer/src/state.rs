@@ -1474,6 +1474,7 @@ impl OutputId {
 /// Only the following URLs are allowed at the moment:
 /// - [RTMP] URL (starting with `rtmp://` or `rtmps://` scheme and having a
 ///   host);
+/// - [SRT] URL (starting with `srt://` scheme and having a host);
 /// - [Icecast] URL (starting with `icecast://` scheme and having a host);
 /// - [FLV] file URL (starting with `file:///` scheme, without host and
 ///   subdirectories, and with `.flv` extension in its path).
@@ -1481,6 +1482,7 @@ impl OutputId {
 /// [FLV]: https://en.wikipedia.org/wiki/Flash_Video
 /// [Icecast]: https://icecast.org
 /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
+/// [SRT]: https://en.wikipedia.org/wiki/Secure_Reliable_Transport
 #[derive(
     Clone, Debug, Deref, Display, Eq, Hash, Into, PartialEq, Serialize,
 )]
@@ -1507,7 +1509,7 @@ impl OutputDstUrl {
     #[must_use]
     pub fn validate(url: &Url) -> bool {
         match url.scheme() {
-            "icecast" | "rtmp" | "rtmps" => url.has_host(),
+            "icecast" | "rtmp" | "rtmps" | "srt" => url.has_host(),
             "file" => {
                 let path = Path::new(url.path());
                 !url.has_host()
@@ -1538,6 +1540,7 @@ impl<'de> Deserialize<'de> for OutputDstUrl {
 /// Only the following URLs are allowed at the moment:
 /// - [RTMP] URL (starting with `rtmp://` or `rtmps://` scheme and having a
 ///   host);
+/// - [SRT] URL (starting with `srt://` scheme and having a host);
 /// - [Icecast] URL (starting with `icecast://` scheme and having a host);
 /// - [FLV] file URL (starting with `file:///` scheme, without host and
 ///   subdirectories, and with `.flv` extension in its path).
@@ -1545,6 +1548,7 @@ impl<'de> Deserialize<'de> for OutputDstUrl {
 /// [FLV]: https://en.wikipedia.org/wiki/Flash_Video
 /// [Icecast]: https://icecast.org
 /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
+/// [SRT]: https://en.wikipedia.org/wiki/Secure_Reliable_Transport
 #[graphql_scalar]
 impl<S> GraphQLScalar for OutputDstUrl
 where

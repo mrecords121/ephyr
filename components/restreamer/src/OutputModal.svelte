@@ -208,6 +208,7 @@
           <br />
           Supported protocols:
           <code>rtmp://</code>,
+          <code>srt://</code>,
           <code>icecast://</code>,
           <code>file:///.flv</code>
         </div>

@@ -598,6 +598,14 @@ impl CopyRestreamer {
     async fn setup_ffmpeg(&self, cmd: &mut Command) -> io::Result<()> {
         let _ = cmd.args(&["-i", self.from_url.as_str()]);
         let _ = match self.to_url.scheme() {
+            "file"
+                if Path::new(self.to_url.path()).extension()
+                    == Some("flv".as_ref()) =>
+            {
+                cmd.args(&["-c", "copy"])
+                    .arg(dvr::new_file_path(&self.to_url).await?)
+            }
+
             "icecast" => cmd
                 .args(&["-c:a", "libmp3lame", "-b:a", "64k"])
                 .args(&["-f", "mp3", "-content_type", "audio/mpeg"])
@@ -608,13 +616,10 @@ impl CopyRestreamer {
                 .args(&["-f", "flv"])
                 .arg(self.to_url.as_str()),
 
-            "file"
-                if Path::new(self.to_url.path()).extension()
-                    == Some("flv".as_ref()) =>
-            {
-                cmd.args(&["-c", "copy"])
-                    .arg(dvr::new_file_path(&self.to_url).await?)
-            }
+            "srt" => cmd
+                .args(&["-c", "copy"])
+                .args(&["-strict", "-2", "-y", "-f", "mpegts"])
+                .arg(self.to_url.as_str()),
 
             _ => unimplemented!(),
         };
@@ -929,6 +934,15 @@ impl MixingRestreamer {
             .args(&["-max_muxing_queue_size", "50000000"]);
 
         let _ = match self.to_url.scheme() {
+            "file"
+                if Path::new(self.to_url.path()).extension()
+                    == Some("flv".as_ref()) =>
+            {
+                cmd.args(&["-map", "0:v"])
+                    .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"])
+                    .arg(dvr::new_file_path(&self.to_url).await?)
+            }
+
             "icecast" => cmd
                 .args(&["-c:a", "libmp3lame", "-b:a", "64k"])
                 .args(&["-f", "mp3", "-content_type", "audio/mpeg"])
@@ -940,14 +954,11 @@ impl MixingRestreamer {
                 .args(&["-f", "flv"])
                 .arg(self.to_url.as_str()),
 
-            "file"
-                if Path::new(self.to_url.path()).extension()
-                    == Some("flv".as_ref()) =>
-            {
-                cmd.args(&["-map", "0:v"])
-                    .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"])
-                    .arg(dvr::new_file_path(&self.to_url).await?)
-            }
+            "srt" => cmd
+                .args(&["-map", "0:v"])
+                .args(&["-c:a", "libfdk_aac", "-c:v", "copy", "-shortest"])
+                .args(&["-strict", "-2", "-y", "-f", "mpegts"])
+                .arg(self.to_url.as_str()),
 
             _ => unimplemented!(),
         };
