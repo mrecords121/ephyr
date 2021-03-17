@@ -237,6 +237,7 @@
       <div class="uk-grid uk-grid-small" uk-grid>
         {#each value.outputs as output}
           <Output
+            {public_host}
             restream_id={value.id}
             value={output}
             hidden={!showAll && !showFiltered[output.status]}

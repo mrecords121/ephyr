@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@apollo/client": "~3.2.9",
+    "clipboard-copy": "^4.0",
     "graphql": "^15.4",
     "subscriptions-transport-ws": "^0.9",
     "svelte-apollo": "^0.4",

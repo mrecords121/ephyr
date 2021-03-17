@@ -3,7 +3,7 @@
 
   import { DisableInput, EnableInput } from './api/graphql/client.graphql';
 
-  import { showError } from './util';
+  import { showError, copyToClipboard } from './util';
 
   import Toggle from './Toggle.svelte';
 
@@ -91,7 +91,11 @@
             </span>
           {/if}
         </span>
-        <span>
+        <span
+          on:dblclick|preventDefault={(e) =>
+            copyToClipboard(e.target.innerText)}
+          title="Double-click to copy"
+        >
           {#if isPull}
             {value.src.url}
           {:else if endpoint.kind === 'HLS'}

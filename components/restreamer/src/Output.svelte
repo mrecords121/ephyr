@@ -9,7 +9,7 @@
     TuneVolume,
   } from './api/graphql/client.graphql';
 
-  import { showError, isOutputPage } from './util';
+  import { showError, isOutputPage, copyToClipboard } from './util';
 
   import { outputModal } from './stores';
 
@@ -23,6 +23,7 @@
   const removeOutputMutation = mutation(RemoveOutput);
   const tuneVolumeMutation = mutation(TuneVolume);
 
+  export let public_host;
   export let value;
   export let restream_id;
   export let hidden = false;
@@ -147,7 +148,7 @@
       <span><i class="far fa-dot-circle uk-alert-danger" /></span>
     {/if}
     {#if value.dst.startsWith('file:///') && value.status === 'OFFLINE'}
-      <RecordsModal let:open id={value.id}>
+      <RecordsModal let:open id={value.id} {public_host}>
         <a
           class="dvr-link"
           href="/"
@@ -156,7 +157,10 @@
         >
       </RecordsModal>
     {:else}
-      <span>{value.dst}</span>
+      <span
+        on:dblclick|preventDefault={() => copyToClipboard(value.dst)}
+        title="Double-click to copy">{value.dst}</span
+      >
     {/if}
 
     {#if value.mixins.length > 0}

@@ -55,6 +55,7 @@ All user visible changes to this project will be documented in this file. This p
         - Ability to show, download and remove recorded [FLV] files ([46c85d4d], [#26]);
         - Ability to edit an existing output ([740fa998], [#28]);
         - Confirmation window on removing ([9acf42e2]).
+    - Copying URLs to clipboard by double-click ([rev]).
 - GraphQL API:
     - Types:
         - `Mixin` object ([77d25dd7], [#23]);
@@ -108,6 +109,7 @@ All user visible changes to this project will be documented in this file. This p
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
 [d397aaaf]: /../../commit/d397aaafde43c98e34837273926b5672df2449fe
 [e96b39f1]: /../../commit/e96b39f1fd3f249b1befd0db4db745e5a495b62d
+[rev]: /../../commit/rev
 
 
 

@@ -9,6 +9,7 @@
 
   const removeDvrFileMutation = mutation(RemoveDvrFile);
 
+  export let public_host;
   export let id;
 
   let files = [];
@@ -71,7 +72,7 @@
               download
               target="_blank"
               title="Download recorded file"
-              href="http://{window.location.host.split(':')[0]}:8000/dvr/{file}"
+              href="http://{public_host}:8000/dvr/{file}"
               >{file.split('/').slice(-1)[0]}</a
             >
             <button

@@ -3,7 +3,7 @@
 
   import { TuneDelay, TuneVolume } from './api/graphql/client.graphql';
 
-  import { showError } from './util';
+  import { showError, copyToClipboard } from './util';
 
   const tuneDelayMutation = mutation(TuneDelay);
   const tuneVolumeMutation = mutation(TuneVolume);
@@ -72,7 +72,10 @@
 <template>
   <div class="mixin">
     <i class="fas fa-wave-square" title="Mixed audio" />
-    <span>{value.src}</span>
+    <span
+      on:dblclick|preventDefault={() => copyToClipboard(value.src)}
+      title="Double-click to copy">{value.src}</span
+    >
     <div class="volume">
       <a href="/" on:click|preventDefault={toggleVolume}>
         {#if volume > 0}

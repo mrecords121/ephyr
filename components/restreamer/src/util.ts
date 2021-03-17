@@ -1,12 +1,28 @@
+import clipboardCopy from 'clipboard-copy';
 import UIkit from 'uikit';
 
 /**
- * Displays error UI popup with the given error `message`.
+ * Displays an error UI popup with the given error `message`.
  *
  * @param message    Error message to be displayed.
  */
 export function showError(message: string) {
   UIkit.notification(message, { status: 'danger', pos: 'top-center' });
+}
+
+/**
+ * Copies the given `text` to clipboard and displays a success UI popup when
+ * it's done.
+ *
+ * @param text    Text to be copied to clipboard.
+ */
+export async function copyToClipboard(text: string) {
+  await clipboardCopy(text);
+  UIkit.notification('Copied', {
+    status: 'success',
+    pos: 'top-center',
+    timeout: 300,
+  });
 }
 
 /**
