@@ -886,6 +886,8 @@ impl Input {
         for e in &mut self.endpoints {
             e.srs_publisher_id = None;
             e.srs_player_ids.clear();
+            // Do not rely only on SRS to set status, as it sporadically races.
+            e.status = Status::Offline;
         }
 
         if let Some(InputSrc::Failover(s)) = self.src.as_mut() {
