@@ -6,10 +6,10 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
-## [0.2.0-beta.2] · 2021-03-13
-[0.2.0-beta.2]: /../../tree/restreamer-v0.2.0-beta.2
+## [0.2.0-rc.1] · 2021-03-17
+[0.2.0-rc.1]: /../../tree/restreamer-v0.2.0-rc.1
 
-[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-beta.2)
+[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-rc.1)
 
 ### BC Breaks
 
@@ -50,9 +50,9 @@ All user visible changes to this project will be documented in this file. This p
         - Tuning delay of a mixed-in [TeamSpeak] track ([77d25dd7], [#23]);
         - Separate page for mixing a single output ([8103cb32], [#29]);
         - [Icecast] URL as supported destination ([5dabcfdc]);
-        - [SRT] URL as supported destination ([rev2], [#21]);
-        - [FLV] `file:///` URL as supported destination ([rev], [#26]);
-        - Ability to show, download and remove recorded [FLV] files ([rev], [#26]);
+        - [SRT] URL as supported destination ([d397aaaf], [#21]);
+        - [FLV] `file:///` URL as supported destination ([46c85d4d], [#26]);
+        - Ability to show, download and remove recorded [FLV] files ([46c85d4d], [#26]);
         - Ability to edit an existing output ([740fa998], [#28]);
         - Confirmation window on removing ([9acf42e2]).
 - GraphQL API:
@@ -70,11 +70,11 @@ All user visible changes to this project will be documented in this file. This p
         - `tuneVolume` and `tuneDelay` ([77d25dd7], [#23]);
         - `mix` argument to `addOutput` ([77d25dd7], [#23]);
         - `import` ([9e1ac1c7]);
-        - `removeDvrFile` ([rev], [#26]).
+        - `removeDvrFile` ([46c85d4d], [#26]).
     - Queries:
         - `Output.volume` and `Output.mixins` fields ([77d25dd7], [#23]);
         - `export` ([9e1ac1c7]);
-        - `dvrFiles` ([rev], [#26]).
+        - `dvrFiles` ([46c85d4d], [#26]).
 - Spec (export/import):
     - `v1` version ([9e1ac1c7]).
 - Config:
@@ -82,11 +82,11 @@ All user visible changes to this project will be documented in this file. This p
 - Deployment:
     - Provision script for [Ubuntu] 20.04:
         - Optional [firewalld] installation via `WITH_FIREWALLD` env var ([bbccc004]);
-        - Auto-detection and usage of [DigitalOcean] and [Hetzner Cloud] mounted external volumes ([rev], [#26]).
+        - Auto-detection and usage of [DigitalOcean] and [Hetzner Cloud] mounted external volumes ([46c85d4d], [#26]).
 - Documentation:
     - Deployment instructions:
         - [Oracle Cloud Infrastructure] on English and Russian languages ([9c7a9c71]);
-        - Mounting additional volume on [DigitalOcean] and [Hetzner Cloud] ([rev], [#26]).
+        - Mounting additional volume on [DigitalOcean] and [Hetzner Cloud] ([46c85d4d], [#26]).
 
 [#21]: /../../issues/21
 [#23]: /../../issues/23
@@ -94,6 +94,7 @@ All user visible changes to this project will be documented in this file. This p
 [#28]: /../../issues/28
 [#29]: /../../issues/29
 [#30]: /../../issues/30
+[46c85d4d]: /../../commit/46c85d4d67e7b8a0efb91444f94f3575f9dfa665
 [5dabcfdc]: /../../commit/5dabcfdce2420fdd43a8f4c20c2eff497e884ac3
 [65f8b86e]: /../../commit/65f8b86eebad0396ef37f1df27548e70952eef63
 [740fa998]: /../../commit/740fa9985feae057ecea758292bcf1c2d2758988
@@ -105,9 +106,8 @@ All user visible changes to this project will be documented in this file. This p
 [a2c5f83f]: /../../commit/a2c5f83ff55f078f242f3beb6d2310a24c835c98
 [a3236808]: /../../commit/a3236808c43d1c5667cac4b3037d7c83edccc48f
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
+[d397aaaf]: /../../commit/d397aaafde43c98e34837273926b5672df2449fe
 [e96b39f1]: /../../commit/e96b39f1fd3f249b1befd0db4db745e5a495b62d
-[rev]: /../../commit/rev
-[rev2]: /../../commit/rev2
 
 
 
