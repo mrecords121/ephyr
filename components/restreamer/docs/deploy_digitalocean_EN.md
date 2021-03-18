@@ -58,7 +58,7 @@ To install Ephyr re-streamer onto a newly created droplet, we should specify a p
 Paste the text below to the `User data` section.
 ```bash
 #!/bin/bash
-curl -sL https://raw.githubusercontent.com/ALLATRA-IT/ephyr/restreamer-v0.2.0-rc.1/components/restreamer/deploy/provision/ubuntu-20-04-x64.sh | bash -s
+curl -sL https://tinyurl.com/k46y7v3c | EPHYR_VER=0.2.0 bash -s
 ```
 
 ![Provision](images/do_1.5.jpg)

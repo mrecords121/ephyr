@@ -6,10 +6,10 @@ All user visible changes to this project will be documented in this file. This p
 
 
 
-## [0.2.0-rc.1] · 2021-03-17
-[0.2.0-rc.1]: /../../tree/restreamer-v0.2.0-rc.1
+## [0.2.0] · 2021-03-18
+[0.2.0]: /../../tree/restreamer-v0.2.0
 
-[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0-rc.1)
+[Diff](/../../compare/restreamer-v0.1.2...restreamer-v0.2.0)
 
 ### BC Breaks
 
@@ -42,7 +42,7 @@ All user visible changes to this project will be documented in this file. This p
         - Optional backup endpoint (push or pull) ([a3236808], [9e1ac1c7]);
         - Ability to export/import as JSON spec ([9e1ac1c7]);
         - Optional [HLS] endpoint ([65f8b86e]);
-        - Ability to pull from [HLS] HTTP URL ([rev2], [#27]);
+        - Ability to pull from [HLS] HTTP URL ([2e4d46ae], [#27]);
         - Confirmation window on removing ([9acf42e2]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
@@ -56,7 +56,7 @@ All user visible changes to this project will be documented in this file. This p
         - Ability to show, download and remove recorded [FLV] files ([46c85d4d], [#26]);
         - Ability to edit an existing output ([740fa998], [#28]);
         - Confirmation window on removing ([9acf42e2]).
-    - Copying URLs to clipboard by double-click ([rev]).
+    - Copying URLs to clipboard by double-click ([62355b8f]).
 - GraphQL API:
     - Types:
         - `Mixin` object ([77d25dd7], [#23]);
@@ -97,8 +97,10 @@ All user visible changes to this project will be documented in this file. This p
 [#28]: /../../issues/28
 [#29]: /../../issues/29
 [#30]: /../../issues/30
+[2e4d46ae]: /../../commit/2e4d46ae929da87fb78f3fa312768bd4e3693e38
 [46c85d4d]: /../../commit/46c85d4d67e7b8a0efb91444f94f3575f9dfa665
 [5dabcfdc]: /../../commit/5dabcfdce2420fdd43a8f4c20c2eff497e884ac3
+[62355b8f]: /../../commit/62355b8f8b8f10fa3c1b6f21c9cfc86eef519211
 [65f8b86e]: /../../commit/65f8b86eebad0396ef37f1df27548e70952eef63
 [740fa998]: /../../commit/740fa9985feae057ecea758292bcf1c2d2758988
 [77d25dd7]: /../../commit/77d25dd739d4f05b319769eddd83c01bd3a490a4
@@ -111,8 +113,6 @@ All user visible changes to this project will be documented in this file. This p
 [bbccc004]: /../../commit/bbccc0040d95d47a72c3bf7c6fc0908f32c89bd4
 [d397aaaf]: /../../commit/d397aaafde43c98e34837273926b5672df2449fe
 [e96b39f1]: /../../commit/e96b39f1fd3f249b1befd0db4db745e5a495b62d
-[rev]: /../../commit/rev
-[rev2]: /../../commit/rev2
 
 
 

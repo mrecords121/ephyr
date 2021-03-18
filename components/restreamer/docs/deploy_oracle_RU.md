@@ -68,7 +68,7 @@
 И вставьте текст ниже в `Cloud-init script` секцию.
 ```bash
 #!/bin/bash
-curl -sL https://raw.githubusercontent.com/ALLATRA-IT/ephyr/restreamer-v0.2.0-rc.1/components/restreamer/deploy/provision/ubuntu-20-04-x64.sh | WITH_FIREWALLD=1 bash -s
+curl -sL https://tinyurl.com/k46y7v3c | EPHYR_VER=0.2.0 WITH_FIREWALLD=1 bash -s
 ```
 
 ![Cloud-init script](images/oci_1.5.2.png)
