@@ -596,7 +596,20 @@ impl CopyRestreamer {
     ///
     /// [FFmpeg]: https://ffmpeg.org
     async fn setup_ffmpeg(&self, cmd: &mut Command) -> io::Result<()> {
-        let _ = cmd.args(&["-i", self.from_url.as_str()]);
+        let _ = match self.from_url.scheme() {
+            "http" | "https"
+                if Path::new(self.from_url.path()).extension()
+                    == Some("m3u8".as_ref()) =>
+            {
+                cmd.arg("-re")
+            }
+
+            "rtmp" | "rtmps" => cmd,
+
+            _ => unimplemented!(),
+        }
+        .args(&["-i", self.from_url.as_str()]);
+
         let _ = match self.to_url.scheme() {
             "file"
                 if Path::new(self.to_url.path()).extension()

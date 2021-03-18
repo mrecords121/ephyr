@@ -1270,8 +1270,13 @@ impl PartialEq<str> for InputKey {
 
 /// [`Url`] of a [`RemoteInputSrc`].
 ///
-/// Only [RTMP] URLs are allowed at the moment.
+/// Only the following URLs are allowed at the moment:
+/// - [RTMP] URL (starting with `rtmp://` or `rtmps://` scheme and having a
+///   host);
+/// - [HLS] URL (starting with `http://` or `https://` scheme, having a host,
+///   and with `.m3u8` extension in its path).
 ///
+/// [HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming
 /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 #[derive(
     Clone, Debug, Deref, Display, Eq, Hash, Into, PartialEq, Serialize,
@@ -1280,11 +1285,32 @@ pub struct InputSrcUrl(Url);
 
 impl InputSrcUrl {
     /// Creates a new [`InputSrcUrl`] if the given [`Url`] is suitable for that.
+    ///
+    /// # Errors
+    ///
+    /// Returns the given [`Url`] back if it doesn't represent a valid
+    /// [`InputSrcUrl`].
     #[inline]
+    pub fn new(url: Url) -> Result<Self, Url> {
+        if Self::validate(&url) {
+            Ok(Self(url))
+        } else {
+            Err(url)
+        }
+    }
+
+    /// Validates the given [`Url`] to represent a valid [`InputSrcUrl`].
     #[must_use]
-    pub fn new(url: Url) -> Option<Self> {
-        (matches!(url.scheme(), "rtmp" | "rtmps") && url.host().is_some())
-            .then(|| Self(url))
+    pub fn validate(url: &Url) -> bool {
+        match url.scheme() {
+            "rtmp" | "rtmps" => url.has_host(),
+            "http" | "https" => {
+                url.has_host()
+                    && Path::new(url.path()).extension()
+                        == Some("m3u8".as_ref())
+            }
+            _ => false,
+        }
     }
 }
 
@@ -1294,15 +1320,21 @@ impl<'de> Deserialize<'de> for InputSrcUrl {
     where
         D: Deserializer<'de>,
     {
-        Self::new(Url::deserialize(deserializer)?)
-            .ok_or_else(|| D::Error::custom("Not a valid RemoteInputSrc.url"))
+        Self::new(Url::deserialize(deserializer)?).map_err(|url| {
+            D::Error::custom(format!("Not a valid RemoteInputSrc.url: {}", url))
+        })
     }
 }
 
 /// Type of a `RemoteInputSrc.url`.
 ///
-/// Only [RTMP] URLs are allowed at the moment.
+/// Only the following URLs are allowed at the moment:
+/// - [RTMP] URL (starting with `rtmp://` or `rtmps://` scheme and having a
+///   host);
+/// - [HLS] URL (starting with `http://` or `https://` scheme, having a host,
+///   and with `.m3u8` extension in its path).
 ///
+/// [HLS]: https://en.wikipedia.org/wiki/HTTP_Live_Streaming
 /// [RTMP]: https://en.wikipedia.org/wiki/Real-Time_Messaging_Protocol
 #[graphql_scalar]
 impl<S> GraphQLScalar for InputSrcUrl
@@ -1317,7 +1349,7 @@ where
         v.as_scalar()
             .and_then(ScalarValue::as_str)
             .and_then(|s| Url::parse(s).ok())
-            .and_then(Self::new)
+            .and_then(|url| Self::new(url).ok())
     }
 
     fn from_str(value: ScalarToken<'_>) -> ParseScalarResult<'_, S> {

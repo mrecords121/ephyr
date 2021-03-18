@@ -96,10 +96,10 @@
             copyToClipboard(e.target.innerText)}
           title="Double-click to copy"
         >
-          {#if isPull}
-            {value.src.url}
-          {:else if endpoint.kind === 'HLS'}
+          {#if endpoint.kind === 'HLS'}
             http://{public_host}:8000/hls/{restream_key}/{value.key}.m3u8
+          {:else if isPull}
+            {value.src.url}
           {:else}
             rtmp://{public_host}/{restream_key}/{value.key}
           {/if}

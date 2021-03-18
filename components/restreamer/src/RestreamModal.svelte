@@ -118,6 +118,10 @@
           <div class="uk-alert">
             {#if $value.is_pull}
               Server will pull RTMP stream from the address below.
+              <br />
+              Supported protocols:
+              <code>rtmp://</code>,
+              <code>http://.m3u8</code> (HLS)
             {:else}
               Server will await RTMP stream to be pushed onto the address above.
             {/if}

@@ -42,6 +42,7 @@ All user visible changes to this project will be documented in this file. This p
         - Optional backup endpoint (push or pull) ([a3236808], [9e1ac1c7]);
         - Ability to export/import as JSON spec ([9e1ac1c7]);
         - Optional [HLS] endpoint ([65f8b86e]);
+        - Ability to pull from [HLS] HTTP URL ([rev2], [#27]);
         - Confirmation window on removing ([9acf42e2]).
     - Output:
         - Specifying [TeamSpeak] URL for mixing ([77d25dd7], [#23]);
@@ -92,6 +93,7 @@ All user visible changes to this project will be documented in this file. This p
 [#21]: /../../issues/21
 [#23]: /../../issues/23
 [#26]: /../../issues/26
+[#27]: /../../issues/27
 [#28]: /../../issues/28
 [#29]: /../../issues/29
 [#30]: /../../issues/30
@@ -110,6 +112,7 @@ All user visible changes to this project will be documented in this file. This p
 [d397aaaf]: /../../commit/d397aaafde43c98e34837273926b5672df2449fe
 [e96b39f1]: /../../commit/e96b39f1fd3f249b1befd0db4db745e5a495b62d
 [rev]: /../../commit/rev
+[rev2]: /../../commit/rev2
 
 
 
