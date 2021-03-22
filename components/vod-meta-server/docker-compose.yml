@@ -3,7 +3,7 @@ version: "2"
 services:
   vod-meta:
     container_name: ephyr-vod-meta
-    image: allatra/ephyr:vod-meta-server
+    image: mrecords121/ephyr:vod-meta-server
     command: ["-v", "INFO"]
     volumes:
       - ./example.vod.meta.json:/state.vod-meta.json
