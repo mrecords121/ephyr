@@ -15,7 +15,7 @@ eq = $(if $(or $(1),$(2)),$(and $(findstring $(1),$(2)),\
 # Project parameters #
 ######################
 
-IMAGE_NAME ?= allatra/ephyr
+IMAGE_NAME ?= mrecords121/ephyr
 IMAGE_TAG ?= dev
 
 
