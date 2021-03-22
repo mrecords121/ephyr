@@ -190,14 +190,14 @@
     {/if}
 
     <a
-      href="https://allatraunites.com"
+      href="http://mrecords.pp.ua"
       target="_blank"
       class="logo"
-      title="Join us on allatraunites.com"
+      title="Join us on mrecords.pp.ua"
     >
       <img src="logo.jpg" alt="Logo" />
-      <h3>Creative Society</h3>
-      <small>Ephyr re-streamer {process.env.VERSION}</small>
+      <h3>MRecords Production</h3>
+      <small>RTMP Restream Server {process.env.VERSION}</small>
     </a>
   </header>
 
@@ -213,8 +213,8 @@
   </main>
 
   <footer class="uk-container">
-    Developed for people with ❤ by
-    <a href="https://github.com/ALLATRA-IT" target="_blank">AllatRa IT</a>
+    Proudly made in Ukraine with ❤ by
+    <a href="http://mrecords.pp.ua" target="_blank">MRecords Production</a>
   </footer>
 </template>
 
@@ -265,15 +265,15 @@
         float: left
 
       h3
-        margin: 4px 0 4px 52px
+        margin: 0 0 4px 52px
         max-width: 50%
 
       small
         position: absolute
         font-size: 12px
         width: 200px
-        bottom: -6px
-        left: 68px
+        bottom: -2px
+        left: 53px
         color: #999
 
     .export-import-all
