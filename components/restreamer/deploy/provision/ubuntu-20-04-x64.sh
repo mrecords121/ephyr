@@ -62,7 +62,7 @@ Requires=local-fs.target
 
 [Service]
 Environment=EPHYR_CONTAINER_NAME=ephyr-restreamer
-Environment=EPHYR_IMAGE_NAME=docker.io/allatra/ephyr
+Environment=EPHYR_IMAGE_NAME=docker.io/mrecords121/ephyr
 Environment=EPHYR_IMAGE_TAG=restreamer${EPHYR_VER}
 
 ExecStartPre=/usr/bin/mkdir -p /var/lib/\${EPHYR_CONTAINER_NAME}/
